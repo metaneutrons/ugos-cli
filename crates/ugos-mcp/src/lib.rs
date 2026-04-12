@@ -18,6 +18,7 @@ use rmcp::{
     schemars, tool, tool_router,
 };
 use tokio::sync::OnceCell;
+use ugos_client::api::docker::DockerApi;
 use ugos_client::api::kvm::KvmApi;
 use ugos_client::{Credentials, UgosClient};
 
@@ -263,6 +264,43 @@ struct OvaParseParam {
     /// Target NAS name or host. Required when multiple targets are configured.
     #[serde(default)]
     target: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct ContainerIdParam {
+    /// Container ID.
+    id: String,
+    /// Target NAS name or host. Required when multiple targets are configured.
+    #[serde(default)]
+    target: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct DockerImageSearchParam {
+    /// Image name to search for.
+    name: String,
+    /// Target NAS name or host. Required when multiple targets are configured.
+    #[serde(default)]
+    target: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct DockerImagePullParam {
+    /// Image name (e.g. "nginx").
+    image: String,
+    /// Image tag (default: "latest").
+    #[serde(default = "default_tag")]
+    tag: String,
+    /// Target NAS name or host. Required when multiple targets are configured.
+    #[serde(default)]
+    target: Option<String>,
+}
+
+const fn default_tag_str() -> &'static str {
+    "latest"
+}
+fn default_tag() -> String {
+    default_tag_str().to_owned()
 }
 
 // ── Server ──────────────────────────────────────────────────────────
@@ -719,6 +757,132 @@ impl UgosMcp {
         match self.client(p.target.as_deref()).await {
             Ok(c) => match c.ova_parse(&p.ova_path).await {
                 Ok(d) => serde_json::to_string_pretty(&d).unwrap_or_default(),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    // ── Docker ──────────────────────────────────────────────────────
+
+    #[tool(description = "Get Docker engine overview (container/image counts, CPU/memory usage)")]
+    async fn ugos_docker_overview(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.docker_overview().await {
+                Ok(o) => serde_json::to_string_pretty(&o).unwrap_or_default(),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Get Docker engine status (online/offline)")]
+    async fn ugos_docker_status(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.docker_engine_status().await {
+                Ok(s) => s,
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List Docker containers")]
+    async fn ugos_docker_ps(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.container_list(1, 100).await {
+                Ok(r) => serde_json::to_string_pretty(&r).unwrap_or_default(),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Start a Docker container")]
+    async fn ugos_docker_start(&self, Parameters(p): Parameters<ContainerIdParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.container_start(&p.id).await {
+                Ok(()) => format!("Started {}", p.id),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Stop a Docker container")]
+    async fn ugos_docker_stop(&self, Parameters(p): Parameters<ContainerIdParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.container_stop(&p.id).await {
+                Ok(()) => format!("Stopped {}", p.id),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Restart a Docker container")]
+    async fn ugos_docker_restart(&self, Parameters(p): Parameters<ContainerIdParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.container_restart(&p.id).await {
+                Ok(()) => format!("Restarted {}", p.id),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Remove a Docker container")]
+    async fn ugos_docker_rm(&self, Parameters(p): Parameters<ContainerIdParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.container_remove(&p.id).await {
+                Ok(()) => format!("Removed {}", p.id),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List local Docker images")]
+    async fn ugos_docker_images(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.docker_image_list(1, 100).await {
+                Ok(r) => serde_json::to_string_pretty(&r).unwrap_or_default(),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Search Docker Hub for images")]
+    async fn ugos_docker_search(
+        &self,
+        Parameters(p): Parameters<DockerImageSearchParam>,
+    ) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.docker_image_search(&p.name, 1, 20).await {
+                Ok(r) => serde_json::to_string_pretty(&r).unwrap_or_default(),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Pull a Docker image from a registry")]
+    async fn ugos_docker_pull(&self, Parameters(p): Parameters<DockerImagePullParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.docker_image_download(&p.image, &p.tag).await {
+                Ok(()) => format!("Pulling {}:{}", p.image, p.tag),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List Docker registry mirror sources")]
+    async fn ugos_docker_mirrors(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.mirror_list().await {
+                Ok(m) => serde_json::to_string_pretty(&m).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
             },
             Err(e) => e,

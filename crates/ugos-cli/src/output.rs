@@ -3,6 +3,7 @@
 use anyhow::Result;
 use serde::Serialize;
 use tabled::{Table, Tabled};
+use ugos_client::types::docker::{Container, DockerImage, Mirror};
 use ugos_client::types::kvm::{
     HostInfo, ImageInfo, LogEntry, NetworkDetail, NetworkSummary, Snapshot, StorageInfo, UsbDevice,
     VmDetail, VmSummary, VncLink,
@@ -348,13 +349,13 @@ impl From<&LogEntry> for LogRow {
 // ── Formatting helpers ──────────────────────────────────────────────
 
 /// Format KiB as human-readable MiB.
-fn format_mib(kib: i64) -> String {
+pub fn format_mib(kib: i64) -> String {
     format!("{} MiB", kib / 1024)
 }
 
 /// Format bytes as human-readable GiB.
 #[allow(clippy::cast_precision_loss)]
-fn format_gib(bytes: i64) -> String {
+pub fn format_gib(bytes: i64) -> String {
     let gib = bytes as f64 / 1_073_741_824.0;
     format!("{gib:.1} GiB")
 }
@@ -399,6 +400,86 @@ pub fn print_success(msg: &str, format: OutputFormat) {
         OutputFormat::Table => println!("{msg}"),
         OutputFormat::Json => {
             println!("{}", serde_json::json!({"status": "ok", "message": msg}));
+        }
+    }
+}
+
+// ── Docker ──────────────────────────────────────────────────────────
+
+/// Table row for Docker containers.
+#[derive(Tabled, Serialize)]
+pub struct ContainerRow {
+    #[tabled(rename = "ID")]
+    pub id: String,
+    #[tabled(rename = "Name")]
+    pub name: String,
+    #[tabled(rename = "Image")]
+    pub image: String,
+    #[tabled(rename = "Status")]
+    pub status: String,
+    #[tabled(rename = "CPU%")]
+    pub cpu: String,
+    #[tabled(rename = "Memory")]
+    pub memory: String,
+}
+
+impl From<&Container> for ContainerRow {
+    fn from(c: &Container) -> Self {
+        Self {
+            id: c.container_id.chars().take(12).collect(),
+            name: c.container_name.clone(),
+            image: c.image.clone(),
+            status: c.state.clone(),
+            cpu: format!("{:.1}%", c.cpu_percent),
+            memory: format_mib(c.memory_usage / 1024),
+        }
+    }
+}
+
+/// Table row for Docker images.
+#[derive(Tabled, Serialize)]
+pub struct DockerImageRow {
+    #[tabled(rename = "ID")]
+    pub id: String,
+    #[tabled(rename = "Repository")]
+    pub repository: String,
+    #[tabled(rename = "Tag")]
+    pub tag: String,
+    #[tabled(rename = "Size")]
+    pub size: String,
+}
+
+impl From<&DockerImage> for DockerImageRow {
+    fn from(i: &DockerImage) -> Self {
+        Self {
+            id: i.id.chars().take(12).collect(),
+            repository: i.repository.clone(),
+            tag: i.tag.clone(),
+            size: format_mib(i.size / 1024),
+        }
+    }
+}
+
+/// Table row for registry mirrors.
+#[derive(Tabled, Serialize)]
+pub struct MirrorRow {
+    #[tabled(rename = "ID")]
+    pub id: String,
+    #[tabled(rename = "Name")]
+    pub name: String,
+    #[tabled(rename = "Address")]
+    pub address: String,
+    #[tabled(rename = "Active")]
+    pub active: String,
+}
+
+impl From<&Mirror> for MirrorRow {
+    fn from(m: &Mirror) -> Self {
+        Self {
+            id: m.id.to_string(),
+            name: m.alias.clone(),
+            address: m.address.clone(),
+            active: if m.status { "✓" } else { "✗" }.into(),
         }
     }
 }
