@@ -232,6 +232,39 @@ const fn default_page_size() -> u32 {
     20
 }
 
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct VmSpecParam {
+    /// Full VM specification as a JSON object.
+    spec: serde_json::Value,
+    /// Target NAS name or host. Required when multiple targets are configured.
+    #[serde(default)]
+    target: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct OvaExportParam {
+    /// VM display name or UUID.
+    vm: String,
+    /// Storage volume name.
+    storage_name: String,
+    /// Storage volume UUID.
+    storage_uuid: String,
+    /// Output OVA file path on the NAS.
+    ova_path: String,
+    /// Target NAS name or host. Required when multiple targets are configured.
+    #[serde(default)]
+    target: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct OvaParseParam {
+    /// OVA file path on the NAS.
+    ova_path: String,
+    /// Target NAS name or host. Required when multiple targets are configured.
+    #[serde(default)]
+    target: Option<String>,
+}
+
 // ── Server ──────────────────────────────────────────────────────────
 
 /// MCP server exposing UGOS NAS operations as tools.
@@ -621,6 +654,71 @@ impl UgosMcp {
         match self.client(p.target.as_deref()).await {
             Ok(c) => match c.log_operators().await {
                 Ok(ops) => serde_json::to_string_pretty(&ops).unwrap_or_default(),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    // ── VM create/update ────────────────────────────────────────────
+
+    #[tool(
+        description = "Create a new VM from a full VM spec (JSON object matching VmDetail schema). Use ugos_vm_show to see an example spec."
+    )]
+    async fn ugos_vm_create(&self, Parameters(p): Parameters<VmSpecParam>) -> String {
+        let spec: ugos_client::types::kvm::VmDetail = match serde_json::from_value(p.spec) {
+            Ok(s) => s,
+            Err(e) => return format!("error parsing spec: {e}"),
+        };
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.vm_create(&spec).await {
+                Ok(uuid) => format!("Created VM {uuid}"),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Update an existing VM (must be shut off). Takes a full VM spec (JSON object matching VmDetail schema)."
+    )]
+    async fn ugos_vm_update(&self, Parameters(p): Parameters<VmSpecParam>) -> String {
+        let spec: ugos_client::types::kvm::VmDetail = match serde_json::from_value(p.spec) {
+            Ok(s) => s,
+            Err(e) => return format!("error parsing spec: {e}"),
+        };
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.vm_update(&spec).await {
+                Ok(()) => format!("Updated VM {}", spec.virtual_machine_display_name),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    // ── OVA ─────────────────────────────────────────────────────────
+
+    #[tool(description = "Export a VM as an OVA file to a path on the NAS")]
+    async fn ugos_ova_export(&self, Parameters(p): Parameters<OvaExportParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c
+                .ova_export(&p.vm, &p.storage_name, &p.storage_uuid, &p.ova_path)
+                .await
+            {
+                Ok(()) => format!("Exported {} to {}", p.vm, p.ova_path),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Parse an OVA file on the NAS and return the VM configuration it contains"
+    )]
+    async fn ugos_ova_parse(&self, Parameters(p): Parameters<OvaParseParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.ova_parse(&p.ova_path).await {
+                Ok(d) => serde_json::to_string_pretty(&d).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
             },
             Err(e) => e,

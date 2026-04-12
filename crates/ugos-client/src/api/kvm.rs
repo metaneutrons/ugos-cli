@@ -28,6 +28,10 @@ pub trait KvmApi {
     fn vm_reboot(&self, name: &str, force: bool) -> impl Future<Output = Result<()>> + Send;
     /// Delete a VM.
     fn vm_delete(&self, name: &str) -> impl Future<Output = Result<()>> + Send;
+    /// Create a new VM from a `VmDetail` spec. Generates a UUID automatically.
+    fn vm_create(&self, spec: &VmDetail) -> impl Future<Output = Result<String>> + Send;
+    /// Update an existing VM (must be shut off).
+    fn vm_update(&self, spec: &VmDetail) -> impl Future<Output = Result<()>> + Send;
     /// Get host hardware info (CPU cores, memory).
     fn host_info(&self) -> impl Future<Output = Result<HostInfo>> + Send;
 
@@ -120,6 +124,20 @@ pub trait KvmApi {
 
     /// Send a heartbeat to keep the session alive.
     fn heartbeat(&self) -> impl Future<Output = Result<()>> + Send;
+
+    // ── OVA ─────────────────────────────────────────────────────────
+
+    /// Export a VM as an OVA file.
+    fn ova_export(
+        &self,
+        vm: &str,
+        storage_name: &str,
+        storage_uuid: &str,
+        ova_path: &str,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Parse an OVA file and return the VM configuration it contains.
+    fn ova_parse(&self, ova_path: &str) -> impl Future<Output = Result<VmDetail>> + Send;
 }
 
 // ── Name resolution ─────────────────────────────────────────────────
@@ -218,6 +236,21 @@ impl KvmApi for UgosClient {
                 ],
             )
             .await?;
+        Ok(())
+    }
+
+    async fn vm_create(&self, spec: &VmDetail) -> Result<String> {
+        let mut spec = spec.clone();
+        if spec.virtual_machine_name.is_empty() {
+            spec.virtual_machine_name = uuid::Uuid::new_v4().to_string();
+        }
+        let uuid = spec.virtual_machine_name.clone();
+        let _: ResultWrapper<String> = self.post("kvm/manager/CreateVirtualMachine", &spec).await?;
+        Ok(uuid)
+    }
+
+    async fn vm_update(&self, spec: &VmDetail) -> Result<()> {
+        let _: ResultWrapper<String> = self.post("kvm/manager/UpdateVirtualMachine", spec).await?;
         Ok(())
     }
 
@@ -422,5 +455,30 @@ impl KvmApi for UgosClient {
     async fn heartbeat(&self) -> Result<()> {
         let _: serde_json::Value = self.get("verify/heartbeat").await?;
         Ok(())
+    }
+
+    // ── OVA ─────────────────────────────────────────────────────────
+
+    async fn ova_export(
+        &self,
+        vm: &str,
+        storage_name: &str,
+        storage_uuid: &str,
+        ova_path: &str,
+    ) -> Result<()> {
+        let (uuid, _) = resolve_vm(self, vm).await?;
+        let body = serde_json::json!({
+            "virtualName": uuid,
+            "storageName": storage_name,
+            "storageUUID": storage_uuid,
+            "ovaPath": ova_path,
+        });
+        let _: ResultWrapper<String> = self.post("kvm/manager/ExportOVA", &body).await?;
+        Ok(())
+    }
+
+    async fn ova_parse(&self, ova_path: &str) -> Result<VmDetail> {
+        let body = serde_json::json!({"ovaPath": ova_path});
+        self.post("kvm/manager/ParseOvaFile", &body).await
     }
 }
