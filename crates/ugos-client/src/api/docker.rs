@@ -30,6 +30,9 @@ pub trait DockerApi {
     /// Show detailed container configuration.
     fn container_show(&self, id: &str) -> impl Future<Output = Result<ContainerDetail>> + Send;
 
+    /// Create a container from a detail spec.
+    fn container_create(&self, spec: &ContainerDetail) -> impl Future<Output = Result<()>> + Send;
+
     /// Start a container.
     fn container_start(&self, id: &str) -> impl Future<Output = Result<()>> + Send;
 
@@ -100,6 +103,11 @@ impl DockerApi for UgosClient {
     async fn container_show(&self, id: &str) -> Result<ContainerDetail> {
         self.get_with_params("docker/container/GetContainerById", &[("containerId", id)])
             .await
+    }
+
+    async fn container_create(&self, spec: &ContainerDetail) -> Result<()> {
+        let _: serde_json::Value = self.post("docker/container/CreateContainer", spec).await?;
+        Ok(())
     }
 
     async fn container_start(&self, id: &str) -> Result<()> {

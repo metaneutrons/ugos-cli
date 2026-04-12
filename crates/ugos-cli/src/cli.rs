@@ -344,6 +344,11 @@ pub enum DockerAction {
         /// Container ID.
         id: String,
     },
+    /// Create a container from a JSON spec file.
+    Create {
+        /// Path to JSON file (use `ugos docker show <id>` to get a template).
+        file: String,
+    },
     /// Stop a container.
     Stop {
         /// Container ID.

@@ -350,6 +350,14 @@ async fn docker(client: &UgosClient, action: &DockerAction, fmt: OutputFormat) -
                 println!("{}", serde_json::to_string_pretty(&detail)?);
             }
         }
+        DockerAction::Create { file } => {
+            let json = std::fs::read_to_string(file)
+                .map_err(|e| anyhow::anyhow!("reading {file}: {e}"))?;
+            let spec: ugos_client::types::docker::ContainerDetail = serde_json::from_str(&json)
+                .map_err(|e| anyhow::anyhow!("parsing container spec: {e}"))?;
+            client.container_create(&spec).await?;
+            output::print_success(&format!("Created container {}", spec.container_name), fmt);
+        }
         DockerAction::Stop { id } => {
             client.container_stop(id).await?;
             output::print_success(&format!("Stopped {id}"), fmt);
