@@ -67,6 +67,21 @@ pub enum Resource {
         #[command(subcommand)]
         action: ImageAction,
     },
+    /// USB device management.
+    Usb {
+        #[command(subcommand)]
+        action: UsbAction,
+    },
+    /// VNC link management.
+    Vnc {
+        #[command(subcommand)]
+        action: VncAction,
+    },
+    /// KVM audit logs.
+    Log {
+        #[command(subcommand)]
+        action: LogAction,
+    },
     /// Show NAS host info.
     Info,
 }
@@ -164,6 +179,11 @@ pub enum NetworkAction {
         /// Network name.
         name: String,
     },
+    /// Delete a KVM network.
+    Delete {
+        /// Network name.
+        name: String,
+    },
 }
 
 /// Storage subcommands.
@@ -171,6 +191,27 @@ pub enum NetworkAction {
 pub enum StorageAction {
     /// List storage volumes.
     List,
+    /// Check which VMs use a storage volume.
+    Usage {
+        /// Volume name.
+        name: String,
+        /// Volume UUID.
+        uuid: String,
+    },
+    /// Add a storage volume to KVM.
+    Add {
+        /// Volume name.
+        name: String,
+        /// Volume UUID.
+        uuid: String,
+    },
+    /// Remove a storage volume from KVM.
+    Delete {
+        /// Volume name.
+        name: String,
+        /// Volume UUID.
+        uuid: String,
+    },
 }
 
 /// Image subcommands.
@@ -178,4 +219,60 @@ pub enum StorageAction {
 pub enum ImageAction {
     /// List ISO/disk images.
     List,
+    /// Delete an image.
+    Delete {
+        /// Image file name (e.g. `CachyOS.iso`).
+        file_name: String,
+        /// Image display name (e.g. `CachyOS`).
+        image_name: String,
+    },
+    /// Check which VMs use an image.
+    Usage {
+        /// Image name.
+        name: String,
+    },
+}
+
+/// USB subcommands.
+#[derive(Debug, Subcommand)]
+pub enum UsbAction {
+    /// List USB devices for a VM.
+    List {
+        /// VM name or UUID.
+        vm: String,
+    },
+}
+
+/// VNC subcommands.
+#[derive(Debug, Subcommand)]
+pub enum VncAction {
+    /// List VNC links for a VM.
+    List {
+        /// VM name or UUID.
+        vm: String,
+    },
+    /// Generate a noVNC link for a VM.
+    Generate {
+        /// VM name or UUID.
+        vm: String,
+        /// Base URL for the noVNC link.
+        #[arg(long, default_value = "")]
+        source_url: String,
+    },
+}
+
+/// Log subcommands.
+#[derive(Debug, Subcommand)]
+pub enum LogAction {
+    /// Search KVM audit logs.
+    List {
+        /// Page number.
+        #[arg(long, default_value = "1")]
+        page: u32,
+        /// Page size.
+        #[arg(long, default_value = "20")]
+        page_size: u32,
+    },
+    /// List all operator usernames.
+    Operators,
 }
