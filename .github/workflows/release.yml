@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            bins: ugos-cli ugos-mcp
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-24.04-arm
+            bins: ugos-cli ugos-mcp
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            bins: ugos-cli ugos-mcp
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            bins: ugos-cli ugos-mcp
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            bins: ugos-cli.exe ugos-mcp.exe
+          - target: aarch64-pc-windows-msvc
+            os: windows-latest
+            bins: ugos-cli.exe ugos-mcp.exe
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+      - name: Build release
+        run: cargo build --release --target ${{ matrix.target }} -p ugos-cli -p ugos-mcp
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          cd target/${{ matrix.target }}/release
+          tar czf ../../../ugos-cli-${{ matrix.target }}.tar.gz ugos-cli ugos-mcp
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cd target/${{ matrix.target }}/release
+          7z a ../../../ugos-cli-${{ matrix.target }}.zip ugos-cli.exe ugos-mcp.exe
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: ugos-cli-${{ matrix.target }}
+          path: |
+            ugos-cli-${{ matrix.target }}.tar.gz
+            ugos-cli-${{ matrix.target }}.zip
+
+  upload-release-artifacts:
+    name: Upload Release Artifacts
+    runs-on: ubuntu-latest
+    needs: [build]
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ugos-cli-*/*
+
+  crates-io:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    needs: [build]
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Publish ugos-client
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+        run: cargo publish -p ugos-client || true

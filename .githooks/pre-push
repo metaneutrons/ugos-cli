@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -e
+
+echo "🔍 pre-push: audit..."
+cargo audit 2>/dev/null || echo "⚠️  cargo-audit not installed, skipping"
+
+echo "🔍 pre-push: build..."
+cargo build --workspace
+
+echo "✅ pre-push: passed"

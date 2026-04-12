@@ -1,0 +1,25 @@
+[package]
+name = "ugos-client"
+description = "Rust client library for the UGREEN NAS (UGOS) API — authentication, KVM virtual machine management, snapshots, networks, storage, and images"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+keywords = ["ugreen", "nas", "ugos", "kvm", "api-client"]
+categories = ["api-bindings", "network-programming"]
+readme = "../../README.md"
+
+[lints]
+workspace = true
+
+[dependencies]
+base64.workspace = true
+reqwest.workspace = true
+rsa.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["sync"] }
+tracing.workspace = true

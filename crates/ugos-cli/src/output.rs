@@ -1,0 +1,327 @@
+//! Output formatting for CLI results.
+
+use anyhow::Result;
+use serde::Serialize;
+use tabled::{Table, Tabled};
+use ugos_client::types::kvm::{
+    HostInfo, ImageInfo, NetworkDetail, NetworkSummary, Snapshot, StorageInfo, VmDetail, VmSummary,
+};
+
+use crate::cli::OutputFormat;
+
+// ── Display row types ───────────────────────────────────────────────
+
+/// Table row for VM list.
+#[derive(Tabled, Serialize)]
+pub struct VmRow {
+    #[tabled(rename = "Name")]
+    pub name: String,
+    #[tabled(rename = "Status")]
+    pub status: String,
+    #[tabled(rename = "CPU%")]
+    pub cpu: String,
+    #[tabled(rename = "Memory")]
+    pub memory: String,
+    #[tabled(rename = "OS")]
+    pub os: String,
+}
+
+impl From<&VmSummary> for VmRow {
+    fn from(v: &VmSummary) -> Self {
+        Self {
+            name: v.vir_display_name.clone(),
+            status: v.status.clone(),
+            cpu: format!("{}%", v.guest_cpu_percent),
+            memory: format_mib(v.guest_used_memory),
+            os: v.system_type.clone(),
+        }
+    }
+}
+
+/// Table row for VM detail.
+#[derive(Tabled, Serialize)]
+pub struct VmDetailRow {
+    #[tabled(rename = "Field")]
+    pub field: String,
+    #[tabled(rename = "Value")]
+    pub value: String,
+}
+
+/// Convert a `VmDetail` into key-value rows.
+pub fn vm_detail_rows(d: &VmDetail) -> Vec<VmDetailRow> {
+    vec![
+        VmDetailRow {
+            field: "Name".into(),
+            value: d.virtual_machine_display_name.clone(),
+        },
+        VmDetailRow {
+            field: "UUID".into(),
+            value: d.virtual_machine_name.clone(),
+        },
+        VmDetailRow {
+            field: "OS".into(),
+            value: format!("{} {}", d.system_type, d.system_version),
+        },
+        VmDetailRow {
+            field: "CPUs".into(),
+            value: d.core.value.to_string(),
+        },
+        VmDetailRow {
+            field: "Memory".into(),
+            value: format_mib(d.memory.value),
+        },
+        VmDetailRow {
+            field: "Storage".into(),
+            value: d.storage_name.clone(),
+        },
+        VmDetailRow {
+            field: "Boot".into(),
+            value: d.device.boot_type.clone(),
+        },
+        VmDetailRow {
+            field: "Graphics".into(),
+            value: d.device.graphics_card.clone(),
+        },
+        VmDetailRow {
+            field: "Auto-start".into(),
+            value: d.other_config.auto_matic_start_up.to_string(),
+        },
+    ]
+}
+
+/// Table row for snapshots.
+#[derive(Tabled, Serialize)]
+pub struct SnapshotRow {
+    #[tabled(rename = "Name")]
+    pub name: String,
+    #[tabled(rename = "Display Name")]
+    pub display_name: String,
+    #[tabled(rename = "Current")]
+    pub current: String,
+}
+
+impl From<&Snapshot> for SnapshotRow {
+    fn from(s: &Snapshot) -> Self {
+        Self {
+            name: s.name.clone(),
+            display_name: s.display_name.clone(),
+            current: if s.is_current {
+                "✓".into()
+            } else {
+                String::new()
+            },
+        }
+    }
+}
+
+/// Table row for networks.
+#[derive(Tabled, Serialize)]
+pub struct NetworkRow {
+    #[tabled(rename = "Name")]
+    pub name: String,
+    #[tabled(rename = "Label")]
+    pub label: String,
+    #[tabled(rename = "Type")]
+    pub net_type: String,
+    #[tabled(rename = "Interface")]
+    pub interface: String,
+    #[tabled(rename = "VMs")]
+    pub vms: String,
+}
+
+impl From<&NetworkSummary> for NetworkRow {
+    fn from(n: &NetworkSummary) -> Self {
+        Self {
+            name: n.network_name.clone(),
+            label: n.network_label.clone(),
+            net_type: n.network_type.clone(),
+            interface: n.interface_name.clone(),
+            vms: n.virtual_display_names.join(", "),
+        }
+    }
+}
+
+/// Table row for network detail.
+#[derive(Tabled, Serialize)]
+pub struct NetDetailRow {
+    #[tabled(rename = "Field")]
+    pub field: String,
+    #[tabled(rename = "Value")]
+    pub value: String,
+}
+
+/// Convert a `NetworkDetail` into key-value rows.
+pub fn net_detail_rows(d: &NetworkDetail) -> Vec<NetDetailRow> {
+    vec![
+        NetDetailRow {
+            field: "Name".into(),
+            value: d.network_name.clone(),
+        },
+        NetDetailRow {
+            field: "UUID".into(),
+            value: d.network_uuid.clone(),
+        },
+        NetDetailRow {
+            field: "Type".into(),
+            value: d.network_type.clone(),
+        },
+        NetDetailRow {
+            field: "Mode".into(),
+            value: d.network_mode.clone(),
+        },
+        NetDetailRow {
+            field: "Interface".into(),
+            value: d.mapping_network.clone(),
+        },
+        NetDetailRow {
+            field: "IPv4".into(),
+            value: d.enable_ipv4.to_string(),
+        },
+        NetDetailRow {
+            field: "IPv4 Subnet".into(),
+            value: d.ipv4_subnet.clone(),
+        },
+        NetDetailRow {
+            field: "IPv6".into(),
+            value: d.enable_ipv6.to_string(),
+        },
+    ]
+}
+
+/// Table row for storage.
+#[derive(Tabled, Serialize)]
+pub struct StorageRow {
+    #[tabled(rename = "Name")]
+    pub name: String,
+    #[tabled(rename = "Label")]
+    pub label: String,
+    #[tabled(rename = "Filesystem")]
+    pub filesystem: String,
+    #[tabled(rename = "Total")]
+    pub total: String,
+    #[tabled(rename = "Available")]
+    pub available: String,
+    #[tabled(rename = "Path")]
+    pub path: String,
+}
+
+impl From<&StorageInfo> for StorageRow {
+    fn from(s: &StorageInfo) -> Self {
+        Self {
+            name: s.name.clone(),
+            label: s.label.clone(),
+            filesystem: s.filesystem.clone(),
+            total: format_gib(s.total_capacity),
+            available: format_gib(s.available_capacity),
+            path: s.path.clone(),
+        }
+    }
+}
+
+/// Table row for images.
+#[derive(Tabled, Serialize)]
+pub struct ImageRow {
+    #[tabled(rename = "Name")]
+    pub name: String,
+    #[tabled(rename = "File")]
+    pub file: String,
+    #[tabled(rename = "Type")]
+    pub image_type: String,
+    #[tabled(rename = "Size")]
+    pub size: String,
+    #[tabled(rename = "State")]
+    pub state: String,
+}
+
+impl From<&ImageInfo> for ImageRow {
+    fn from(i: &ImageInfo) -> Self {
+        Self {
+            name: i.image_name.clone(),
+            file: i.file_name.clone(),
+            image_type: i.image_type.clone(),
+            size: format_gib(i.file_size),
+            state: i.state.clone(),
+        }
+    }
+}
+
+/// Table row for host info.
+#[derive(Tabled, Serialize)]
+pub struct HostInfoRow {
+    #[tabled(rename = "Field")]
+    pub field: String,
+    #[tabled(rename = "Value")]
+    pub value: String,
+}
+
+/// Convert `HostInfo` into key-value rows.
+pub fn host_info_rows(h: &HostInfo) -> Vec<HostInfoRow> {
+    vec![
+        HostInfoRow {
+            field: "CPU Cores".into(),
+            value: h.cores.to_string(),
+        },
+        HostInfoRow {
+            field: "Memory".into(),
+            value: format_gib(h.memory),
+        },
+    ]
+}
+
+// ── Formatting helpers ──────────────────────────────────────────────
+
+/// Format KiB as human-readable MiB.
+fn format_mib(kib: i64) -> String {
+    format!("{} MiB", kib / 1024)
+}
+
+/// Format bytes as human-readable GiB.
+#[allow(clippy::cast_precision_loss)]
+fn format_gib(bytes: i64) -> String {
+    let gib = bytes as f64 / 1_073_741_824.0;
+    format!("{gib:.1} GiB")
+}
+
+// ── Generic printers ────────────────────────────────────────────────
+
+/// Print a list of items as a table or JSON.
+///
+/// # Errors
+///
+/// Returns an error if JSON serialization fails.
+pub fn print_list<T: Tabled + Serialize>(items: &[T], format: OutputFormat) -> Result<()> {
+    match format {
+        OutputFormat::Table => {
+            if items.is_empty() {
+                // Using tracing would be wrong here — this is user-facing output.
+                #[allow(clippy::print_stdout)]
+                {
+                    println!("No results.");
+                }
+            } else {
+                #[allow(clippy::print_stdout)]
+                {
+                    println!("{}", Table::new(items));
+                }
+            }
+        }
+        OutputFormat::Json => {
+            #[allow(clippy::print_stdout)]
+            {
+                println!("{}", serde_json::to_string_pretty(items)?);
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Print a success message (for mutating operations).
+pub fn print_success(msg: &str, format: OutputFormat) {
+    #[allow(clippy::print_stdout)]
+    match format {
+        OutputFormat::Table => println!("{msg}"),
+        OutputFormat::Json => {
+            println!("{}", serde_json::json!({"status": "ok", "message": msg}));
+        }
+    }
+}
