@@ -15,7 +15,7 @@ pub struct Cli {
     pub user: Option<String>,
 
     /// Password.
-    #[arg(long, env = "UGOS_PASSWORD", global = true)]
+    #[arg(long, env = "UGOS_PASSWORD", global = true, hide_env_values = true)]
     pub password: Option<String>,
 
     /// HTTPS port.
