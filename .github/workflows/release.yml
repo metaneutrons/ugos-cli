@@ -71,6 +71,96 @@ jobs:
         with:
           files: ugos-cli-*/*
 
+  update-homebrew:
+    name: Update Homebrew Tap
+    runs-on: ubuntu-latest
+    needs: [build, upload-release-artifacts]
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: ugos-cli-*-apple-darwin
+          path: ./artifacts
+      - name: Calculate checksums
+        id: checksums
+        run: |
+          X64_SHA=$(sha256sum ./artifacts/ugos-cli-x86_64-apple-darwin/ugos-cli-x86_64-apple-darwin.tar.gz | cut -d' ' -f1)
+          ARM64_SHA=$(sha256sum ./artifacts/ugos-cli-aarch64-apple-darwin/ugos-cli-aarch64-apple-darwin.tar.gz | cut -d' ' -f1)
+          LINUX_X64_SHA=$(sha256sum ./artifacts/ugos-cli-x86_64-unknown-linux-gnu/ugos-cli-x86_64-unknown-linux-gnu.tar.gz 2>/dev/null | cut -d' ' -f1 || echo "")
+          LINUX_ARM64_SHA=$(sha256sum ./artifacts/ugos-cli-aarch64-unknown-linux-gnu/ugos-cli-aarch64-unknown-linux-gnu.tar.gz 2>/dev/null | cut -d' ' -f1 || echo "")
+          echo "x64_sha=${X64_SHA}" >> "$GITHUB_OUTPUT"
+          echo "arm64_sha=${ARM64_SHA}" >> "$GITHUB_OUTPUT"
+          echo "linux_x64_sha=${LINUX_X64_SHA}" >> "$GITHUB_OUTPUT"
+          echo "linux_arm64_sha=${LINUX_ARM64_SHA}" >> "$GITHUB_OUTPUT"
+      - name: Download all artifacts for checksums
+        uses: actions/download-artifact@v8
+        with:
+          pattern: ugos-cli-*-linux-gnu
+          path: ./artifacts
+      - name: Recalculate Linux checksums
+        id: linux_checksums
+        run: |
+          LINUX_X64_SHA=$(sha256sum ./artifacts/ugos-cli-x86_64-unknown-linux-gnu/ugos-cli-x86_64-unknown-linux-gnu.tar.gz | cut -d' ' -f1)
+          LINUX_ARM64_SHA=$(sha256sum ./artifacts/ugos-cli-aarch64-unknown-linux-gnu/ugos-cli-aarch64-unknown-linux-gnu.tar.gz | cut -d' ' -f1)
+          echo "linux_x64_sha=${LINUX_X64_SHA}" >> "$GITHUB_OUTPUT"
+          echo "linux_arm64_sha=${LINUX_ARM64_SHA}" >> "$GITHUB_OUTPUT"
+      - name: Update Homebrew tap
+        env:
+          TAP_TOKEN: ${{ secrets.HOMEBREW_UPDATE_TOKEN }}
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          X64_SHA=${{ steps.checksums.outputs.x64_sha }}
+          ARM64_SHA=${{ steps.checksums.outputs.arm64_sha }}
+          LINUX_X64_SHA=${{ steps.linux_checksums.outputs.linux_x64_sha }}
+          LINUX_ARM64_SHA=${{ steps.linux_checksums.outputs.linux_arm64_sha }}
+
+          git clone https://x-access-token:${TAP_TOKEN}@github.com/metaneutrons/homebrew-tap.git
+          cd homebrew-tap
+          mkdir -p Formula
+
+          cat > Formula/ugos-cli.rb << EOF
+          class UgosCli < Formula
+            desc "CLI and MCP server for UGREEN NAS (UGOS) management"
+            homepage "https://github.com/metaneutrons/ugos-cli"
+            version "${VERSION}"
+            license "GPL-3.0"
+
+            on_macos do
+              if Hardware::CPU.intel?
+                url "https://github.com/metaneutrons/ugos-cli/releases/download/v${VERSION}/ugos-cli-x86_64-apple-darwin.tar.gz"
+                sha256 "${X64_SHA}"
+              else
+                url "https://github.com/metaneutrons/ugos-cli/releases/download/v${VERSION}/ugos-cli-aarch64-apple-darwin.tar.gz"
+                sha256 "${ARM64_SHA}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.intel?
+                url "https://github.com/metaneutrons/ugos-cli/releases/download/v${VERSION}/ugos-cli-x86_64-unknown-linux-gnu.tar.gz"
+                sha256 "${LINUX_X64_SHA}"
+              else
+                url "https://github.com/metaneutrons/ugos-cli/releases/download/v${VERSION}/ugos-cli-aarch64-unknown-linux-gnu.tar.gz"
+                sha256 "${LINUX_ARM64_SHA}"
+              end
+            end
+
+            def install
+              bin.install "ugos-cli"
+              bin.install "ugos-mcp"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/ugos-cli --version")
+            end
+          end
+          EOF
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Formula/ugos-cli.rb
+          git commit -m "Update ugos-cli to ${VERSION}"
+          git push
+
   # crates-io:
   #   name: Publish to crates.io
   #   runs-on: ubuntu-latest
