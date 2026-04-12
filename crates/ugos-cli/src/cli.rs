@@ -77,6 +77,11 @@ pub enum Resource {
         #[command(subcommand)]
         action: VncAction,
     },
+    /// OVA export/import.
+    Ova {
+        #[command(subcommand)]
+        action: OvaAction,
+    },
     /// KVM audit logs.
     Log {
         #[command(subcommand)]
@@ -121,6 +126,16 @@ pub enum VmAction {
     Delete {
         /// VM name or UUID.
         name: String,
+    },
+    /// Create a VM from a JSON spec file.
+    Create {
+        /// Path to a JSON file containing the VM spec (`VmDetail`).
+        file: String,
+    },
+    /// Update a VM from a JSON spec file (VM must be shut off).
+    Update {
+        /// Path to a JSON file containing the VM spec (`VmDetail`).
+        file: String,
     },
     /// Snapshot management.
     Snapshot {
@@ -275,4 +290,25 @@ pub enum LogAction {
     },
     /// List all operator usernames.
     Operators,
+}
+
+/// OVA subcommands.
+#[derive(Debug, Subcommand)]
+pub enum OvaAction {
+    /// Export a VM as an OVA file.
+    Export {
+        /// VM name or UUID.
+        vm: String,
+        /// Storage volume name.
+        storage_name: String,
+        /// Storage volume UUID.
+        storage_uuid: String,
+        /// Output OVA file path on the NAS.
+        ova_path: String,
+    },
+    /// Parse an OVA file and show the VM configuration it contains.
+    Parse {
+        /// OVA file path on the NAS.
+        ova_path: String,
+    },
 }

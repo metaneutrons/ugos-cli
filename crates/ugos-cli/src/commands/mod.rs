@@ -5,8 +5,8 @@ use ugos_client::UgosClient;
 use ugos_client::api::kvm::KvmApi;
 
 use crate::cli::{
-    ImageAction, LogAction, NetworkAction, OutputFormat, Resource, SnapshotAction, StorageAction,
-    UsbAction, VmAction, VncAction,
+    ImageAction, LogAction, NetworkAction, OutputFormat, OvaAction, Resource, SnapshotAction,
+    StorageAction, UsbAction, VmAction, VncAction,
 };
 use crate::output;
 
@@ -23,6 +23,7 @@ pub async fn run(client: &UgosClient, resource: &Resource, fmt: OutputFormat) ->
         Resource::Image { action } => image(client, action, fmt).await,
         Resource::Usb { action } => usb(client, action, fmt).await,
         Resource::Vnc { action } => vnc(client, action, fmt).await,
+        Resource::Ova { action } => ova(client, action, fmt).await,
         Resource::Log { action } => log(client, action, fmt).await,
         Resource::Info => info(client, fmt).await,
     }
@@ -65,6 +66,25 @@ async fn vm(client: &UgosClient, action: &VmAction, fmt: OutputFormat) -> Result
         VmAction::Delete { name } => {
             client.vm_delete(name).await?;
             output::print_success(&format!("Deleted {name}"), fmt);
+        }
+        VmAction::Create { file } => {
+            let json = std::fs::read_to_string(file)
+                .map_err(|e| anyhow::anyhow!("reading {file}: {e}"))?;
+            let spec: ugos_client::types::kvm::VmDetail =
+                serde_json::from_str(&json).map_err(|e| anyhow::anyhow!("parsing VM spec: {e}"))?;
+            let uuid = client.vm_create(&spec).await?;
+            output::print_success(&format!("Created VM {uuid}"), fmt);
+        }
+        VmAction::Update { file } => {
+            let json = std::fs::read_to_string(file)
+                .map_err(|e| anyhow::anyhow!("reading {file}: {e}"))?;
+            let spec: ugos_client::types::kvm::VmDetail =
+                serde_json::from_str(&json).map_err(|e| anyhow::anyhow!("parsing VM spec: {e}"))?;
+            client.vm_update(&spec).await?;
+            output::print_success(
+                &format!("Updated VM {}", spec.virtual_machine_display_name),
+                fmt,
+            );
         }
         VmAction::Snapshot { action } => snapshot(client, action, fmt).await?,
     }
@@ -221,6 +241,38 @@ async fn log(client: &UgosClient, action: &LogAction, fmt: OutputFormat) -> Resu
         LogAction::Operators => {
             let ops = client.log_operators().await?;
             output::print_success(&format!("Operators: {}", ops.join(", ")), fmt);
+        }
+    }
+    Ok(())
+}
+
+async fn ova(client: &UgosClient, action: &OvaAction, fmt: OutputFormat) -> Result<()> {
+    match action {
+        OvaAction::Export {
+            vm,
+            storage_name,
+            storage_uuid,
+            ova_path,
+        } => {
+            client
+                .ova_export(vm, storage_name, storage_uuid, ova_path)
+                .await?;
+            output::print_success(&format!("Exported {vm} to {ova_path}"), fmt);
+        }
+        OvaAction::Parse { ova_path } => {
+            let detail = client.ova_parse(ova_path).await?;
+            match fmt {
+                OutputFormat::Table => {
+                    let rows = output::vm_detail_rows(&detail);
+                    output::print_list(&rows, fmt)?;
+                }
+                OutputFormat::Json => {
+                    #[allow(clippy::print_stdout)]
+                    {
+                        println!("{}", serde_json::to_string_pretty(&detail)?);
+                    }
+                }
+            }
         }
     }
     Ok(())
