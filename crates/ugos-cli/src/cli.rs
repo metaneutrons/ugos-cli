@@ -82,6 +82,11 @@ pub enum Resource {
         #[command(subcommand)]
         action: OvaAction,
     },
+    /// Docker container management.
+    Docker {
+        #[command(subcommand)]
+        action: DockerAction,
+    },
     /// KVM audit logs.
     Log {
         #[command(subcommand)]
@@ -311,4 +316,76 @@ pub enum OvaAction {
         /// OVA file path on the NAS.
         ova_path: String,
     },
+}
+
+/// Docker subcommands.
+#[derive(Debug, Subcommand)]
+pub enum DockerAction {
+    /// Show Docker engine overview.
+    Overview,
+    /// Show Docker engine status.
+    Status,
+    /// List containers.
+    Ps {
+        /// Page number.
+        #[arg(long, default_value = "1")]
+        page: u32,
+        /// Page size.
+        #[arg(long, default_value = "50")]
+        page_size: u32,
+    },
+    /// Start a container.
+    Start {
+        /// Container ID.
+        id: String,
+    },
+    /// Stop a container.
+    Stop {
+        /// Container ID.
+        id: String,
+    },
+    /// Restart a container.
+    Restart {
+        /// Container ID.
+        id: String,
+    },
+    /// Kill a container.
+    Kill {
+        /// Container ID.
+        id: String,
+    },
+    /// Remove a container.
+    Rm {
+        /// Container ID.
+        id: String,
+    },
+    /// List local images.
+    Images {
+        /// Page number.
+        #[arg(long, default_value = "1")]
+        page: u32,
+        /// Page size.
+        #[arg(long, default_value = "50")]
+        page_size: u32,
+    },
+    /// Search Docker Hub for images.
+    Search {
+        /// Image name to search for.
+        name: String,
+    },
+    /// Pull an image.
+    Pull {
+        /// Image name (e.g. `nginx`).
+        image: String,
+        /// Image tag (default: latest).
+        #[arg(long, default_value = "latest")]
+        tag: String,
+    },
+    /// Delete an image.
+    Rmi {
+        /// Image ID.
+        id: String,
+    },
+    /// List registry mirror sources.
+    Mirrors,
 }

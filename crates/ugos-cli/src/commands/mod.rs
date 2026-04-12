@@ -2,11 +2,12 @@
 
 use anyhow::Result;
 use ugos_client::UgosClient;
+use ugos_client::api::docker::DockerApi;
 use ugos_client::api::kvm::KvmApi;
 
 use crate::cli::{
-    ImageAction, LogAction, NetworkAction, OutputFormat, OvaAction, Resource, SnapshotAction,
-    StorageAction, UsbAction, VmAction, VncAction,
+    DockerAction, ImageAction, LogAction, NetworkAction, OutputFormat, OvaAction, Resource,
+    SnapshotAction, StorageAction, UsbAction, VmAction, VncAction,
 };
 use crate::output;
 
@@ -24,6 +25,7 @@ pub async fn run(client: &UgosClient, resource: &Resource, fmt: OutputFormat) ->
         Resource::Usb { action } => usb(client, action, fmt).await,
         Resource::Vnc { action } => vnc(client, action, fmt).await,
         Resource::Ova { action } => ova(client, action, fmt).await,
+        Resource::Docker { action } => docker(client, action, fmt).await,
         Resource::Log { action } => log(client, action, fmt).await,
         Resource::Info => info(client, fmt).await,
     }
@@ -273,6 +275,113 @@ async fn ova(client: &UgosClient, action: &OvaAction, fmt: OutputFormat) -> Resu
                     }
                 }
             }
+        }
+    }
+    Ok(())
+}
+
+#[allow(clippy::too_many_lines)]
+async fn docker(client: &UgosClient, action: &DockerAction, fmt: OutputFormat) -> Result<()> {
+    match action {
+        DockerAction::Overview => {
+            let ov = client.docker_overview().await?;
+            match fmt {
+                OutputFormat::Table => {
+                    let rows = vec![
+                        output::HostInfoRow {
+                            field: "Containers".into(),
+                            value: format!(
+                                "{} ({} running)",
+                                ov.container_count, ov.run_container_count
+                            ),
+                        },
+                        output::HostInfoRow {
+                            field: "Images".into(),
+                            value: ov.image_count.to_string(),
+                        },
+                        output::HostInfoRow {
+                            field: "CPU".into(),
+                            value: format!(
+                                "{}% (containers: {}%)",
+                                ov.cpu_used, ov.container_cpu_used
+                            ),
+                        },
+                        output::HostInfoRow {
+                            field: "Memory".into(),
+                            value: format!(
+                                "{} / {}",
+                                output::format_gib(ov.memory_used),
+                                output::format_gib(ov.total_memory)
+                            ),
+                        },
+                        output::HostInfoRow {
+                            field: "Engine".into(),
+                            value: if ov.status { "running" } else { "stopped" }.into(),
+                        },
+                    ];
+                    output::print_list(&rows, fmt)?;
+                }
+                OutputFormat::Json => {
+                    #[allow(clippy::print_stdout)]
+                    {
+                        println!("{}", serde_json::to_string_pretty(&ov)?);
+                    }
+                }
+            }
+        }
+        DockerAction::Status => {
+            let status = client.docker_engine_status().await?;
+            output::print_success(&format!("Docker engine: {status}"), fmt);
+        }
+        DockerAction::Ps { page, page_size } => {
+            let result = client.container_list(*page, *page_size).await?;
+            let containers = result.result.unwrap_or_default();
+            let rows: Vec<output::ContainerRow> = containers.iter().map(Into::into).collect();
+            output::print_list(&rows, fmt)?;
+        }
+        DockerAction::Start { id } => {
+            client.container_start(id).await?;
+            output::print_success(&format!("Started {id}"), fmt);
+        }
+        DockerAction::Stop { id } => {
+            client.container_stop(id).await?;
+            output::print_success(&format!("Stopped {id}"), fmt);
+        }
+        DockerAction::Restart { id } => {
+            client.container_restart(id).await?;
+            output::print_success(&format!("Restarted {id}"), fmt);
+        }
+        DockerAction::Kill { id } => {
+            client.container_kill(id).await?;
+            output::print_success(&format!("Killed {id}"), fmt);
+        }
+        DockerAction::Rm { id } => {
+            client.container_remove(id).await?;
+            output::print_success(&format!("Removed {id}"), fmt);
+        }
+        DockerAction::Images { page, page_size } => {
+            let result = client.docker_image_list(*page, *page_size).await?;
+            let images = result.result.unwrap_or_default();
+            let rows: Vec<output::DockerImageRow> = images.iter().map(Into::into).collect();
+            output::print_list(&rows, fmt)?;
+        }
+        DockerAction::Search { name } => {
+            let images = client.docker_image_search(name, 1, 20).await?;
+            let rows: Vec<output::DockerImageRow> = images.iter().map(Into::into).collect();
+            output::print_list(&rows, fmt)?;
+        }
+        DockerAction::Pull { image, tag } => {
+            client.docker_image_download(image, tag).await?;
+            output::print_success(&format!("Pulling {image}:{tag}"), fmt);
+        }
+        DockerAction::Rmi { id } => {
+            client.docker_image_delete(id).await?;
+            output::print_success(&format!("Deleted image {id}"), fmt);
+        }
+        DockerAction::Mirrors => {
+            let mirrors = client.mirror_list().await?;
+            let rows: Vec<output::MirrorRow> = mirrors.iter().map(Into::into).collect();
+            output::print_list(&rows, fmt)?;
         }
     }
     Ok(())
