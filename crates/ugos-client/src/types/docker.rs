@@ -40,39 +40,107 @@ pub struct DockerOverview {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Container {
+    /// Container name.
+    #[serde(default)]
+    pub name: String,
     /// Container ID.
     #[serde(default)]
     pub container_id: String,
-    /// Container name.
+    /// Image ID.
     #[serde(default)]
-    pub container_name: String,
+    pub image_id: String,
     /// Image name.
     #[serde(default)]
-    pub image: String,
+    pub image_name: String,
+    /// Image version/tag.
+    #[serde(default)]
+    pub version: String,
     /// Container status (e.g. "running", "exited").
     #[serde(default)]
     pub status: String,
-    /// Container state.
+    /// Compose project name (empty if standalone).
     #[serde(default)]
-    pub state: String,
-    /// CPU usage percentage.
-    #[serde(default)]
-    pub cpu_percent: f64,
-    /// Memory usage in bytes.
-    #[serde(default)]
-    pub memory_usage: i64,
-    /// Memory limit in bytes.
-    #[serde(default)]
-    pub memory_limit: i64,
+    pub project_name: String,
     /// Creation timestamp.
     #[serde(default)]
-    pub created: i64,
+    pub create_at: i64,
+    /// Application label.
+    #[serde(default)]
+    pub application: String,
+}
+
+/// Detailed container configuration from `GetContainerById`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+#[allow(clippy::struct_excessive_bools)]
+pub struct ContainerDetail {
+    /// Image name.
+    #[serde(default)]
+    pub image_name: String,
+    /// Image ID.
+    #[serde(default)]
+    pub image_id: String,
+    /// Image version/tag.
+    #[serde(default)]
+    pub image_version: String,
+    /// Full image reference (e.g. "nginx:latest").
+    #[serde(default)]
+    pub tag: String,
+    /// Container name.
+    #[serde(default)]
+    pub container_name: String,
+    /// CPU limit (0 = unlimited).
+    #[serde(default)]
+    pub cpu_limit: i64,
+    /// Memory limit in bytes (0 = unlimited).
+    #[serde(default)]
+    pub mem_limit: i64,
+    /// No resource restrictions.
+    #[serde(default)]
+    pub no_restrictions: bool,
+    /// Network mode (e.g. "bridge", "host").
+    #[serde(default)]
+    pub network_mode: String,
+    /// Hardware acceleration enabled.
+    #[serde(default)]
+    pub hardware_acceleration: bool,
+    /// Privileged mode.
+    #[serde(default)]
+    pub privileged_mode: bool,
+    /// Restart policy.
+    #[serde(default)]
+    pub abnormal_reset: bool,
+    /// Whether the container should run after creation.
+    #[serde(default)]
+    pub run_container: bool,
     /// Port mappings.
     #[serde(default)]
-    pub ports: Vec<serde_json::Value>,
-    /// All other fields.
-    #[serde(flatten)]
-    pub extra: serde_json::Map<String, serde_json::Value>,
+    pub port_mapping: Vec<serde_json::Value>,
+    /// Volume mounts.
+    pub volumes: Option<Vec<serde_json::Value>>,
+    /// Environment variables.
+    #[serde(default)]
+    pub environment_variables: Vec<EnvVar>,
+    /// Container run command.
+    #[serde(default)]
+    pub container_run_command: Vec<String>,
+    /// Linux capabilities.
+    #[serde(default)]
+    pub perm_and_func: Vec<String>,
+    /// Compose project name.
+    #[serde(default)]
+    pub project_name: String,
+}
+
+/// Environment variable key-value pair.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EnvVar {
+    /// Variable name.
+    #[serde(default)]
+    pub variable: String,
+    /// Variable value (UGOS calls this "price").
+    #[serde(default)]
+    pub price: String,
 }
 
 /// Paginated container list response.
