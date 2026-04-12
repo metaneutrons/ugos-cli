@@ -1,0 +1,24 @@
+{
+  "name": "ugos-dev",
+  "description": "UGOS CLI development agent",
+  "useLegacyMcpJson": true,
+  "tools": [
+    "code",
+    "glob",
+    "grep",
+    "knowledge",
+    "read",
+    "write",
+    "shell",
+    "todo_list"
+  ],
+  "resources": [
+    "file://.kiro/steering/requirements.md",
+   "file://.kiro/steering/architecture.md",
+    "file://.kiro/steering/conventions.md",
+    "file://.kiro/steering/plan.md",
+    "file://.kiro/docs/api-auth.md",
+    "file://.kiro/docs/api-kvm.md",
+    "file://.kiro/docs/api-overview.md"
+  ]
+}

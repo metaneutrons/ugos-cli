@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+set -e
+
+echo "🔍 pre-commit: formatting..."
+cargo fmt --all -- --check
+
+echo "🔍 pre-commit: clippy..."
+cargo clippy --workspace -- -D warnings
+
+echo "✅ pre-commit: passed"
