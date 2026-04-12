@@ -96,24 +96,27 @@ pub struct ContainerPage {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DockerImage {
-    /// Image ID.
+    /// Image ID (sha256:...).
     #[serde(default)]
-    pub id: String,
-    /// Repository name.
+    pub image_id: String,
+    /// Image reference (e.g. "hello-world:latest").
     #[serde(default)]
-    pub repository: String,
-    /// Tag.
+    pub image_ref: String,
+    /// Image name (e.g. "hello-world").
     #[serde(default)]
-    pub tag: String,
+    pub image_name: String,
     /// Image size in bytes.
     #[serde(default)]
-    pub size: i64,
+    pub image_size: i64,
+    /// Image tag (e.g. "latest").
+    #[serde(default)]
+    pub image_version: String,
+    /// Pull status (1 = ready).
+    #[serde(default)]
+    pub status: i64,
     /// Creation timestamp.
     #[serde(default)]
-    pub created: i64,
-    /// All other fields.
-    #[serde(flatten)]
-    pub extra: serde_json::Map<String, serde_json::Value>,
+    pub create: i64,
 }
 
 /// Paginated image list response.

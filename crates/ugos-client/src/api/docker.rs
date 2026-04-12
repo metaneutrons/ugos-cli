@@ -153,7 +153,7 @@ impl DockerApi for UgosClient {
     }
 
     async fn docker_image_download(&self, image: &str, tag: &str) -> Result<()> {
-        let body = serde_json::json!({"imageName": image, "imageTag": tag});
+        let body = serde_json::json!({"name": image, "tag": tag});
         let _: serde_json::Value = self.post("docker/image/DownloadImage", &body).await?;
         Ok(())
     }
