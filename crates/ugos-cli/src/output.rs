@@ -452,10 +452,10 @@ pub struct DockerImageRow {
 impl From<&DockerImage> for DockerImageRow {
     fn from(i: &DockerImage) -> Self {
         Self {
-            id: i.id.chars().take(12).collect(),
-            repository: i.repository.clone(),
-            tag: i.tag.clone(),
-            size: format_mib(i.size / 1024),
+            id: i.image_id.chars().take(19).collect(),
+            repository: i.image_name.clone(),
+            tag: i.image_version.clone(),
+            size: format_mib(i.image_size / 1024),
         }
     }
 }
