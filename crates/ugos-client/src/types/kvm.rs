@@ -325,3 +325,55 @@ pub struct HostInfo {
     /// Total memory in bytes.
     pub memory: i64,
 }
+
+// ── VNC ─────────────────────────────────────────────────────────────
+
+/// VNC link info from `ListAllLink`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VncLink {
+    /// Link URL or identifier.
+    #[serde(default)]
+    pub link: String,
+    /// Link type.
+    #[serde(default, rename = "type")]
+    pub link_type: i64,
+    /// Password (if set).
+    #[serde(default)]
+    pub password: String,
+    /// API key.
+    #[serde(default)]
+    pub api_key: String,
+}
+
+// ── Logs ────────────────────────────────────────────────────────────
+
+/// A KVM log entry from `PageSearchLogs`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LogEntry {
+    /// Log ID.
+    #[serde(default)]
+    pub id: i64,
+    /// Operator username.
+    #[serde(default)]
+    pub operator: String,
+    /// Operation description.
+    #[serde(default)]
+    pub content: String,
+    /// Creation timestamp.
+    #[serde(default)]
+    pub create_time: String,
+}
+
+/// Paginated log search result.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LogPage {
+    /// Log entries.
+    #[serde(default)]
+    pub list: Vec<LogEntry>,
+    /// Total number of entries.
+    #[serde(default)]
+    pub total: i64,
+}

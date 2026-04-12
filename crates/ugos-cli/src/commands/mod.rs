@@ -5,7 +5,8 @@ use ugos_client::UgosClient;
 use ugos_client::api::kvm::KvmApi;
 
 use crate::cli::{
-    ImageAction, NetworkAction, OutputFormat, Resource, SnapshotAction, StorageAction, VmAction,
+    ImageAction, LogAction, NetworkAction, OutputFormat, Resource, SnapshotAction, StorageAction,
+    UsbAction, VmAction, VncAction,
 };
 use crate::output;
 
@@ -20,6 +21,9 @@ pub async fn run(client: &UgosClient, resource: &Resource, fmt: OutputFormat) ->
         Resource::Network { action } => network(client, action, fmt).await,
         Resource::Storage { action } => storage(client, action, fmt).await,
         Resource::Image { action } => image(client, action, fmt).await,
+        Resource::Usb { action } => usb(client, action, fmt).await,
+        Resource::Vnc { action } => vnc(client, action, fmt).await,
+        Resource::Log { action } => log(client, action, fmt).await,
         Resource::Info => info(client, fmt).await,
     }
 }
@@ -120,6 +124,10 @@ async fn network(client: &UgosClient, action: &NetworkAction, fmt: OutputFormat)
                 }
             }
         }
+        NetworkAction::Delete { name } => {
+            client.network_delete(name).await?;
+            output::print_success(&format!("Deleted network {name}"), fmt);
+        }
     }
     Ok(())
 }
@@ -131,6 +139,22 @@ async fn storage(client: &UgosClient, action: &StorageAction, fmt: OutputFormat)
             let rows: Vec<output::StorageRow> = vols.iter().map(Into::into).collect();
             output::print_list(&rows, fmt)?;
         }
+        StorageAction::Usage { name, uuid } => {
+            let vms = client.storage_check_usage(name, uuid).await?;
+            if vms.is_empty() {
+                output::print_success("No VMs using this storage", fmt);
+            } else {
+                output::print_success(&format!("VMs using storage: {}", vms.join(", ")), fmt);
+            }
+        }
+        StorageAction::Add { name, uuid } => {
+            client.storage_add(name, uuid).await?;
+            output::print_success(&format!("Added storage {name}"), fmt);
+        }
+        StorageAction::Delete { name, uuid } => {
+            client.storage_delete(name, uuid).await?;
+            output::print_success(&format!("Deleted storage {name}"), fmt);
+        }
     }
     Ok(())
 }
@@ -141,6 +165,62 @@ async fn image(client: &UgosClient, action: &ImageAction, fmt: OutputFormat) -> 
             let imgs = client.image_list().await?;
             let rows: Vec<output::ImageRow> = imgs.iter().map(Into::into).collect();
             output::print_list(&rows, fmt)?;
+        }
+        ImageAction::Delete {
+            file_name,
+            image_name,
+        } => {
+            client.image_delete(file_name, image_name).await?;
+            output::print_success(&format!("Deleted image {image_name}"), fmt);
+        }
+        ImageAction::Usage { name } => {
+            let vms = client.image_check_usage(name).await?;
+            if vms.is_empty() {
+                output::print_success("No VMs using this image", fmt);
+            } else {
+                output::print_success(&format!("VMs using image: {}", vms.join(", ")), fmt);
+            }
+        }
+    }
+    Ok(())
+}
+
+async fn usb(client: &UgosClient, action: &UsbAction, fmt: OutputFormat) -> Result<()> {
+    match action {
+        UsbAction::List { vm } => {
+            let devs = client.usb_list(vm).await?;
+            let rows: Vec<output::UsbRow> = devs.iter().map(Into::into).collect();
+            output::print_list(&rows, fmt)?;
+        }
+    }
+    Ok(())
+}
+
+async fn vnc(client: &UgosClient, action: &VncAction, fmt: OutputFormat) -> Result<()> {
+    match action {
+        VncAction::List { vm } => {
+            let links = client.vnc_list(vm).await?;
+            let rows: Vec<output::VncRow> = links.iter().map(Into::into).collect();
+            output::print_list(&rows, fmt)?;
+        }
+        VncAction::Generate { vm, source_url } => {
+            let link = client.vnc_generate(vm, source_url).await?;
+            output::print_success(&format!("VNC link: {link}"), fmt);
+        }
+    }
+    Ok(())
+}
+
+async fn log(client: &UgosClient, action: &LogAction, fmt: OutputFormat) -> Result<()> {
+    match action {
+        LogAction::List { page, page_size } => {
+            let result = client.log_search(*page, *page_size).await?;
+            let rows: Vec<output::LogRow> = result.list.iter().map(Into::into).collect();
+            output::print_list(&rows, fmt)?;
+        }
+        LogAction::Operators => {
+            let ops = client.log_operators().await?;
+            output::print_success(&format!("Operators: {}", ops.join(", ")), fmt);
         }
     }
     Ok(())

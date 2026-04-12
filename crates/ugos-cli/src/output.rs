@@ -4,7 +4,8 @@ use anyhow::Result;
 use serde::Serialize;
 use tabled::{Table, Tabled};
 use ugos_client::types::kvm::{
-    HostInfo, ImageInfo, NetworkDetail, NetworkSummary, Snapshot, StorageInfo, VmDetail, VmSummary,
+    HostInfo, ImageInfo, LogEntry, NetworkDetail, NetworkSummary, Snapshot, StorageInfo, UsbDevice,
+    VmDetail, VmSummary, VncLink,
 };
 
 use crate::cli::OutputFormat;
@@ -266,6 +267,82 @@ pub fn host_info_rows(h: &HostInfo) -> Vec<HostInfoRow> {
             value: format_gib(h.memory),
         },
     ]
+}
+
+// ── USB ─────────────────────────────────────────────────────────────
+
+/// Table row for USB devices.
+#[derive(Tabled, Serialize)]
+pub struct UsbRow {
+    #[tabled(rename = "Vendor")]
+    pub vendor: String,
+    #[tabled(rename = "Product")]
+    pub product: String,
+    #[tabled(rename = "Vendor ID")]
+    pub vendor_id: String,
+    #[tabled(rename = "Product ID")]
+    pub product_id: String,
+    #[tabled(rename = "Used By")]
+    pub used_by: String,
+}
+
+impl From<&UsbDevice> for UsbRow {
+    fn from(u: &UsbDevice) -> Self {
+        Self {
+            vendor: u.vendor_name.clone(),
+            product: u.product_name.clone(),
+            vendor_id: u.vendor_id.clone(),
+            product_id: u.product_id.clone(),
+            used_by: if u.used_by.is_empty() {
+                "-".into()
+            } else {
+                u.used_by.clone()
+            },
+        }
+    }
+}
+
+// ── VNC ─────────────────────────────────────────────────────────────
+
+/// Table row for VNC links.
+#[derive(Tabled, Serialize)]
+pub struct VncRow {
+    #[tabled(rename = "Link")]
+    pub link: String,
+    #[tabled(rename = "Type")]
+    pub link_type: String,
+}
+
+impl From<&VncLink> for VncRow {
+    fn from(v: &VncLink) -> Self {
+        Self {
+            link: v.link.clone(),
+            link_type: v.link_type.to_string(),
+        }
+    }
+}
+
+// ── Logs ────────────────────────────────────────────────────────────
+
+/// Table row for log entries.
+#[derive(Tabled, Serialize)]
+pub struct LogRow {
+    #[tabled(rename = "Time")]
+    pub time: String,
+    #[tabled(rename = "Operator")]
+    pub operator: String,
+    #[tabled(rename = "Content")]
+    pub content: String,
+}
+
+impl From<&LogEntry> for LogRow {
+    fn from(l: &LogEntry) -> Self {
+        Self {
+            time: l.create_time.clone(),
+            operator: l.operator.clone(),
+            content: l.content.clone(),
+        }
+    }
 }
 
 // ── Formatting helpers ──────────────────────────────────────────────

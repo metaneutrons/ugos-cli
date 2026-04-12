@@ -169,6 +169,69 @@ struct TargetOnlyParam {
     target: Option<String>,
 }
 
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct ImageDeleteParam {
+    /// Image file name (e.g. "CachyOS.iso").
+    file_name: String,
+    /// Image display name (e.g. `CachyOS`).
+    image_name: String,
+    /// Target NAS name or host. Required when multiple targets are configured.
+    #[serde(default)]
+    target: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct ImageNameParam {
+    /// Image name.
+    name: String,
+    /// Target NAS name or host. Required when multiple targets are configured.
+    #[serde(default)]
+    target: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct StorageRefParam {
+    /// Storage volume name.
+    name: String,
+    /// Storage volume UUID.
+    uuid: String,
+    /// Target NAS name or host. Required when multiple targets are configured.
+    #[serde(default)]
+    target: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct VncGenerateParam {
+    /// VM display name or UUID.
+    vm: String,
+    /// Base URL for the noVNC link.
+    #[serde(default)]
+    source_url: String,
+    /// Target NAS name or host. Required when multiple targets are configured.
+    #[serde(default)]
+    target: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct LogSearchParam {
+    /// Page number (default: 1).
+    #[serde(default = "default_page")]
+    page: u32,
+    /// Page size (default: 20).
+    #[serde(default = "default_page_size")]
+    page_size: u32,
+    /// Target NAS name or host. Required when multiple targets are configured.
+    #[serde(default)]
+    target: Option<String>,
+}
+
+const fn default_page() -> u32 {
+    1
+}
+const fn default_page_size() -> u32 {
+    20
+}
+
 // ── Server ──────────────────────────────────────────────────────────
 
 /// MCP server exposing UGOS NAS operations as tools.
@@ -425,6 +488,139 @@ impl UgosMcp {
         match self.client(p.target.as_deref()).await {
             Ok(c) => match c.host_info().await {
                 Ok(i) => serde_json::to_string_pretty(&i).unwrap_or_default(),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    // ── USB ─────────────────────────────────────────────────────────
+
+    #[tool(description = "List USB devices available to a VM")]
+    async fn ugos_usb_list(&self, Parameters(p): Parameters<SnapshotListParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.usb_list(&p.vm).await {
+                Ok(d) => serde_json::to_string_pretty(&d).unwrap_or_default(),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    // ── Image ops ───────────────────────────────────────────────────
+
+    #[tool(description = "Delete an ISO/disk image")]
+    async fn ugos_image_delete(&self, Parameters(p): Parameters<ImageDeleteParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.image_delete(&p.file_name, &p.image_name).await {
+                Ok(()) => format!("Deleted image {}", p.image_name),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Check which VMs use an image")]
+    async fn ugos_image_usage(&self, Parameters(p): Parameters<ImageNameParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.image_check_usage(&p.name).await {
+                Ok(vms) => serde_json::to_string_pretty(&vms).unwrap_or_default(),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    // ── Storage ops ─────────────────────────────────────────────────
+
+    #[tool(description = "Check which VMs use a storage volume")]
+    async fn ugos_storage_usage(&self, Parameters(p): Parameters<StorageRefParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.storage_check_usage(&p.name, &p.uuid).await {
+                Ok(vms) => serde_json::to_string_pretty(&vms).unwrap_or_default(),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Add a storage volume to KVM")]
+    async fn ugos_storage_add(&self, Parameters(p): Parameters<StorageRefParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.storage_add(&p.name, &p.uuid).await {
+                Ok(()) => format!("Added storage {}", p.name),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Remove a storage volume from KVM")]
+    async fn ugos_storage_delete(&self, Parameters(p): Parameters<StorageRefParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.storage_delete(&p.name, &p.uuid).await {
+                Ok(()) => format!("Deleted storage {}", p.name),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    // ── Network ops ─────────────────────────────────────────────────
+
+    #[tool(description = "Delete a KVM network")]
+    async fn ugos_network_delete(&self, Parameters(p): Parameters<NetworkNameParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.network_delete(&p.name).await {
+                Ok(()) => format!("Deleted network {}", p.name),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    // ── VNC ─────────────────────────────────────────────────────────
+
+    #[tool(description = "List VNC links for a VM")]
+    async fn ugos_vnc_list(&self, Parameters(p): Parameters<SnapshotListParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.vnc_list(&p.vm).await {
+                Ok(l) => serde_json::to_string_pretty(&l).unwrap_or_default(),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Generate a noVNC link to access a VM console in the browser")]
+    async fn ugos_vnc_generate(&self, Parameters(p): Parameters<VncGenerateParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.vnc_generate(&p.vm, &p.source_url).await {
+                Ok(link) => link,
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    // ── Logs ────────────────────────────────────────────────────────
+
+    #[tool(description = "Search KVM audit logs")]
+    async fn ugos_log_search(&self, Parameters(p): Parameters<LogSearchParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.log_search(p.page, p.page_size).await {
+                Ok(l) => serde_json::to_string_pretty(&l).unwrap_or_default(),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List all operator usernames from KVM logs")]
+    async fn ugos_log_operators(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.log_operators().await {
+                Ok(ops) => serde_json::to_string_pretty(&ops).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
             },
             Err(e) => e,
