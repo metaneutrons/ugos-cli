@@ -339,6 +339,11 @@ pub enum DockerAction {
         /// Container ID.
         id: String,
     },
+    /// Show container details.
+    Show {
+        /// Container ID.
+        id: String,
+    },
     /// Stop a container.
     Stop {
         /// Container ID.

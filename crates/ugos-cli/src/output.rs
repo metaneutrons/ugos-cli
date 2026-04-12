@@ -427,11 +427,11 @@ impl From<&Container> for ContainerRow {
     fn from(c: &Container) -> Self {
         Self {
             id: c.container_id.chars().take(12).collect(),
-            name: c.container_name.clone(),
-            image: c.image.clone(),
-            status: c.state.clone(),
-            cpu: format!("{:.1}%", c.cpu_percent),
-            memory: format_mib(c.memory_usage / 1024),
+            name: c.name.clone(),
+            image: format!("{}:{}", c.image_name, c.version),
+            status: c.status.clone(),
+            cpu: String::new(),
+            memory: String::new(),
         }
     }
 }

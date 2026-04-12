@@ -343,6 +343,13 @@ async fn docker(client: &UgosClient, action: &DockerAction, fmt: OutputFormat) -
             client.container_start(id).await?;
             output::print_success(&format!("Started {id}"), fmt);
         }
+        DockerAction::Show { id } => {
+            let detail = client.container_show(id).await?;
+            #[allow(clippy::print_stdout)]
+            {
+                println!("{}", serde_json::to_string_pretty(&detail)?);
+            }
+        }
         DockerAction::Stop { id } => {
             client.container_stop(id).await?;
             output::print_success(&format!("Stopped {id}"), fmt);

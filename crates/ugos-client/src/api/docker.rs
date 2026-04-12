@@ -3,7 +3,9 @@
 use crate::client::UgosClient;
 use crate::error::Result;
 use crate::types::common::ResultWrapper;
-use crate::types::docker::{ContainerPage, DockerImage, DockerOverview, ImagePage, Mirror};
+use crate::types::docker::{
+    ContainerDetail, ContainerPage, DockerImage, DockerOverview, ImagePage, Mirror,
+};
 
 /// Docker management operations on a UGOS NAS.
 #[allow(clippy::module_name_repetitions)]
@@ -24,6 +26,9 @@ pub trait DockerApi {
         page: u32,
         page_size: u32,
     ) -> impl Future<Output = Result<ContainerPage>> + Send;
+
+    /// Show detailed container configuration.
+    fn container_show(&self, id: &str) -> impl Future<Output = Result<ContainerDetail>> + Send;
 
     /// Start a container.
     fn container_start(&self, id: &str) -> impl Future<Output = Result<()>> + Send;
@@ -90,6 +95,11 @@ impl DockerApi for UgosClient {
     async fn container_list(&self, page: u32, page_size: u32) -> Result<ContainerPage> {
         let body = serde_json::json!({"pageNum": page, "pageSize": page_size});
         self.post("docker/container/ContainerListV2", &body).await
+    }
+
+    async fn container_show(&self, id: &str) -> Result<ContainerDetail> {
+        self.get_with_params("docker/container/GetContainerById", &[("containerId", id)])
+            .await
     }
 
     async fn container_start(&self, id: &str) -> Result<()> {
