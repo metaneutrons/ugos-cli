@@ -809,6 +809,35 @@ impl UgosMcp {
         }
     }
 
+    #[tool(description = "Show detailed Docker container configuration")]
+    async fn ugos_docker_show(&self, Parameters(p): Parameters<ContainerIdParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.container_show(&p.id).await {
+                Ok(d) => serde_json::to_string_pretty(&d).unwrap_or_default(),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Create a Docker container from a spec (JSON object matching ContainerDetail schema). Use ugos_docker_show to get an example spec."
+    )]
+    async fn ugos_docker_create(&self, Parameters(p): Parameters<VmSpecParam>) -> String {
+        let spec: ugos_client::types::docker::ContainerDetail = match serde_json::from_value(p.spec)
+        {
+            Ok(s) => s,
+            Err(e) => return format!("error parsing spec: {e}"),
+        };
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.container_create(&spec).await {
+                Ok(()) => format!("Created container {}", spec.container_name),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
     #[tool(description = "Stop a Docker container")]
     async fn ugos_docker_stop(&self, Parameters(p): Parameters<ContainerIdParam>) -> String {
         match self.client(p.target.as_deref()).await {
