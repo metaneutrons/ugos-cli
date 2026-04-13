@@ -34,6 +34,7 @@ impl UgosClient {
         let http = reqwest::Client::builder()
             .cookie_store(true)
             .danger_accept_invalid_certs(true)
+            .timeout(std::time::Duration::from_secs(30))
             .build()
             .map_err(|e| UgosError::Encryption(format!("HTTP client build: {e}")))?;
 
@@ -62,6 +63,7 @@ impl UgosClient {
         let http = reqwest::Client::builder()
             .cookie_store(true)
             .danger_accept_invalid_certs(true)
+            .timeout(std::time::Duration::from_secs(30))
             .build()
             .map_err(|e| UgosError::Encryption(format!("HTTP client build: {e}")))?;
 

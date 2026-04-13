@@ -29,9 +29,9 @@ impl<T> ApiResponse<T> {
         match self.code {
             200 => Ok(self.data),
             1003 => Err(UgosError::AuthFailed),
-            1005 => Err(UgosError::ParameterError(self.msg)),
+            1005 | 2052 => Err(UgosError::ParameterError(self.msg)),
             1024 => Err(UgosError::LoginExpired),
-            3004 => Err(UgosError::OperationFailed(self.msg)),
+            2031 | 2063 | 3004 => Err(UgosError::OperationFailed(self.msg)),
             9404 => Err(UgosError::AppNotFound(self.msg)),
             9405 => Err(UgosError::AppServiceError(self.msg)),
             code => Err(UgosError::Api {

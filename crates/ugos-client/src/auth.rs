@@ -12,7 +12,8 @@ use serde::{Deserialize, Serialize};
 use crate::error::{Result, UgosError};
 
 /// Credentials needed to authenticate with a UGOS NAS.
-#[derive(Debug, Clone)]
+/// Login credentials for a UGOS NAS.
+#[derive(Clone)]
 pub struct Credentials {
     /// Username (e.g. "fabian").
     pub username: String,
@@ -20,11 +21,28 @@ pub struct Credentials {
     pub password: String,
 }
 
+impl std::fmt::Debug for Credentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Credentials")
+            .field("username", &self.username)
+            .field("password", &"[REDACTED]")
+            .finish()
+    }
+}
+
 /// Session data returned after successful login.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub struct Session {
     /// The session token appended as `?token=` to every request.
     pub token: String,
+}
+
+impl std::fmt::Debug for Session {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Session")
+            .field("token", &"[REDACTED]")
+            .finish()
+    }
 }
 
 /// Login response payload from `/verify/login`.
