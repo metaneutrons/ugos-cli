@@ -795,3 +795,356 @@ fn build_vm_spec(
         storage_name: storage.to_owned(),
     })
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // ── parse_mem_limit ─────────────────────────────────────────────
+
+    #[test]
+    fn parse_mem_limit_megabytes() {
+        assert_eq!(parse_mem_limit("512m"), 512 * 1024 * 1024);
+    }
+
+    #[test]
+    fn parse_mem_limit_gigabytes() {
+        assert_eq!(parse_mem_limit("2g"), 2 * 1024 * 1024 * 1024);
+    }
+
+    #[test]
+    fn parse_mem_limit_raw_bytes() {
+        assert_eq!(parse_mem_limit("1048576"), 1_048_576);
+    }
+
+    #[test]
+    fn parse_mem_limit_garbage() {
+        assert_eq!(parse_mem_limit("abc"), 0);
+    }
+
+    #[test]
+    fn parse_mem_limit_case_insensitive() {
+        assert_eq!(parse_mem_limit("1G"), 1024 * 1024 * 1024);
+        assert_eq!(parse_mem_limit("256M"), 256 * 1024 * 1024);
+    }
+
+    // ── build_container_spec validation ─────────────────────────────
+
+    #[test]
+    fn container_spec_valid() {
+        let spec = build_container_spec(
+            "test",
+            "nginx:latest",
+            &["8080:80".into()],
+            &["FOO=bar".into()],
+            &["/data:/data".into()],
+            "no",
+            "bridge",
+            false,
+            None,
+            None,
+        );
+        assert!(spec.is_ok());
+        let s = spec.unwrap();
+        assert_eq!(s.container_name, "test");
+        assert_eq!(s.image_name, "nginx");
+        assert_eq!(s.image_version, "latest");
+        assert_eq!(s.tag, "nginx:latest");
+        assert!(s.no_restrictions);
+        assert!(!s.abnormal_reset);
+    }
+
+    #[test]
+    fn container_spec_image_no_tag() {
+        let spec = build_container_spec(
+            "test",
+            "nginx",
+            &[],
+            &[],
+            &[],
+            "no",
+            "bridge",
+            false,
+            None,
+            None,
+        )
+        .unwrap();
+        assert_eq!(spec.image_name, "nginx");
+        assert_eq!(spec.image_version, "latest");
+    }
+
+    #[test]
+    fn container_spec_bad_port() {
+        let err = build_container_spec(
+            "test",
+            "nginx",
+            &["abc:def".into()],
+            &[],
+            &[],
+            "no",
+            "bridge",
+            false,
+            None,
+            None,
+        );
+        assert!(err.is_err());
+        assert!(
+            err.unwrap_err()
+                .to_string()
+                .contains("invalid port mapping")
+        );
+    }
+
+    #[test]
+    fn container_spec_bad_env() {
+        let err = build_container_spec(
+            "test",
+            "nginx",
+            &[],
+            &["NOEQUALS".into()],
+            &[],
+            "no",
+            "bridge",
+            false,
+            None,
+            None,
+        );
+        assert!(err.is_err());
+        assert!(err.unwrap_err().to_string().contains("invalid env var"));
+    }
+
+    #[test]
+    fn container_spec_bad_volume() {
+        let err = build_container_spec(
+            "test",
+            "nginx",
+            &[],
+            &[],
+            &["nocolon".into()],
+            "no",
+            "bridge",
+            false,
+            None,
+            None,
+        );
+        assert!(err.is_err());
+        assert!(err.unwrap_err().to_string().contains("invalid volume"));
+    }
+
+    #[test]
+    fn container_spec_bad_restart() {
+        let err = build_container_spec(
+            "test",
+            "nginx",
+            &[],
+            &[],
+            &[],
+            "bogus",
+            "bridge",
+            false,
+            None,
+            None,
+        );
+        assert!(err.is_err());
+        assert!(
+            err.unwrap_err()
+                .to_string()
+                .contains("invalid restart policy")
+        );
+    }
+
+    #[test]
+    fn container_spec_bad_network() {
+        let err = build_container_spec(
+            "test",
+            "nginx",
+            &[],
+            &[],
+            &[],
+            "no",
+            "overlay",
+            false,
+            None,
+            None,
+        );
+        assert!(err.is_err());
+        assert!(
+            err.unwrap_err()
+                .to_string()
+                .contains("invalid network mode")
+        );
+    }
+
+    #[test]
+    fn container_spec_memory_limit() {
+        let mem = "512m".to_string();
+        let spec = build_container_spec(
+            "test",
+            "nginx",
+            &[],
+            &[],
+            &[],
+            "no",
+            "bridge",
+            false,
+            Some(&mem),
+            None,
+        )
+        .unwrap();
+        assert_eq!(spec.mem_limit, 512 * 1024 * 1024);
+        assert!(!spec.no_restrictions);
+    }
+
+    #[test]
+    fn container_spec_restart_unless_stopped() {
+        let spec = build_container_spec(
+            "test",
+            "nginx",
+            &[],
+            &[],
+            &[],
+            "unless-stopped",
+            "bridge",
+            false,
+            None,
+            None,
+        )
+        .unwrap();
+        assert!(spec.abnormal_reset);
+    }
+
+    // ── build_vm_spec validation ────────────────────────────────────
+
+    #[test]
+    fn vm_spec_valid() {
+        let spec = build_vm_spec(
+            "TestVM",
+            "linux",
+            4,
+            8192,
+            51200,
+            None,
+            "vnet-bridge0",
+            "uefi",
+            "volume1",
+            false,
+        );
+        assert!(spec.is_ok());
+        let s = spec.unwrap();
+        assert_eq!(s.virtual_machine_display_name, "TestVM");
+        assert_eq!(s.core.value, 4);
+        assert_eq!(s.memory.value, 8192 * 1024);
+        assert_eq!(s.dists[0].size, 51200 * 1024 * 1024);
+        assert!(!s.other_config.auto_matic_start_up);
+    }
+
+    #[test]
+    fn vm_spec_with_iso() {
+        let iso = "/volume1/iso/ubuntu.iso".to_string();
+        let spec = build_vm_spec(
+            "TestVM",
+            "linux",
+            2,
+            4096,
+            20480,
+            Some(&iso),
+            "vnet-bridge0",
+            "uefi",
+            "volume1",
+            true,
+        )
+        .unwrap();
+        assert_eq!(spec.images.len(), 1);
+        assert_eq!(spec.images[0].path, "/volume1/iso/ubuntu.iso");
+        assert!(spec.other_config.auto_matic_start_up);
+    }
+
+    #[test]
+    fn vm_spec_bad_os() {
+        let err = build_vm_spec(
+            "Test",
+            "freebsd",
+            2,
+            4096,
+            20480,
+            None,
+            "vnet-bridge0",
+            "uefi",
+            "volume1",
+            false,
+        );
+        assert!(err.unwrap_err().to_string().contains("invalid OS type"));
+    }
+
+    #[test]
+    fn vm_spec_zero_cores() {
+        let err = build_vm_spec(
+            "Test",
+            "linux",
+            0,
+            4096,
+            20480,
+            None,
+            "vnet-bridge0",
+            "uefi",
+            "volume1",
+            false,
+        );
+        assert!(err.unwrap_err().to_string().contains("cores must be > 0"));
+    }
+
+    #[test]
+    fn vm_spec_zero_memory() {
+        let err = build_vm_spec(
+            "Test",
+            "linux",
+            2,
+            0,
+            20480,
+            None,
+            "vnet-bridge0",
+            "uefi",
+            "volume1",
+            false,
+        );
+        assert!(err.unwrap_err().to_string().contains("memory must be > 0"));
+    }
+
+    #[test]
+    fn vm_spec_bad_boot_type() {
+        let err = build_vm_spec(
+            "Test",
+            "linux",
+            2,
+            4096,
+            20480,
+            None,
+            "vnet-bridge0",
+            "grub",
+            "volume1",
+            false,
+        );
+        assert!(err.unwrap_err().to_string().contains("invalid boot type"));
+    }
+
+    #[test]
+    fn vm_spec_empty_name() {
+        let err = build_vm_spec(
+            "",
+            "linux",
+            2,
+            4096,
+            20480,
+            None,
+            "vnet-bridge0",
+            "uefi",
+            "volume1",
+            false,
+        );
+        assert!(
+            err.unwrap_err()
+                .to_string()
+                .contains("VM name cannot be empty")
+        );
+    }
+}

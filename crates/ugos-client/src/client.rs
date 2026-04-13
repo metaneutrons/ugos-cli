@@ -83,7 +83,7 @@ impl UgosClient {
     }
 
     /// Append `?token=` (or `&token=`) to a URL.
-    fn append_token(url: &str, token: &str) -> String {
+    pub(crate) fn append_token(url: &str, token: &str) -> String {
         if url.contains('?') {
             format!("{url}&token={token}")
         } else {
