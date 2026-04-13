@@ -1,5 +1,7 @@
 //! Command dispatch — maps CLI actions to API calls and output.
 
+use std::io::Write;
+
 use anyhow::Result;
 use ugos_client::UgosClient;
 use ugos_client::api::docker::DockerApi;
@@ -16,58 +18,65 @@ use crate::output;
 /// # Errors
 ///
 /// Returns an error on API or output failure.
-pub async fn run(client: &UgosClient, resource: &Resource, fmt: OutputFormat) -> Result<()> {
+pub async fn run(
+    client: &UgosClient,
+    resource: &Resource,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
     match resource {
-        Resource::Vm { action } => vm(client, action, fmt).await,
-        Resource::Network { action } => network(client, action, fmt).await,
-        Resource::Storage { action } => storage(client, action, fmt).await,
-        Resource::Image { action } => image(client, action, fmt).await,
-        Resource::Usb { action } => usb(client, action, fmt).await,
-        Resource::Vnc { action } => vnc(client, action, fmt).await,
-        Resource::Ova { action } => ova(client, action, fmt).await,
-        Resource::Docker { action } => docker(client, action, fmt).await,
-        Resource::Log { action } => log(client, action, fmt).await,
-        Resource::Info => info(client, fmt).await,
+        Resource::Vm { action } => vm(client, action, fmt, w).await,
+        Resource::Network { action } => network(client, action, fmt, w).await,
+        Resource::Storage { action } => storage(client, action, fmt, w).await,
+        Resource::Image { action } => image(client, action, fmt, w).await,
+        Resource::Usb { action } => usb(client, action, fmt, w).await,
+        Resource::Vnc { action } => vnc(client, action, fmt, w).await,
+        Resource::Ova { action } => ova(client, action, fmt, w).await,
+        Resource::Docker { action } => docker(client, action, fmt, w).await,
+        Resource::Log { action } => log(client, action, fmt, w).await,
+        Resource::Info => info(client, fmt, w).await,
     }
 }
 
-async fn vm(client: &UgosClient, action: &VmAction, fmt: OutputFormat) -> Result<()> {
+async fn vm(
+    client: &UgosClient,
+    action: &VmAction,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
     match action {
         VmAction::List => {
             let vms = client.vm_list().await?;
             let rows: Vec<output::VmRow> = vms.iter().map(Into::into).collect();
-            output::print_list(&rows, fmt)?;
+            output::print_list(w, &rows, fmt)?;
         }
         VmAction::Show { name } => {
             let detail = client.vm_show(name).await?;
             match fmt {
                 OutputFormat::Table => {
                     let rows = output::vm_detail_rows(&detail);
-                    output::print_list(&rows, fmt)?;
+                    output::print_list(w, &rows, fmt)?;
                 }
                 OutputFormat::Json => {
-                    #[allow(clippy::print_stdout)]
-                    {
-                        println!("{}", serde_json::to_string_pretty(&detail)?);
-                    }
+                    output::print_json(w, &detail)?;
                 }
             }
         }
         VmAction::Start { name } => {
             client.vm_start(name).await?;
-            output::print_success(&format!("Started {name}"), fmt);
+            output::print_success(w, &format!("Started {name}"), fmt)?;
         }
         VmAction::Stop { name, force } => {
             client.vm_stop(name, *force).await?;
-            output::print_success(&format!("Stopped {name}"), fmt);
+            output::print_success(w, &format!("Stopped {name}"), fmt)?;
         }
         VmAction::Reboot { name, force } => {
             client.vm_reboot(name, *force).await?;
-            output::print_success(&format!("Rebooted {name}"), fmt);
+            output::print_success(w, &format!("Rebooted {name}"), fmt)?;
         }
         VmAction::Delete { name } => {
             client.vm_delete(name).await?;
-            output::print_success(&format!("Deleted {name}"), fmt);
+            output::print_success(w, &format!("Deleted {name}"), fmt)?;
         }
         VmAction::Create {
             name,
@@ -94,7 +103,7 @@ async fn vm(client: &UgosClient, action: &VmAction, fmt: OutputFormat) -> Result
                 *autostart,
             )?;
             let uuid = client.vm_create(&spec).await?;
-            output::print_success(&format!("Created VM {name} ({uuid})"), fmt);
+            output::print_success(w, &format!("Created VM {name} ({uuid})"), fmt)?;
         }
         VmAction::Update {
             name,
@@ -118,33 +127,39 @@ async fn vm(client: &UgosClient, action: &VmAction, fmt: OutputFormat) -> Result
             }
             client.vm_update(&spec).await?;
             output::print_success(
+                w,
                 &format!("Updated VM {}", spec.virtual_machine_display_name),
                 fmt,
-            );
+            )?;
         }
-        VmAction::Snapshot { action } => snapshot(client, action, fmt).await?,
+        VmAction::Snapshot { action } => snapshot(client, action, fmt, w).await?,
     }
     Ok(())
 }
 
-async fn snapshot(client: &UgosClient, action: &SnapshotAction, fmt: OutputFormat) -> Result<()> {
+async fn snapshot(
+    client: &UgosClient,
+    action: &SnapshotAction,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
     match action {
         SnapshotAction::List { vm } => {
             let snaps = client.snapshot_list(vm).await?;
             let rows: Vec<output::SnapshotRow> = snaps.iter().map(Into::into).collect();
-            output::print_list(&rows, fmt)?;
+            output::print_list(w, &rows, fmt)?;
         }
         SnapshotAction::Create { vm, name } => {
             client.snapshot_create(vm, name).await?;
-            output::print_success(&format!("Created snapshot {name}"), fmt);
+            output::print_success(w, &format!("Created snapshot {name}"), fmt)?;
         }
         SnapshotAction::Delete { vm, name } => {
             client.snapshot_delete(vm, name).await?;
-            output::print_success(&format!("Deleted snapshot {name}"), fmt);
+            output::print_success(w, &format!("Deleted snapshot {name}"), fmt)?;
         }
         SnapshotAction::Revert { vm, name } => {
             client.snapshot_revert(vm, name).await?;
-            output::print_success(&format!("Reverted to snapshot {name}"), fmt);
+            output::print_success(w, &format!("Reverted to snapshot {name}"), fmt)?;
         }
         SnapshotAction::Rename {
             vm,
@@ -152,31 +167,33 @@ async fn snapshot(client: &UgosClient, action: &SnapshotAction, fmt: OutputForma
             new_name,
         } => {
             client.snapshot_rename(vm, old_name, new_name).await?;
-            output::print_success(&format!("Renamed snapshot {old_name} → {new_name}"), fmt);
+            output::print_success(w, &format!("Renamed snapshot {old_name} → {new_name}"), fmt)?;
         }
     }
     Ok(())
 }
 
-async fn network(client: &UgosClient, action: &NetworkAction, fmt: OutputFormat) -> Result<()> {
+async fn network(
+    client: &UgosClient,
+    action: &NetworkAction,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
     match action {
         NetworkAction::List => {
             let nets = client.network_list().await?;
             let rows: Vec<output::NetworkRow> = nets.iter().map(Into::into).collect();
-            output::print_list(&rows, fmt)?;
+            output::print_list(w, &rows, fmt)?;
         }
         NetworkAction::Show { name } => {
             let detail = client.network_show(name).await?;
             match fmt {
                 OutputFormat::Table => {
                     let rows = output::net_detail_rows(&detail);
-                    output::print_list(&rows, fmt)?;
+                    output::print_list(w, &rows, fmt)?;
                 }
                 OutputFormat::Json => {
-                    #[allow(clippy::print_stdout)]
-                    {
-                        println!("{}", serde_json::to_string_pretty(&detail)?);
-                    }
+                    output::print_json(w, &detail)?;
                 }
             }
         }
@@ -194,7 +211,7 @@ async fn network(client: &UgosClient, action: &NetworkAction, fmt: OutputFormat)
                 ..Default::default()
             };
             client.network_create(&net).await?;
-            output::print_success(&format!("Created network {name}"), fmt);
+            output::print_success(w, &format!("Created network {name}"), fmt)?;
         }
         NetworkAction::Update { name, interface } => {
             let mut net = client.network_show(name).await?;
@@ -202,111 +219,141 @@ async fn network(client: &UgosClient, action: &NetworkAction, fmt: OutputFormat)
                 net.mapping_network = iface.clone();
             }
             client.network_update(&net).await?;
-            output::print_success(&format!("Updated network {name}"), fmt);
+            output::print_success(w, &format!("Updated network {name}"), fmt)?;
         }
         NetworkAction::Delete { name } => {
             client.network_delete(name).await?;
-            output::print_success(&format!("Deleted network {name}"), fmt);
+            output::print_success(w, &format!("Deleted network {name}"), fmt)?;
         }
     }
     Ok(())
 }
 
-async fn storage(client: &UgosClient, action: &StorageAction, fmt: OutputFormat) -> Result<()> {
+async fn storage(
+    client: &UgosClient,
+    action: &StorageAction,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
     match action {
         StorageAction::List => {
             let vols = client.storage_list().await?;
             let rows: Vec<output::StorageRow> = vols.iter().map(Into::into).collect();
-            output::print_list(&rows, fmt)?;
+            output::print_list(w, &rows, fmt)?;
         }
         StorageAction::Usage { name, uuid } => {
             let vms = client.storage_check_usage(name, uuid).await?;
             if vms.is_empty() {
-                output::print_success("No VMs using this storage", fmt);
+                output::print_success(w, "No VMs using this storage", fmt)?;
             } else {
-                output::print_success(&format!("VMs using storage: {}", vms.join(", ")), fmt);
+                output::print_success(w, &format!("VMs using storage: {}", vms.join(", ")), fmt)?;
             }
         }
         StorageAction::Add { name, uuid } => {
             client.storage_add(name, uuid).await?;
-            output::print_success(&format!("Added storage {name}"), fmt);
+            output::print_success(w, &format!("Added storage {name}"), fmt)?;
         }
         StorageAction::Delete { name, uuid } => {
             client.storage_delete(name, uuid).await?;
-            output::print_success(&format!("Deleted storage {name}"), fmt);
+            output::print_success(w, &format!("Deleted storage {name}"), fmt)?;
         }
     }
     Ok(())
 }
 
-async fn image(client: &UgosClient, action: &ImageAction, fmt: OutputFormat) -> Result<()> {
+async fn image(
+    client: &UgosClient,
+    action: &ImageAction,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
     match action {
         ImageAction::List => {
             let imgs = client.image_list().await?;
             let rows: Vec<output::ImageRow> = imgs.iter().map(Into::into).collect();
-            output::print_list(&rows, fmt)?;
+            output::print_list(w, &rows, fmt)?;
         }
         ImageAction::Delete {
             file_name,
             image_name,
         } => {
             client.image_delete(file_name, image_name).await?;
-            output::print_success(&format!("Deleted image {image_name}"), fmt);
+            output::print_success(w, &format!("Deleted image {image_name}"), fmt)?;
         }
         ImageAction::Usage { name } => {
             let vms = client.image_check_usage(name).await?;
             if vms.is_empty() {
-                output::print_success("No VMs using this image", fmt);
+                output::print_success(w, "No VMs using this image", fmt)?;
             } else {
-                output::print_success(&format!("VMs using image: {}", vms.join(", ")), fmt);
+                output::print_success(w, &format!("VMs using image: {}", vms.join(", ")), fmt)?;
             }
         }
     }
     Ok(())
 }
 
-async fn usb(client: &UgosClient, action: &UsbAction, fmt: OutputFormat) -> Result<()> {
+async fn usb(
+    client: &UgosClient,
+    action: &UsbAction,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
     match action {
         UsbAction::List { vm } => {
             let devs = client.usb_list(vm).await?;
             let rows: Vec<output::UsbRow> = devs.iter().map(Into::into).collect();
-            output::print_list(&rows, fmt)?;
+            output::print_list(w, &rows, fmt)?;
         }
     }
     Ok(())
 }
 
-async fn vnc(client: &UgosClient, action: &VncAction, fmt: OutputFormat) -> Result<()> {
+async fn vnc(
+    client: &UgosClient,
+    action: &VncAction,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
     match action {
         VncAction::List { vm } => {
             let links = client.vnc_list(vm).await?;
             let rows: Vec<output::VncRow> = links.iter().map(Into::into).collect();
-            output::print_list(&rows, fmt)?;
+            output::print_list(w, &rows, fmt)?;
         }
         VncAction::Generate { vm, source_url } => {
             let link = client.vnc_generate(vm, source_url).await?;
-            output::print_success(&format!("VNC link: {link}"), fmt);
+            output::print_success(w, &format!("VNC link: {link}"), fmt)?;
         }
     }
     Ok(())
 }
 
-async fn log(client: &UgosClient, action: &LogAction, fmt: OutputFormat) -> Result<()> {
+async fn log(
+    client: &UgosClient,
+    action: &LogAction,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
     match action {
         LogAction::List { page, page_size } => {
             let result = client.log_search(*page, *page_size).await?;
             let rows: Vec<output::LogRow> = result.list.iter().map(Into::into).collect();
-            output::print_list(&rows, fmt)?;
+            output::print_list(w, &rows, fmt)?;
         }
         LogAction::Operators => {
             let ops = client.log_operators().await?;
-            output::print_success(&format!("Operators: {}", ops.join(", ")), fmt);
+            output::print_success(w, &format!("Operators: {}", ops.join(", ")), fmt)?;
         }
     }
     Ok(())
 }
 
-async fn ova(client: &UgosClient, action: &OvaAction, fmt: OutputFormat) -> Result<()> {
+async fn ova(
+    client: &UgosClient,
+    action: &OvaAction,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
     match action {
         OvaAction::Export {
             vm,
@@ -317,20 +364,17 @@ async fn ova(client: &UgosClient, action: &OvaAction, fmt: OutputFormat) -> Resu
             client
                 .ova_export(vm, storage_name, storage_uuid, ova_path)
                 .await?;
-            output::print_success(&format!("Exported {vm} to {ova_path}"), fmt);
+            output::print_success(w, &format!("Exported {vm} to {ova_path}"), fmt)?;
         }
         OvaAction::Parse { ova_path } => {
             let detail = client.ova_parse(ova_path).await?;
             match fmt {
                 OutputFormat::Table => {
                     let rows = output::vm_detail_rows(&detail);
-                    output::print_list(&rows, fmt)?;
+                    output::print_list(w, &rows, fmt)?;
                 }
                 OutputFormat::Json => {
-                    #[allow(clippy::print_stdout)]
-                    {
-                        println!("{}", serde_json::to_string_pretty(&detail)?);
-                    }
+                    output::print_json(w, &detail)?;
                 }
             }
         }
@@ -339,7 +383,12 @@ async fn ova(client: &UgosClient, action: &OvaAction, fmt: OutputFormat) -> Resu
 }
 
 #[allow(clippy::too_many_lines)]
-async fn docker(client: &UgosClient, action: &DockerAction, fmt: OutputFormat) -> Result<()> {
+async fn docker(
+    client: &UgosClient,
+    action: &DockerAction,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
     match action {
         DockerAction::Overview => {
             let ov = client.docker_overview().await?;
@@ -377,36 +426,30 @@ async fn docker(client: &UgosClient, action: &DockerAction, fmt: OutputFormat) -
                             value: if ov.status { "running" } else { "stopped" }.into(),
                         },
                     ];
-                    output::print_list(&rows, fmt)?;
+                    output::print_list(w, &rows, fmt)?;
                 }
                 OutputFormat::Json => {
-                    #[allow(clippy::print_stdout)]
-                    {
-                        println!("{}", serde_json::to_string_pretty(&ov)?);
-                    }
+                    output::print_json(w, &ov)?;
                 }
             }
         }
         DockerAction::Status => {
             let status = client.docker_engine_status().await?;
-            output::print_success(&format!("Docker engine: {status}"), fmt);
+            output::print_success(w, &format!("Docker engine: {status}"), fmt)?;
         }
         DockerAction::Ps { page, page_size } => {
             let result = client.container_list(*page, *page_size).await?;
             let containers = result.result.unwrap_or_default();
             let rows: Vec<output::ContainerRow> = containers.iter().map(Into::into).collect();
-            output::print_list(&rows, fmt)?;
+            output::print_list(w, &rows, fmt)?;
         }
         DockerAction::Start { id } => {
             client.container_start(id).await?;
-            output::print_success(&format!("Started {id}"), fmt);
+            output::print_success(w, &format!("Started {id}"), fmt)?;
         }
         DockerAction::Show { id } => {
             let detail = client.container_show(id).await?;
-            #[allow(clippy::print_stdout)]
-            {
-                println!("{}", serde_json::to_string_pretty(&detail)?);
-            }
+            output::print_json(w, &detail)?;
         }
         DockerAction::Create {
             name,
@@ -433,123 +476,111 @@ async fn docker(client: &UgosClient, action: &DockerAction, fmt: OutputFormat) -
                 cpus.as_ref(),
             )?;
             client.container_create(&spec).await?;
-            output::print_success(&format!("Created container {name}"), fmt);
+            output::print_success(w, &format!("Created container {name}"), fmt)?;
         }
         DockerAction::Stop { id } => {
             client.container_stop(id).await?;
-            output::print_success(&format!("Stopped {id}"), fmt);
+            output::print_success(w, &format!("Stopped {id}"), fmt)?;
         }
         DockerAction::Restart { id } => {
             client.container_restart(id).await?;
-            output::print_success(&format!("Restarted {id}"), fmt);
+            output::print_success(w, &format!("Restarted {id}"), fmt)?;
         }
         DockerAction::Kill { id } => {
             client.container_kill(id).await?;
-            output::print_success(&format!("Killed {id}"), fmt);
+            output::print_success(w, &format!("Killed {id}"), fmt)?;
         }
         DockerAction::Rm { id } => {
             client.container_remove(id).await?;
-            output::print_success(&format!("Removed {id}"), fmt);
+            output::print_success(w, &format!("Removed {id}"), fmt)?;
         }
         DockerAction::Images { page, page_size } => {
             let result = client.docker_image_list(*page, *page_size).await?;
             let images = result.result.unwrap_or_default();
             let rows: Vec<output::DockerImageRow> = images.iter().map(Into::into).collect();
-            output::print_list(&rows, fmt)?;
+            output::print_list(w, &rows, fmt)?;
         }
         DockerAction::Search { name } => {
             let images = client.docker_image_search(name, 1, 20).await?;
             let rows: Vec<output::DockerImageRow> = images.iter().map(Into::into).collect();
-            output::print_list(&rows, fmt)?;
+            output::print_list(w, &rows, fmt)?;
         }
         DockerAction::Pull { image, tag } => {
             client.docker_image_download(image, tag).await?;
-            output::print_success(&format!("Pulling {image}:{tag}"), fmt);
+            output::print_success(w, &format!("Pulling {image}:{tag}"), fmt)?;
         }
         DockerAction::Rmi { id } => {
             client.docker_image_delete(id).await?;
-            output::print_success(&format!("Deleted image {id}"), fmt);
+            output::print_success(w, &format!("Deleted image {id}"), fmt)?;
         }
         DockerAction::Export { id, path } => {
             client.docker_image_export(id, path).await?;
-            output::print_success(&format!("Exporting image {id} to {path}"), fmt);
+            output::print_success(w, &format!("Exporting image {id} to {path}"), fmt)?;
         }
         DockerAction::LoadUrl { url } => {
             client.docker_image_load_url(url).await?;
-            output::print_success(&format!("Loading image from {url}"), fmt);
+            output::print_success(w, &format!("Loading image from {url}"), fmt)?;
         }
         DockerAction::LoadPath { path } => {
             client.docker_image_load_path(path).await?;
-            output::print_success(&format!("Loading image from {path}"), fmt);
+            output::print_success(w, &format!("Loading image from {path}"), fmt)?;
         }
         DockerAction::Mirrors => {
             let mirrors = client.mirror_list().await?;
             let rows: Vec<output::MirrorRow> = mirrors.iter().map(Into::into).collect();
-            output::print_list(&rows, fmt)?;
+            output::print_list(w, &rows, fmt)?;
         }
         DockerAction::MirrorAdd { alias, address } => {
             client.mirror_add(alias, address).await?;
-            output::print_success(&format!("Added mirror {alias}"), fmt);
+            output::print_success(w, &format!("Added mirror {alias}"), fmt)?;
         }
         DockerAction::MirrorDelete { id } => {
             client.mirror_delete(*id).await?;
-            output::print_success(&format!("Deleted mirror {id}"), fmt);
+            output::print_success(w, &format!("Deleted mirror {id}"), fmt)?;
         }
         DockerAction::MirrorSwitch { id } => {
             client.mirror_switch(*id).await?;
-            output::print_success(&format!("Switched to mirror {id}"), fmt);
+            output::print_success(w, &format!("Switched to mirror {id}"), fmt)?;
         }
         DockerAction::Logs { id, lines } => {
             let logs = client.container_logs(id, *lines).await?;
-            #[allow(clippy::print_stdout)]
-            {
-                println!("{}", serde_json::to_string_pretty(&logs)?);
-            }
+            output::print_json(w, &logs)?;
         }
         DockerAction::Clone { id, name } => {
             client.container_clone(id, name).await?;
-            output::print_success(&format!("Cloned {id} as {name}"), fmt);
+            output::print_success(w, &format!("Cloned {id} as {name}"), fmt)?;
         }
         DockerAction::Batch { action, ids } => {
             client.container_batch(ids, action).await?;
-            output::print_success(&format!("{action} {} containers", ids.len()), fmt);
+            output::print_success(w, &format!("{action} {} containers", ids.len()), fmt)?;
         }
         DockerAction::Compose { project } => {
             let data = client.compose_containers(project).await?;
-            #[allow(clippy::print_stdout)]
-            {
-                println!("{}", serde_json::to_string_pretty(&data)?);
-            }
+            output::print_json(w, &data)?;
         }
         DockerAction::ProxyGet => {
             let proxy = client.docker_proxy_get().await?;
-            #[allow(clippy::print_stdout)]
-            {
-                println!("{}", serde_json::to_string_pretty(&proxy)?);
-            }
+            output::print_json(w, &proxy)?;
         }
         DockerAction::ProxySet { json } => {
             let proxy: serde_json::Value =
                 serde_json::from_str(json).map_err(|e| anyhow::anyhow!("invalid JSON: {e}"))?;
             client.docker_proxy_set(&proxy).await?;
-            output::print_success("Updated HTTP proxy", fmt);
+            output::print_success(w, "Updated HTTP proxy", fmt)?;
         }
     }
     Ok(())
 }
 
-async fn info(client: &UgosClient, fmt: OutputFormat) -> Result<()> {
+async fn info(client: &UgosClient, fmt: OutputFormat, w: &mut impl Write) -> Result<()> {
     let host = client.host_info().await?;
     match fmt {
         OutputFormat::Table => {
             let rows = output::host_info_rows(&host);
-            output::print_list(&rows, fmt)?;
+            output::print_list(w, &rows, fmt)?;
         }
         OutputFormat::Json => {
-            #[allow(clippy::print_stdout)]
-            {
-                println!("{}", serde_json::to_string_pretty(&host)?);
-            }
+            output::print_json(w, &host)?;
         }
     }
     Ok(())
