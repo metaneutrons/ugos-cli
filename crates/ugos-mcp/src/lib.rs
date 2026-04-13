@@ -15,7 +15,7 @@ use rmcp::{
     ServerHandler,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
     model::{ServerCapabilities, ServerInfo},
-    schemars, tool, tool_router,
+    schemars, tool, tool_handler, tool_router,
 };
 use tokio::sync::OnceCell;
 use ugos_client::api::docker::DockerApi;
@@ -1209,6 +1209,7 @@ impl UgosMcp {
     }
 }
 
+#[tool_handler]
 impl ServerHandler for UgosMcp {
     fn get_info(&self) -> ServerInfo {
         let target_names: Vec<&str> = self.targets.iter().map(|t| t.name.as_str()).collect();
