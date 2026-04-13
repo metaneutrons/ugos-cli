@@ -1,5 +1,7 @@
 //! Output formatting for CLI results.
 
+use std::io::Write;
+
 use anyhow::Result;
 use serde::Serialize;
 use tabled::{Table, Tabled};
@@ -366,42 +368,50 @@ pub fn format_gib(bytes: i64) -> String {
 ///
 /// # Errors
 ///
-/// Returns an error if JSON serialization fails.
-pub fn print_list<T: Tabled + Serialize>(items: &[T], format: OutputFormat) -> Result<()> {
+/// Returns an error if writing or JSON serialization fails.
+pub fn print_list<T: Tabled + Serialize>(
+    w: &mut impl Write,
+    items: &[T],
+    format: OutputFormat,
+) -> Result<()> {
     match format {
         OutputFormat::Table => {
             if items.is_empty() {
-                // Using tracing would be wrong here — this is user-facing output.
-                #[allow(clippy::print_stdout)]
-                {
-                    println!("No results.");
-                }
+                writeln!(w, "No results.")?;
             } else {
-                #[allow(clippy::print_stdout)]
-                {
-                    println!("{}", Table::new(items));
-                }
+                writeln!(w, "{}", Table::new(items))?;
             }
         }
         OutputFormat::Json => {
-            #[allow(clippy::print_stdout)]
-            {
-                println!("{}", serde_json::to_string_pretty(items)?);
-            }
+            writeln!(w, "{}", serde_json::to_string_pretty(items)?)?;
         }
     }
     Ok(())
 }
 
 /// Print a success message (for mutating operations).
-pub fn print_success(msg: &str, format: OutputFormat) {
-    #[allow(clippy::print_stdout)]
+///
+/// # Errors
+///
+/// Returns an error if writing fails.
+pub fn print_success(w: &mut impl Write, msg: &str, format: OutputFormat) -> Result<()> {
     match format {
-        OutputFormat::Table => println!("{msg}"),
+        OutputFormat::Table => writeln!(w, "{msg}")?,
         OutputFormat::Json => {
-            println!("{}", serde_json::json!({"status": "ok", "message": msg}));
+            writeln!(w, "{}", serde_json::json!({"status": "ok", "message": msg}))?;
         }
     }
+    Ok(())
+}
+
+/// Print a raw JSON value.
+///
+/// # Errors
+///
+/// Returns an error if writing or serialization fails.
+pub fn print_json(w: &mut impl Write, value: &impl Serialize) -> Result<()> {
+    writeln!(w, "{}", serde_json::to_string_pretty(value)?)?;
+    Ok(())
 }
 
 // ── Docker ──────────────────────────────────────────────────────────

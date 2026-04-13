@@ -5,6 +5,8 @@ mod commands;
 mod output;
 mod session;
 
+use std::io::{BufWriter, Write};
+
 use anyhow::{Context, Result, bail};
 use clap::Parser;
 use ugos_client::{Credentials, Session, UgosClient};
@@ -37,8 +39,17 @@ async fn main() -> Result<()> {
 
     let client = build_client(host, cli.port, &creds, cli.no_cache).await?;
 
-    if let Err(e) = commands::run(&client, &cli.command, cli.output).await {
-        // On login expired after retry, give a clear message.
+    let mut stdout = BufWriter::new(std::io::stdout().lock());
+    let result = commands::run(&client, &cli.command, cli.output, &mut stdout).await;
+    let flush_result = stdout.flush();
+
+    // Check for BrokenPipe (piped to head/less/etc) — exit silently.
+    if is_broken_pipe(&result) || is_broken_pipe_io(&flush_result) {
+        std::process::exit(0);
+    }
+    flush_result.context("flushing stdout")?;
+
+    if let Err(e) = result {
         bail!("{e:#}");
     }
 
@@ -103,4 +114,22 @@ async fn build_client(
     }
 
     Ok(client)
+}
+
+/// Check if an `anyhow::Error` wraps a `BrokenPipe`.
+fn is_broken_pipe(result: &Result<()>) -> bool {
+    match result {
+        Err(e) => e
+            .downcast_ref::<std::io::Error>()
+            .is_some_and(|io| io.kind() == std::io::ErrorKind::BrokenPipe),
+        Ok(()) => false,
+    }
+}
+
+/// Check if an `io::Result` is a `BrokenPipe`.
+fn is_broken_pipe_io(result: &std::io::Result<()>) -> bool {
+    match result {
+        Err(e) => e.kind() == std::io::ErrorKind::BrokenPipe,
+        Ok(()) => false,
+    }
 }
