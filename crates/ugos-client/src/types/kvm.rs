@@ -193,7 +193,7 @@ pub struct NetworkSummary {
 }
 
 /// Detailed network configuration from `GetNetworkByName`.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 #[allow(clippy::struct_excessive_bools)]
 pub struct NetworkDetail {

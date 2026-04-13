@@ -238,6 +238,25 @@ pub enum NetworkAction {
         /// Network name.
         name: String,
     },
+    /// Create a KVM network.
+    Create {
+        /// Network name.
+        name: String,
+        /// Network type: bridge, nat, none.
+        #[arg(long, default_value = "bridge")]
+        net_type: String,
+        /// Mapping network interface (e.g. `bridge0`).
+        #[arg(long)]
+        interface: String,
+    },
+    /// Update a KVM network.
+    Update {
+        /// Network name.
+        name: String,
+        /// Mapping network interface.
+        #[arg(long)]
+        interface: Option<String>,
+    },
     /// Delete a KVM network.
     Delete {
         /// Network name.
@@ -462,6 +481,74 @@ pub enum DockerAction {
         /// Image ID.
         id: String,
     },
+    /// Export an image to a NAS path.
+    Export {
+        /// Image ID.
+        id: String,
+        /// Destination path on the NAS.
+        path: String,
+    },
+    /// Load an image from a URL.
+    LoadUrl {
+        /// URL to load image from.
+        url: String,
+    },
+    /// Load an image from a NAS path.
+    LoadPath {
+        /// Path to image file on the NAS.
+        path: String,
+    },
     /// List registry mirror sources.
     Mirrors,
+    /// Add a registry mirror source.
+    MirrorAdd {
+        /// Display name.
+        alias: String,
+        /// Mirror URL.
+        address: String,
+    },
+    /// Delete a registry mirror source.
+    MirrorDelete {
+        /// Mirror ID.
+        id: i64,
+    },
+    /// Switch active registry mirror source.
+    MirrorSwitch {
+        /// Mirror ID.
+        id: i64,
+    },
+    /// Show container logs.
+    Logs {
+        /// Container ID.
+        id: String,
+        /// Number of log lines.
+        #[arg(long, default_value = "100")]
+        lines: u32,
+    },
+    /// Clone a container.
+    Clone {
+        /// Source container ID.
+        id: String,
+        /// New container name.
+        name: String,
+    },
+    /// Batch operate on containers.
+    Batch {
+        /// Operation: start, stop, restart, remove.
+        action: String,
+        /// Container IDs.
+        ids: Vec<String>,
+    },
+    /// Show compose project containers.
+    Compose {
+        /// Project name.
+        project: String,
+    },
+    /// Show Docker HTTP proxy configuration.
+    ProxyGet,
+    /// Set Docker HTTP proxy configuration.
+    ProxySet {
+        /// Proxy JSON (e.g. `{"http":"http://proxy:8080"}`).
+        json: String,
+    },
 }
