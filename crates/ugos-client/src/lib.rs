@@ -30,3 +30,6 @@ pub mod types;
 // Re-export the most commonly used items at the crate root.
 pub use auth::{Credentials, Session};
 pub use client::UgosClient;
+
+#[cfg(test)]
+mod tests;

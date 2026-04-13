@@ -1232,3 +1232,6 @@ impl ServerHandler for UgosMcp {
             .with_instructions(instructions)
     }
 }
+
+#[cfg(test)]
+mod tests;

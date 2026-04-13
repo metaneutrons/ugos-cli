@@ -24,3 +24,6 @@ thiserror.workspace = true
 tokio = { workspace = true, features = ["sync"] }
 tracing.workspace = true
 uuid = { version = "1", features = ["v4"] }
+
+[features]
+integration = []
