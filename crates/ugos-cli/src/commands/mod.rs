@@ -92,7 +92,7 @@ async fn vm(client: &UgosClient, action: &VmAction, fmt: OutputFormat) -> Result
                 boot_type,
                 storage,
                 *autostart,
-            );
+            )?;
             let uuid = client.vm_create(&spec).await?;
             output::print_success(&format!("Created VM {name} ({uuid})"), fmt);
         }
@@ -407,7 +407,7 @@ async fn docker(client: &UgosClient, action: &DockerAction, fmt: OutputFormat) -
                 *privileged,
                 memory.as_ref(),
                 cpus.as_ref(),
-            );
+            )?;
             client.container_create(&spec).await?;
             output::print_success(&format!("Created container {name}"), fmt);
         }
@@ -485,7 +485,7 @@ fn parse_mem_limit(s: &str) -> i64 {
         .unwrap_or_else(|| s.parse::<i64>().unwrap_or(0))
 }
 
-#[allow(clippy::too_many_arguments)]
+#[allow(clippy::too_many_arguments, clippy::similar_names)]
 fn build_container_spec(
     name: &str,
     image: &str,
@@ -497,7 +497,45 @@ fn build_container_spec(
     privileged: bool,
     memory: Option<&String>,
     cpus: Option<&f64>,
-) -> ugos_client::types::docker::ContainerDetail {
+) -> Result<ugos_client::types::docker::ContainerDetail> {
+    // ── Validate ────────────────────────────────────────────────────
+    anyhow::ensure!(!name.is_empty(), "container name cannot be empty");
+    anyhow::ensure!(
+        image
+            .chars()
+            .all(|c| c.is_alphanumeric() || "/:._-".contains(c)),
+        "invalid image name: {image}"
+    );
+    for p in ports {
+        let mapping = p.split('/').next().unwrap_or(p);
+        let parts: Vec<&str> = mapping.split(':').collect();
+        anyhow::ensure!(
+            parts.len() == 2 && parts[0].parse::<u16>().is_ok() && parts[1].parse::<u16>().is_ok(),
+            "invalid port mapping '{p}', expected host:container (e.g. 8080:80)"
+        );
+    }
+    for e in envs {
+        anyhow::ensure!(e.contains('='), "invalid env var '{e}', expected KEY=VALUE");
+    }
+    for v in volumes {
+        anyhow::ensure!(
+            v.contains(':'),
+            "invalid volume '{v}', expected host_path:container_path"
+        );
+    }
+    anyhow::ensure!(
+        matches!(restart, "no" | "always" | "unless-stopped"),
+        "invalid restart policy '{restart}', expected: no, always, unless-stopped"
+    );
+    anyhow::ensure!(
+        matches!(network, "bridge" | "host"),
+        "invalid network mode '{network}', expected: bridge, host"
+    );
+    if let Some(c) = cpus {
+        anyhow::ensure!(*c >= 0.0, "CPU limit cannot be negative");
+    }
+
+    // ── Build ───────────────────────────────────────────────────────
     let (img_name, img_ver) = image
         .split_once(':')
         .map_or((image, "latest"), |(n, t)| (n, t));
@@ -540,7 +578,7 @@ fn build_container_spec(
     #[allow(clippy::cast_possible_truncation)]
     let cpu_limit = cpus.map_or(0, |c| (*c * 100.0) as i64);
 
-    ugos_client::types::docker::ContainerDetail {
+    Ok(ugos_client::types::docker::ContainerDetail {
         image_name: img_name.to_owned(),
         image_version: img_ver.to_owned(),
         tag: image.to_owned(),
@@ -560,7 +598,7 @@ fn build_container_spec(
         perm_and_func: vec![],
         project_name: String::new(),
         image_id: String::new(),
-    }
+    })
 }
 
 #[allow(clippy::too_many_arguments, clippy::similar_names)]
@@ -575,10 +613,26 @@ fn build_vm_spec(
     boot_type: &str,
     storage: &str,
     autostart: bool,
-) -> ugos_client::types::kvm::VmDetail {
+) -> Result<ugos_client::types::kvm::VmDetail> {
     use ugos_client::types::kvm::{
         VmDetail, VmDevice, VmDisk, VmImage, VmNetwork, VmOtherConfig, VmResource,
     };
+
+    // ── Validate ────────────────────────────────────────────────────
+    anyhow::ensure!(!name.is_empty(), "VM name cannot be empty");
+    anyhow::ensure!(
+        matches!(os, "linux" | "windows" | "other"),
+        "invalid OS type '{os}', expected: linux, windows, other"
+    );
+    anyhow::ensure!(cores > 0, "cores must be > 0, got {cores}");
+    anyhow::ensure!(memory_mib > 0, "memory must be > 0 MiB, got {memory_mib}");
+    anyhow::ensure!(disk_mib > 0, "disk must be > 0 MiB, got {disk_mib}");
+    anyhow::ensure!(
+        matches!(boot_type, "uefi" | "bios"),
+        "invalid boot type '{boot_type}', expected: uefi, bios"
+    );
+
+    // ── Build ───────────────────────────────────────────────────────
 
     let memory_kib = memory_mib * 1024;
     let disk_bytes = disk_mib * 1024 * 1024;
@@ -593,7 +647,7 @@ fn build_vm_spec(
         })
         .unwrap_or_default();
 
-    VmDetail {
+    Ok(VmDetail {
         virtual_machine_name: String::new(), // vm_create generates UUID
         virtual_machine_display_name: name.to_owned(),
         system_type: os.to_owned(),
@@ -625,5 +679,5 @@ fn build_vm_spec(
             share_directory: vec![],
         },
         storage_name: storage.to_owned(),
-    }
+    })
 }
