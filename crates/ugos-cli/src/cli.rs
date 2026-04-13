@@ -132,15 +132,54 @@ pub enum VmAction {
         /// VM name or UUID.
         name: String,
     },
-    /// Create a VM from a JSON spec file.
+    /// Create a VM.
     Create {
-        /// Path to a JSON file containing the VM spec (`VmDetail`).
-        file: String,
+        /// Display name for the VM.
+        name: String,
+        /// OS type: linux, windows, other.
+        #[arg(long, default_value = "linux")]
+        os: String,
+        /// Number of CPU cores.
+        #[arg(long)]
+        cores: i64,
+        /// Memory in MiB.
+        #[arg(long)]
+        memory: i64,
+        /// Disk size in MiB.
+        #[arg(long)]
+        disk: i64,
+        /// ISO image path on the NAS (optional).
+        #[arg(long)]
+        iso: Option<String>,
+        /// KVM network name (default: vnet-bridge0).
+        #[arg(long, default_value = "vnet-bridge0")]
+        network: String,
+        /// Boot type: uefi or bios.
+        #[arg(long, default_value = "uefi")]
+        boot_type: String,
+        /// Storage volume name (e.g. `volume1`).
+        #[arg(long, default_value = "volume1")]
+        storage: String,
+        /// Auto-start on NAS boot.
+        #[arg(long)]
+        autostart: bool,
     },
-    /// Update a VM from a JSON spec file (VM must be shut off).
+    /// Update a VM (must be shut off). Only specified flags are changed.
     Update {
-        /// Path to a JSON file containing the VM spec (`VmDetail`).
-        file: String,
+        /// VM name or UUID.
+        name: String,
+        /// Number of CPU cores.
+        #[arg(long)]
+        cores: Option<i64>,
+        /// Memory in MiB.
+        #[arg(long)]
+        memory: Option<i64>,
+        /// Auto-start on NAS boot.
+        #[arg(long)]
+        autostart: Option<bool>,
+        /// Boot type: uefi or bios.
+        #[arg(long)]
+        boot_type: Option<String>,
     },
     /// Snapshot management.
     Snapshot {
@@ -344,10 +383,37 @@ pub enum DockerAction {
         /// Container ID.
         id: String,
     },
-    /// Create a container from a JSON spec file.
+    /// Create a container.
     Create {
-        /// Path to JSON file (use `ugos docker show <id>` to get a template).
-        file: String,
+        /// Container name.
+        name: String,
+        /// Image (e.g. `nginx:latest`).
+        #[arg(long)]
+        image: String,
+        /// Port mapping (repeatable, `host:container` or `host:container/udp`).
+        #[arg(long, short)]
+        port: Vec<String>,
+        /// Environment variable (repeatable, `KEY=VALUE`).
+        #[arg(long, short)]
+        env: Vec<String>,
+        /// Volume mount (repeatable, `host_path:container_path`).
+        #[arg(long, short)]
+        volume: Vec<String>,
+        /// Restart policy: no, always, unless-stopped.
+        #[arg(long, default_value = "no")]
+        restart: String,
+        /// Network mode: bridge, host.
+        #[arg(long, default_value = "bridge")]
+        network: String,
+        /// Run in privileged mode.
+        #[arg(long)]
+        privileged: bool,
+        /// Memory limit (e.g. `512m`, `2g`). 0 = unlimited.
+        #[arg(long)]
+        memory: Option<String>,
+        /// CPU limit (number of cores). 0 = unlimited.
+        #[arg(long)]
+        cpus: Option<f64>,
     },
     /// Stop a container.
     Stop {

@@ -69,19 +69,53 @@ async fn vm(client: &UgosClient, action: &VmAction, fmt: OutputFormat) -> Result
             client.vm_delete(name).await?;
             output::print_success(&format!("Deleted {name}"), fmt);
         }
-        VmAction::Create { file } => {
-            let json = std::fs::read_to_string(file)
-                .map_err(|e| anyhow::anyhow!("reading {file}: {e}"))?;
-            let spec: ugos_client::types::kvm::VmDetail =
-                serde_json::from_str(&json).map_err(|e| anyhow::anyhow!("parsing VM spec: {e}"))?;
+        VmAction::Create {
+            name,
+            os,
+            cores,
+            memory,
+            disk,
+            iso,
+            network,
+            boot_type,
+            storage,
+            autostart,
+        } => {
+            let spec = build_vm_spec(
+                name,
+                os,
+                *cores,
+                *memory,
+                *disk,
+                iso.as_ref(),
+                network,
+                boot_type,
+                storage,
+                *autostart,
+            );
             let uuid = client.vm_create(&spec).await?;
-            output::print_success(&format!("Created VM {uuid}"), fmt);
+            output::print_success(&format!("Created VM {name} ({uuid})"), fmt);
         }
-        VmAction::Update { file } => {
-            let json = std::fs::read_to_string(file)
-                .map_err(|e| anyhow::anyhow!("reading {file}: {e}"))?;
-            let spec: ugos_client::types::kvm::VmDetail =
-                serde_json::from_str(&json).map_err(|e| anyhow::anyhow!("parsing VM spec: {e}"))?;
+        VmAction::Update {
+            name,
+            cores,
+            memory,
+            autostart,
+            boot_type,
+        } => {
+            let mut spec = client.vm_show(name).await?;
+            if let Some(c) = cores {
+                spec.core.value = *c;
+            }
+            if let Some(m) = memory {
+                spec.memory.value = *m * 1024; // MiB → KiB
+            }
+            if let Some(a) = autostart {
+                spec.other_config.auto_matic_start_up = *a;
+            }
+            if let Some(bt) = boot_type {
+                spec.device.boot_type = bt.clone();
+            }
             client.vm_update(&spec).await?;
             output::print_success(
                 &format!("Updated VM {}", spec.virtual_machine_display_name),
@@ -350,13 +384,32 @@ async fn docker(client: &UgosClient, action: &DockerAction, fmt: OutputFormat) -
                 println!("{}", serde_json::to_string_pretty(&detail)?);
             }
         }
-        DockerAction::Create { file } => {
-            let json = std::fs::read_to_string(file)
-                .map_err(|e| anyhow::anyhow!("reading {file}: {e}"))?;
-            let spec: ugos_client::types::docker::ContainerDetail = serde_json::from_str(&json)
-                .map_err(|e| anyhow::anyhow!("parsing container spec: {e}"))?;
+        DockerAction::Create {
+            name,
+            image,
+            port,
+            env,
+            volume,
+            restart,
+            network,
+            privileged,
+            memory,
+            cpus,
+        } => {
+            let spec = build_container_spec(
+                name,
+                image,
+                port,
+                env,
+                volume,
+                restart,
+                network,
+                *privileged,
+                memory.as_ref(),
+                cpus.as_ref(),
+            );
             client.container_create(&spec).await?;
-            output::print_success(&format!("Created container {}", spec.container_name), fmt);
+            output::print_success(&format!("Created container {name}"), fmt);
         }
         DockerAction::Stop { id } => {
             client.container_stop(id).await?;
@@ -417,4 +470,160 @@ async fn info(client: &UgosClient, fmt: OutputFormat) -> Result<()> {
         }
     }
     Ok(())
+}
+
+// ── Builder helpers ─────────────────────────────────────────────────
+
+fn parse_mem_limit(s: &str) -> i64 {
+    let s = s.trim().to_lowercase();
+    s.strip_suffix('g')
+        .map(|n| n.parse::<i64>().unwrap_or(0) * 1024 * 1024 * 1024)
+        .or_else(|| {
+            s.strip_suffix('m')
+                .map(|n| n.parse::<i64>().unwrap_or(0) * 1024 * 1024)
+        })
+        .unwrap_or_else(|| s.parse::<i64>().unwrap_or(0))
+}
+
+#[allow(clippy::too_many_arguments)]
+fn build_container_spec(
+    name: &str,
+    image: &str,
+    ports: &[String],
+    envs: &[String],
+    volumes: &[String],
+    restart: &str,
+    network: &str,
+    privileged: bool,
+    memory: Option<&String>,
+    cpus: Option<&f64>,
+) -> ugos_client::types::docker::ContainerDetail {
+    let (img_name, img_ver) = image
+        .split_once(':')
+        .map_or((image, "latest"), |(n, t)| (n, t));
+
+    let port_mapping: Vec<serde_json::Value> = ports
+        .iter()
+        .map(|p| {
+            let (mapping, proto) = p
+                .split_once('/')
+                .map_or((p.as_str(), "tcp"), |(m, pr)| (m, pr));
+            let (host, container) = mapping.split_once(':').unwrap_or(("0", mapping));
+            serde_json::json!({
+                "hostPort": host.parse::<u16>().unwrap_or(0),
+                "containerPort": container.parse::<u16>().unwrap_or(0),
+                "protocol": proto
+            })
+        })
+        .collect();
+
+    let env_vars: Vec<ugos_client::types::docker::EnvVar> = envs
+        .iter()
+        .filter_map(|e| {
+            e.split_once('=')
+                .map(|(k, v)| ugos_client::types::docker::EnvVar {
+                    variable: k.to_owned(),
+                    price: v.to_owned(),
+                })
+        })
+        .collect();
+
+    let vols: Vec<serde_json::Value> = volumes
+        .iter()
+        .filter_map(|v| {
+            v.split_once(':')
+                .map(|(host, ctr)| serde_json::json!({"hostPath": host, "containerPath": ctr}))
+        })
+        .collect();
+
+    let mem_limit = memory.map_or(0, |s| parse_mem_limit(s));
+    #[allow(clippy::cast_possible_truncation)]
+    let cpu_limit = cpus.map_or(0, |c| (*c * 100.0) as i64);
+
+    ugos_client::types::docker::ContainerDetail {
+        image_name: img_name.to_owned(),
+        image_version: img_ver.to_owned(),
+        tag: image.to_owned(),
+        container_name: name.to_owned(),
+        cpu_limit,
+        mem_limit,
+        no_restrictions: mem_limit == 0 && cpu_limit == 0,
+        network_mode: network.to_owned(),
+        hardware_acceleration: false,
+        privileged_mode: privileged,
+        abnormal_reset: restart != "no",
+        run_container: true,
+        port_mapping,
+        volumes: if vols.is_empty() { None } else { Some(vols) },
+        environment_variables: env_vars,
+        container_run_command: vec![],
+        perm_and_func: vec![],
+        project_name: String::new(),
+        image_id: String::new(),
+    }
+}
+
+#[allow(clippy::too_many_arguments, clippy::similar_names)]
+fn build_vm_spec(
+    name: &str,
+    os: &str,
+    cores: i64,
+    memory_mib: i64,
+    disk_mib: i64,
+    iso: Option<&String>,
+    network: &str,
+    boot_type: &str,
+    storage: &str,
+    autostart: bool,
+) -> ugos_client::types::kvm::VmDetail {
+    use ugos_client::types::kvm::{
+        VmDetail, VmDevice, VmDisk, VmImage, VmNetwork, VmOtherConfig, VmResource,
+    };
+
+    let memory_kib = memory_mib * 1024;
+    let disk_bytes = disk_mib * 1024 * 1024;
+
+    let images = iso
+        .map(|path| {
+            vec![VmImage {
+                path: path.clone(),
+                dev: "hda".into(),
+                order: 2,
+            }]
+        })
+        .unwrap_or_default();
+
+    VmDetail {
+        virtual_machine_name: String::new(), // vm_create generates UUID
+        virtual_machine_display_name: name.to_owned(),
+        system_type: os.to_owned(),
+        system_version: String::new(),
+        core: VmResource { value: cores },
+        memory: VmResource { value: memory_kib },
+        images,
+        dists: vec![VmDisk {
+            bus: "virtio".into(),
+            size: disk_bytes,
+            dev: "vda".into(),
+            path: String::new(),
+            order: 1,
+        }],
+        networks: vec![VmNetwork {
+            name: network.to_owned(),
+            mac_address: String::new(),
+            nic_type: "virtio".into(),
+        }],
+        device: VmDevice {
+            usb_controller: 2,
+            usb_devices: vec![],
+            graphics_card: "virtio".into(),
+            boot_type: boot_type.to_owned(),
+        },
+        other_config: VmOtherConfig {
+            auto_matic_start_up: autostart,
+            keyboard_language: "en".into(),
+            share_directory: vec![],
+        },
+        storage_name: storage.to_owned(),
+    }
 }
