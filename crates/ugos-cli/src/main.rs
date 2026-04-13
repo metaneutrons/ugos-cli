@@ -42,6 +42,21 @@ async fn main() -> Result<()> {
         bail!("{e:#}");
     }
 
+    // Save session after command (re-auth may have refreshed it).
+    if !cli.no_cache {
+        let sess = client.session().await;
+        let cached = session::CachedSession {
+            host: host.to_owned(),
+            port: cli.port,
+            user: user.to_owned(),
+            token: sess.token,
+            created_at: session::unix_now(),
+        };
+        if let Err(e) = session::save(&cached) {
+            tracing::warn!("failed to save session cache: {e}");
+        }
+    }
+
     Ok(())
 }
 
@@ -80,6 +95,7 @@ async fn build_client(
             port,
             user: creds.username.clone(),
             token: sess.token,
+            created_at: session::unix_now(),
         };
         if let Err(e) = session::save(&cached) {
             tracing::warn!("failed to save session cache: {e}");
