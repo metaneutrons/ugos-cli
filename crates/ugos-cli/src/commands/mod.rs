@@ -180,6 +180,30 @@ async fn network(client: &UgosClient, action: &NetworkAction, fmt: OutputFormat)
                 }
             }
         }
+        NetworkAction::Create {
+            name,
+            net_type,
+            interface,
+        } => {
+            let net = ugos_client::types::kvm::NetworkDetail {
+                network_uuid: String::new(),
+                network_name: name.clone(),
+                network_type: net_type.clone(),
+                network_mode: net_type.clone(),
+                mapping_network: interface.clone(),
+                ..Default::default()
+            };
+            client.network_create(&net).await?;
+            output::print_success(&format!("Created network {name}"), fmt);
+        }
+        NetworkAction::Update { name, interface } => {
+            let mut net = client.network_show(name).await?;
+            if let Some(iface) = interface {
+                net.mapping_network = iface.clone();
+            }
+            client.network_update(&net).await?;
+            output::print_success(&format!("Updated network {name}"), fmt);
+        }
         NetworkAction::Delete { name } => {
             client.network_delete(name).await?;
             output::print_success(&format!("Deleted network {name}"), fmt);
@@ -446,10 +470,69 @@ async fn docker(client: &UgosClient, action: &DockerAction, fmt: OutputFormat) -
             client.docker_image_delete(id).await?;
             output::print_success(&format!("Deleted image {id}"), fmt);
         }
+        DockerAction::Export { id, path } => {
+            client.docker_image_export(id, path).await?;
+            output::print_success(&format!("Exporting image {id} to {path}"), fmt);
+        }
+        DockerAction::LoadUrl { url } => {
+            client.docker_image_load_url(url).await?;
+            output::print_success(&format!("Loading image from {url}"), fmt);
+        }
+        DockerAction::LoadPath { path } => {
+            client.docker_image_load_path(path).await?;
+            output::print_success(&format!("Loading image from {path}"), fmt);
+        }
         DockerAction::Mirrors => {
             let mirrors = client.mirror_list().await?;
             let rows: Vec<output::MirrorRow> = mirrors.iter().map(Into::into).collect();
             output::print_list(&rows, fmt)?;
+        }
+        DockerAction::MirrorAdd { alias, address } => {
+            client.mirror_add(alias, address).await?;
+            output::print_success(&format!("Added mirror {alias}"), fmt);
+        }
+        DockerAction::MirrorDelete { id } => {
+            client.mirror_delete(*id).await?;
+            output::print_success(&format!("Deleted mirror {id}"), fmt);
+        }
+        DockerAction::MirrorSwitch { id } => {
+            client.mirror_switch(*id).await?;
+            output::print_success(&format!("Switched to mirror {id}"), fmt);
+        }
+        DockerAction::Logs { id, lines } => {
+            let logs = client.container_logs(id, *lines).await?;
+            #[allow(clippy::print_stdout)]
+            {
+                println!("{}", serde_json::to_string_pretty(&logs)?);
+            }
+        }
+        DockerAction::Clone { id, name } => {
+            client.container_clone(id, name).await?;
+            output::print_success(&format!("Cloned {id} as {name}"), fmt);
+        }
+        DockerAction::Batch { action, ids } => {
+            client.container_batch(ids, action).await?;
+            output::print_success(&format!("{action} {} containers", ids.len()), fmt);
+        }
+        DockerAction::Compose { project } => {
+            let data = client.compose_containers(project).await?;
+            #[allow(clippy::print_stdout)]
+            {
+                println!("{}", serde_json::to_string_pretty(&data)?);
+            }
+        }
+        DockerAction::ProxyGet => {
+            let proxy = client.docker_proxy_get().await?;
+            #[allow(clippy::print_stdout)]
+            {
+                println!("{}", serde_json::to_string_pretty(&proxy)?);
+            }
+        }
+        DockerAction::ProxySet { json } => {
+            let proxy: serde_json::Value =
+                serde_json::from_str(json).map_err(|e| anyhow::anyhow!("invalid JSON: {e}"))?;
+            client.docker_proxy_set(&proxy).await?;
+            output::print_success("Updated HTTP proxy", fmt);
         }
     }
     Ok(())

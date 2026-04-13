@@ -303,6 +303,118 @@ fn default_tag() -> String {
     default_tag_str().to_owned()
 }
 
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct ContainerLogsParam {
+    /// Container ID.
+    id: String,
+    /// Number of log lines (default: 100).
+    #[serde(default = "default_log_lines")]
+    lines: u32,
+    /// Target NAS.
+    #[serde(default)]
+    target: Option<String>,
+}
+const fn default_log_lines() -> u32 {
+    100
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct ContainerCloneParam {
+    /// Source container ID.
+    id: String,
+    /// New container name.
+    name: String,
+    /// Target NAS.
+    #[serde(default)]
+    target: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct ContainerBatchParam {
+    /// Container IDs.
+    ids: Vec<String>,
+    /// Operation: start, stop, restart, remove.
+    action: String,
+    /// Target NAS.
+    #[serde(default)]
+    target: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct ImageExportParam {
+    /// Image ID.
+    id: String,
+    /// Destination path on the NAS.
+    path: String,
+    /// Target NAS.
+    #[serde(default)]
+    target: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct ImageLoadParam {
+    /// URL or NAS path to load image from.
+    source: String,
+    /// Target NAS.
+    #[serde(default)]
+    target: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct MirrorAddParam {
+    /// Display name.
+    alias: String,
+    /// Mirror URL.
+    address: String,
+    /// Target NAS.
+    #[serde(default)]
+    target: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct MirrorIdParam {
+    /// Mirror ID.
+    id: i64,
+    /// Target NAS.
+    #[serde(default)]
+    target: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct ComposeParam {
+    /// Compose project name.
+    project: String,
+    /// Target NAS.
+    #[serde(default)]
+    target: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct ProxySetParam {
+    /// Proxy configuration JSON object.
+    proxy: serde_json::Value,
+    /// Target NAS.
+    #[serde(default)]
+    target: Option<String>,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct NetworkCreateParam {
+    /// Network name.
+    name: String,
+    /// Network type: bridge, nat, none.
+    #[serde(default = "default_bridge")]
+    net_type: String,
+    /// Mapping network interface.
+    interface: String,
+    /// Target NAS.
+    #[serde(default)]
+    target: Option<String>,
+}
+fn default_bridge() -> String {
+    "bridge".to_owned()
+}
+
 // ── Server ──────────────────────────────────────────────────────────
 
 /// MCP server exposing UGOS NAS operations as tools.
@@ -912,6 +1024,184 @@ impl UgosMcp {
         match self.client(p.target.as_deref()).await {
             Ok(c) => match c.mirror_list().await {
                 Ok(m) => serde_json::to_string_pretty(&m).unwrap_or_default(),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Get Docker container logs")]
+    async fn ugos_docker_logs(&self, Parameters(p): Parameters<ContainerLogsParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.container_logs(&p.id, p.lines).await {
+                Ok(v) => serde_json::to_string_pretty(&v).unwrap_or_default(),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Clone a Docker container")]
+    async fn ugos_docker_clone(&self, Parameters(p): Parameters<ContainerCloneParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.container_clone(&p.id, &p.name).await {
+                Ok(()) => format!("Cloned {} as {}", p.id, p.name),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Batch operate on Docker containers (start/stop/restart/remove)")]
+    async fn ugos_docker_batch(&self, Parameters(p): Parameters<ContainerBatchParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.container_batch(&p.ids, &p.action).await {
+                Ok(()) => format!("{} {} containers", p.action, p.ids.len()),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Export a Docker image to a NAS path")]
+    async fn ugos_docker_image_export(
+        &self,
+        Parameters(p): Parameters<ImageExportParam>,
+    ) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.docker_image_export(&p.id, &p.path).await {
+                Ok(()) => format!("Exporting image {} to {}", p.id, p.path),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Load a Docker image from a URL")]
+    async fn ugos_docker_image_load_url(
+        &self,
+        Parameters(p): Parameters<ImageLoadParam>,
+    ) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.docker_image_load_url(&p.source).await {
+                Ok(()) => format!("Loading image from {}", p.source),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Load a Docker image from a NAS path")]
+    async fn ugos_docker_image_load_path(
+        &self,
+        Parameters(p): Parameters<ImageLoadParam>,
+    ) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.docker_image_load_path(&p.source).await {
+                Ok(()) => format!("Loading image from {}", p.source),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Add a Docker registry mirror source")]
+    async fn ugos_docker_mirror_add(&self, Parameters(p): Parameters<MirrorAddParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.mirror_add(&p.alias, &p.address).await {
+                Ok(()) => format!("Added mirror {}", p.alias),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Delete a Docker registry mirror source")]
+    async fn ugos_docker_mirror_delete(&self, Parameters(p): Parameters<MirrorIdParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.mirror_delete(p.id).await {
+                Ok(()) => format!("Deleted mirror {}", p.id),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Switch active Docker registry mirror source")]
+    async fn ugos_docker_mirror_switch(&self, Parameters(p): Parameters<MirrorIdParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.mirror_switch(p.id).await {
+                Ok(()) => format!("Switched to mirror {}", p.id),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List containers in a Docker Compose project")]
+    async fn ugos_docker_compose(&self, Parameters(p): Parameters<ComposeParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.compose_containers(&p.project).await {
+                Ok(v) => serde_json::to_string_pretty(&v).unwrap_or_default(),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Get Docker HTTP proxy configuration")]
+    async fn ugos_docker_proxy_get(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.docker_proxy_get().await {
+                Ok(v) => serde_json::to_string_pretty(&v).unwrap_or_default(),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Set Docker HTTP proxy configuration")]
+    async fn ugos_docker_proxy_set(&self, Parameters(p): Parameters<ProxySetParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.docker_proxy_set(&p.proxy).await {
+                Ok(()) => "Updated HTTP proxy".into(),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    // ── KVM Network Create/Update ───────────────────────────────────
+
+    #[tool(description = "Create a KVM network")]
+    async fn ugos_network_create(&self, Parameters(p): Parameters<NetworkCreateParam>) -> String {
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => {
+                let net = ugos_client::types::kvm::NetworkDetail {
+                    network_name: p.name.clone(),
+                    network_type: p.net_type.clone(),
+                    network_mode: p.net_type.clone(),
+                    mapping_network: p.interface.clone(),
+                    ..Default::default()
+                };
+                match c.network_create(&net).await {
+                    Ok(()) => format!("Created network {}", p.name),
+                    Err(e) => format!("error: {e}"),
+                }
+            }
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Update a KVM network")]
+    async fn ugos_network_update(&self, Parameters(p): Parameters<VmSpecParam>) -> String {
+        let net: ugos_client::types::kvm::NetworkDetail = match serde_json::from_value(p.spec) {
+            Ok(s) => s,
+            Err(e) => return format!("error parsing spec: {e}"),
+        };
+        match self.client(p.target.as_deref()).await {
+            Ok(c) => match c.network_update(&net).await {
+                Ok(()) => format!("Updated network {}", net.network_name),
                 Err(e) => format!("error: {e}"),
             },
             Err(e) => e,
