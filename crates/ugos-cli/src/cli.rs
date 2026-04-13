@@ -391,7 +391,7 @@ pub enum DockerAction {
         #[arg(long)]
         image: String,
         /// Port mapping (repeatable, `host:container` or `host:container/udp`).
-        #[arg(long, short)]
+        #[arg(id = "publish", long = "publish", short = 'p')]
         port: Vec<String>,
         /// Environment variable (repeatable, `KEY=VALUE`).
         #[arg(long, short)]
