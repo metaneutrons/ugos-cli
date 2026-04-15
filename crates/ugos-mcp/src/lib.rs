@@ -94,7 +94,7 @@ struct VmNameParam {
     name: String,
     /// Target NAS name or host. Required when multiple targets are configured.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -106,7 +106,7 @@ struct VmStopParam {
     force: bool,
     /// Target NAS name or host. Required when multiple targets are configured.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -118,7 +118,7 @@ struct VmRebootParam {
     force: bool,
     /// Target NAS name or host. Required when multiple targets are configured.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -127,7 +127,7 @@ struct SnapshotListParam {
     vm: String,
     /// Target NAS name or host. Required when multiple targets are configured.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -138,7 +138,7 @@ struct SnapshotParam {
     name: String,
     /// Target NAS name or host. Required when multiple targets are configured.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -151,7 +151,7 @@ struct SnapshotRenameParam {
     new_name: String,
     /// Target NAS name or host. Required when multiple targets are configured.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -160,14 +160,14 @@ struct NetworkNameParam {
     name: String,
     /// Target NAS name or host. Required when multiple targets are configured.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 struct TargetOnlyParam {
     /// Target NAS name or host. Required when multiple targets are configured.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -178,7 +178,7 @@ struct ImageDeleteParam {
     image_name: String,
     /// Target NAS name or host. Required when multiple targets are configured.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -187,7 +187,7 @@ struct ImageNameParam {
     name: String,
     /// Target NAS name or host. Required when multiple targets are configured.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -198,7 +198,7 @@ struct StorageRefParam {
     uuid: String,
     /// Target NAS name or host. Required when multiple targets are configured.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -210,7 +210,7 @@ struct VncGenerateParam {
     source_url: String,
     /// Target NAS name or host. Required when multiple targets are configured.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -223,7 +223,7 @@ struct LogSearchParam {
     page_size: u32,
     /// Target NAS name or host. Required when multiple targets are configured.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 const fn default_page() -> u32 {
@@ -239,7 +239,7 @@ struct VmSpecParam {
     spec: serde_json::Value,
     /// Target NAS name or host. Required when multiple targets are configured.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -254,7 +254,7 @@ struct OvaExportParam {
     ova_path: String,
     /// Target NAS name or host. Required when multiple targets are configured.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -263,7 +263,7 @@ struct OvaParseParam {
     ova_path: String,
     /// Target NAS name or host. Required when multiple targets are configured.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -272,7 +272,7 @@ struct ContainerIdParam {
     id: String,
     /// Target NAS name or host. Required when multiple targets are configured.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -281,7 +281,7 @@ struct DockerImageSearchParam {
     name: String,
     /// Target NAS name or host. Required when multiple targets are configured.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -293,7 +293,7 @@ struct DockerImagePullParam {
     tag: String,
     /// Target NAS name or host. Required when multiple targets are configured.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 const fn default_tag_str() -> &'static str {
@@ -312,7 +312,7 @@ struct ContainerLogsParam {
     lines: u32,
     /// Target NAS.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 const fn default_log_lines() -> u32 {
     100
@@ -326,7 +326,7 @@ struct ContainerCloneParam {
     name: String,
     /// Target NAS.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -337,7 +337,7 @@ struct ContainerBatchParam {
     action: String,
     /// Target NAS.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -348,7 +348,7 @@ struct ImageExportParam {
     path: String,
     /// Target NAS.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -357,7 +357,7 @@ struct ImageLoadParam {
     source: String,
     /// Target NAS.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -368,7 +368,7 @@ struct MirrorAddParam {
     address: String,
     /// Target NAS.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -377,7 +377,7 @@ struct MirrorIdParam {
     id: i64,
     /// Target NAS.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -386,7 +386,7 @@ struct ComposeParam {
     project: String,
     /// Target NAS.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -395,7 +395,7 @@ struct ProxySetParam {
     proxy: serde_json::Value,
     /// Target NAS.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -409,7 +409,7 @@ struct NetworkCreateParam {
     interface: String,
     /// Target NAS.
     #[serde(default)]
-    target: Option<String>,
+    target: String,
 }
 fn default_bridge() -> String {
     "bridge".to_owned()
@@ -447,8 +447,13 @@ impl UgosMcp {
     }
 
     /// Resolve which target to use and return a connected client.
-    async fn client(&self, target: Option<&str>) -> Result<&UgosClient, String> {
-        let cfg = self.resolve_target(target)?;
+    async fn client(&self, target: &str) -> Result<&UgosClient, String> {
+        let t = if target.is_empty() {
+            None
+        } else {
+            Some(target)
+        };
+        let cfg = self.resolve_target(t)?;
         let cell = self
             .clients
             .get(&cfg.name)
@@ -503,7 +508,7 @@ impl UgosMcp {
 
     #[tool(description = "List all virtual machines on a UGOS NAS")]
     async fn ugos_vm_list(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.vm_list().await {
                 Ok(vms) => serde_json::to_string_pretty(&vms).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
@@ -514,7 +519,7 @@ impl UgosMcp {
 
     #[tool(description = "Show detailed VM configuration")]
     async fn ugos_vm_show(&self, Parameters(p): Parameters<VmNameParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.vm_show(&p.name).await {
                 Ok(d) => serde_json::to_string_pretty(&d).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
@@ -525,7 +530,7 @@ impl UgosMcp {
 
     #[tool(description = "Power on a virtual machine")]
     async fn ugos_vm_start(&self, Parameters(p): Parameters<VmNameParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.vm_start(&p.name).await {
                 Ok(()) => format!("Started {}", p.name),
                 Err(e) => format!("error: {e}"),
@@ -536,7 +541,7 @@ impl UgosMcp {
 
     #[tool(description = "Shut down a virtual machine (graceful or forced)")]
     async fn ugos_vm_stop(&self, Parameters(p): Parameters<VmStopParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.vm_stop(&p.name, p.force).await {
                 Ok(()) => format!("Stopped {}", p.name),
                 Err(e) => format!("error: {e}"),
@@ -547,7 +552,7 @@ impl UgosMcp {
 
     #[tool(description = "Reboot a virtual machine (graceful or forced)")]
     async fn ugos_vm_reboot(&self, Parameters(p): Parameters<VmRebootParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.vm_reboot(&p.name, p.force).await {
                 Ok(()) => format!("Rebooted {}", p.name),
                 Err(e) => format!("error: {e}"),
@@ -558,7 +563,7 @@ impl UgosMcp {
 
     #[tool(description = "Delete a virtual machine")]
     async fn ugos_vm_delete(&self, Parameters(p): Parameters<VmNameParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.vm_delete(&p.name).await {
                 Ok(()) => format!("Deleted {}", p.name),
                 Err(e) => format!("error: {e}"),
@@ -569,7 +574,7 @@ impl UgosMcp {
 
     #[tool(description = "List snapshots for a virtual machine")]
     async fn ugos_snapshot_list(&self, Parameters(p): Parameters<SnapshotListParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.snapshot_list(&p.vm).await {
                 Ok(s) => serde_json::to_string_pretty(&s).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
@@ -580,7 +585,7 @@ impl UgosMcp {
 
     #[tool(description = "Create a snapshot of a virtual machine")]
     async fn ugos_snapshot_create(&self, Parameters(p): Parameters<SnapshotParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.snapshot_create(&p.vm, &p.name).await {
                 Ok(()) => format!("Created snapshot {}", p.name),
                 Err(e) => format!("error: {e}"),
@@ -591,7 +596,7 @@ impl UgosMcp {
 
     #[tool(description = "Delete a snapshot")]
     async fn ugos_snapshot_delete(&self, Parameters(p): Parameters<SnapshotParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.snapshot_delete(&p.vm, &p.name).await {
                 Ok(()) => format!("Deleted snapshot {}", p.name),
                 Err(e) => format!("error: {e}"),
@@ -602,7 +607,7 @@ impl UgosMcp {
 
     #[tool(description = "Revert a virtual machine to a snapshot")]
     async fn ugos_snapshot_revert(&self, Parameters(p): Parameters<SnapshotParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.snapshot_revert(&p.vm, &p.name).await {
                 Ok(()) => format!("Reverted to snapshot {}", p.name),
                 Err(e) => format!("error: {e}"),
@@ -613,7 +618,7 @@ impl UgosMcp {
 
     #[tool(description = "Rename a snapshot")]
     async fn ugos_snapshot_rename(&self, Parameters(p): Parameters<SnapshotRenameParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.snapshot_rename(&p.vm, &p.old_name, &p.new_name).await {
                 Ok(()) => format!("Renamed {} → {}", p.old_name, p.new_name),
                 Err(e) => format!("error: {e}"),
@@ -624,7 +629,7 @@ impl UgosMcp {
 
     #[tool(description = "List KVM networks")]
     async fn ugos_network_list(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.network_list().await {
                 Ok(n) => serde_json::to_string_pretty(&n).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
@@ -635,7 +640,7 @@ impl UgosMcp {
 
     #[tool(description = "Show KVM network details")]
     async fn ugos_network_show(&self, Parameters(p): Parameters<NetworkNameParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.network_show(&p.name).await {
                 Ok(d) => serde_json::to_string_pretty(&d).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
@@ -646,7 +651,7 @@ impl UgosMcp {
 
     #[tool(description = "List KVM storage volumes")]
     async fn ugos_storage_list(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.storage_list().await {
                 Ok(v) => serde_json::to_string_pretty(&v).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
@@ -657,7 +662,7 @@ impl UgosMcp {
 
     #[tool(description = "List ISO/disk images available for KVM")]
     async fn ugos_image_list(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.image_list().await {
                 Ok(i) => serde_json::to_string_pretty(&i).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
@@ -668,7 +673,7 @@ impl UgosMcp {
 
     #[tool(description = "Show NAS host hardware info (CPU cores, memory)")]
     async fn ugos_host_info(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.host_info().await {
                 Ok(i) => serde_json::to_string_pretty(&i).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
@@ -681,7 +686,7 @@ impl UgosMcp {
 
     #[tool(description = "List USB devices available to a VM")]
     async fn ugos_usb_list(&self, Parameters(p): Parameters<SnapshotListParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.usb_list(&p.vm).await {
                 Ok(d) => serde_json::to_string_pretty(&d).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
@@ -694,7 +699,7 @@ impl UgosMcp {
 
     #[tool(description = "Delete an ISO/disk image")]
     async fn ugos_image_delete(&self, Parameters(p): Parameters<ImageDeleteParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.image_delete(&p.file_name, &p.image_name).await {
                 Ok(()) => format!("Deleted image {}", p.image_name),
                 Err(e) => format!("error: {e}"),
@@ -705,7 +710,7 @@ impl UgosMcp {
 
     #[tool(description = "Check which VMs use an image")]
     async fn ugos_image_usage(&self, Parameters(p): Parameters<ImageNameParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.image_check_usage(&p.name).await {
                 Ok(vms) => serde_json::to_string_pretty(&vms).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
@@ -718,7 +723,7 @@ impl UgosMcp {
 
     #[tool(description = "Check which VMs use a storage volume")]
     async fn ugos_storage_usage(&self, Parameters(p): Parameters<StorageRefParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.storage_check_usage(&p.name, &p.uuid).await {
                 Ok(vms) => serde_json::to_string_pretty(&vms).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
@@ -729,7 +734,7 @@ impl UgosMcp {
 
     #[tool(description = "Add a storage volume to KVM")]
     async fn ugos_storage_add(&self, Parameters(p): Parameters<StorageRefParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.storage_add(&p.name, &p.uuid).await {
                 Ok(()) => format!("Added storage {}", p.name),
                 Err(e) => format!("error: {e}"),
@@ -740,7 +745,7 @@ impl UgosMcp {
 
     #[tool(description = "Remove a storage volume from KVM")]
     async fn ugos_storage_delete(&self, Parameters(p): Parameters<StorageRefParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.storage_delete(&p.name, &p.uuid).await {
                 Ok(()) => format!("Deleted storage {}", p.name),
                 Err(e) => format!("error: {e}"),
@@ -753,7 +758,7 @@ impl UgosMcp {
 
     #[tool(description = "Delete a KVM network")]
     async fn ugos_network_delete(&self, Parameters(p): Parameters<NetworkNameParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.network_delete(&p.name).await {
                 Ok(()) => format!("Deleted network {}", p.name),
                 Err(e) => format!("error: {e}"),
@@ -766,7 +771,7 @@ impl UgosMcp {
 
     #[tool(description = "List VNC links for a VM")]
     async fn ugos_vnc_list(&self, Parameters(p): Parameters<SnapshotListParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.vnc_list(&p.vm).await {
                 Ok(l) => serde_json::to_string_pretty(&l).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
@@ -777,7 +782,7 @@ impl UgosMcp {
 
     #[tool(description = "Generate a noVNC link to access a VM console in the browser")]
     async fn ugos_vnc_generate(&self, Parameters(p): Parameters<VncGenerateParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.vnc_generate(&p.vm, &p.source_url).await {
                 Ok(link) => link,
                 Err(e) => format!("error: {e}"),
@@ -790,7 +795,7 @@ impl UgosMcp {
 
     #[tool(description = "Search KVM audit logs")]
     async fn ugos_log_search(&self, Parameters(p): Parameters<LogSearchParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.log_search(p.page, p.page_size).await {
                 Ok(l) => serde_json::to_string_pretty(&l).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
@@ -801,7 +806,7 @@ impl UgosMcp {
 
     #[tool(description = "List all operator usernames from KVM logs")]
     async fn ugos_log_operators(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.log_operators().await {
                 Ok(ops) => serde_json::to_string_pretty(&ops).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
@@ -820,7 +825,7 @@ impl UgosMcp {
             Ok(s) => s,
             Err(e) => return format!("error parsing spec: {e}"),
         };
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.vm_create(&spec).await {
                 Ok(uuid) => format!("Created VM {uuid}"),
                 Err(e) => format!("error: {e}"),
@@ -837,7 +842,7 @@ impl UgosMcp {
             Ok(s) => s,
             Err(e) => return format!("error parsing spec: {e}"),
         };
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.vm_update(&spec).await {
                 Ok(()) => format!("Updated VM {}", spec.virtual_machine_display_name),
                 Err(e) => format!("error: {e}"),
@@ -850,7 +855,7 @@ impl UgosMcp {
 
     #[tool(description = "Export a VM as an OVA file to a path on the NAS")]
     async fn ugos_ova_export(&self, Parameters(p): Parameters<OvaExportParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c
                 .ova_export(&p.vm, &p.storage_name, &p.storage_uuid, &p.ova_path)
                 .await
@@ -866,7 +871,7 @@ impl UgosMcp {
         description = "Parse an OVA file on the NAS and return the VM configuration it contains"
     )]
     async fn ugos_ova_parse(&self, Parameters(p): Parameters<OvaParseParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.ova_parse(&p.ova_path).await {
                 Ok(d) => serde_json::to_string_pretty(&d).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
@@ -879,7 +884,7 @@ impl UgosMcp {
 
     #[tool(description = "Get Docker engine overview (container/image counts, CPU/memory usage)")]
     async fn ugos_docker_overview(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.docker_overview().await {
                 Ok(o) => serde_json::to_string_pretty(&o).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
@@ -890,7 +895,7 @@ impl UgosMcp {
 
     #[tool(description = "Get Docker engine status (online/offline)")]
     async fn ugos_docker_status(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.docker_engine_status().await {
                 Ok(s) => s,
                 Err(e) => format!("error: {e}"),
@@ -901,7 +906,7 @@ impl UgosMcp {
 
     #[tool(description = "List Docker containers")]
     async fn ugos_docker_ps(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.container_list(1, 100).await {
                 Ok(r) => serde_json::to_string_pretty(&r).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
@@ -912,7 +917,7 @@ impl UgosMcp {
 
     #[tool(description = "Start a Docker container")]
     async fn ugos_docker_start(&self, Parameters(p): Parameters<ContainerIdParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.container_start(&p.id).await {
                 Ok(()) => format!("Started {}", p.id),
                 Err(e) => format!("error: {e}"),
@@ -923,7 +928,7 @@ impl UgosMcp {
 
     #[tool(description = "Show detailed Docker container configuration")]
     async fn ugos_docker_show(&self, Parameters(p): Parameters<ContainerIdParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.container_show(&p.id).await {
                 Ok(d) => serde_json::to_string_pretty(&d).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
@@ -941,7 +946,7 @@ impl UgosMcp {
             Ok(s) => s,
             Err(e) => return format!("error parsing spec: {e}"),
         };
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.container_create(&spec).await {
                 Ok(()) => format!("Created container {}", spec.container_name),
                 Err(e) => format!("error: {e}"),
@@ -952,7 +957,7 @@ impl UgosMcp {
 
     #[tool(description = "Stop a Docker container")]
     async fn ugos_docker_stop(&self, Parameters(p): Parameters<ContainerIdParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.container_stop(&p.id).await {
                 Ok(()) => format!("Stopped {}", p.id),
                 Err(e) => format!("error: {e}"),
@@ -963,7 +968,7 @@ impl UgosMcp {
 
     #[tool(description = "Restart a Docker container")]
     async fn ugos_docker_restart(&self, Parameters(p): Parameters<ContainerIdParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.container_restart(&p.id).await {
                 Ok(()) => format!("Restarted {}", p.id),
                 Err(e) => format!("error: {e}"),
@@ -974,7 +979,7 @@ impl UgosMcp {
 
     #[tool(description = "Remove a Docker container")]
     async fn ugos_docker_rm(&self, Parameters(p): Parameters<ContainerIdParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.container_remove(&p.id).await {
                 Ok(()) => format!("Removed {}", p.id),
                 Err(e) => format!("error: {e}"),
@@ -985,7 +990,7 @@ impl UgosMcp {
 
     #[tool(description = "List local Docker images")]
     async fn ugos_docker_images(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.docker_image_list(1, 100).await {
                 Ok(r) => serde_json::to_string_pretty(&r).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
@@ -999,7 +1004,7 @@ impl UgosMcp {
         &self,
         Parameters(p): Parameters<DockerImageSearchParam>,
     ) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.docker_image_search(&p.name, 1, 20).await {
                 Ok(r) => serde_json::to_string_pretty(&r).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
@@ -1010,7 +1015,7 @@ impl UgosMcp {
 
     #[tool(description = "Pull a Docker image from a registry")]
     async fn ugos_docker_pull(&self, Parameters(p): Parameters<DockerImagePullParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.docker_image_download(&p.image, &p.tag).await {
                 Ok(()) => format!("Pulling {}:{}", p.image, p.tag),
                 Err(e) => format!("error: {e}"),
@@ -1021,7 +1026,7 @@ impl UgosMcp {
 
     #[tool(description = "List Docker registry mirror sources")]
     async fn ugos_docker_mirrors(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.mirror_list().await {
                 Ok(m) => serde_json::to_string_pretty(&m).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
@@ -1032,7 +1037,7 @@ impl UgosMcp {
 
     #[tool(description = "Get Docker container logs")]
     async fn ugos_docker_logs(&self, Parameters(p): Parameters<ContainerLogsParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.container_logs(&p.id, p.lines).await {
                 Ok(v) => serde_json::to_string_pretty(&v).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
@@ -1043,7 +1048,7 @@ impl UgosMcp {
 
     #[tool(description = "Clone a Docker container")]
     async fn ugos_docker_clone(&self, Parameters(p): Parameters<ContainerCloneParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.container_clone(&p.id, &p.name).await {
                 Ok(()) => format!("Cloned {} as {}", p.id, p.name),
                 Err(e) => format!("error: {e}"),
@@ -1054,7 +1059,7 @@ impl UgosMcp {
 
     #[tool(description = "Batch operate on Docker containers (start/stop/restart/remove)")]
     async fn ugos_docker_batch(&self, Parameters(p): Parameters<ContainerBatchParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.container_batch(&p.ids, &p.action).await {
                 Ok(()) => format!("{} {} containers", p.action, p.ids.len()),
                 Err(e) => format!("error: {e}"),
@@ -1068,7 +1073,7 @@ impl UgosMcp {
         &self,
         Parameters(p): Parameters<ImageExportParam>,
     ) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.docker_image_export(&p.id, &p.path).await {
                 Ok(()) => format!("Exporting image {} to {}", p.id, p.path),
                 Err(e) => format!("error: {e}"),
@@ -1082,7 +1087,7 @@ impl UgosMcp {
         &self,
         Parameters(p): Parameters<ImageLoadParam>,
     ) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.docker_image_load_url(&p.source).await {
                 Ok(()) => format!("Loading image from {}", p.source),
                 Err(e) => format!("error: {e}"),
@@ -1096,7 +1101,7 @@ impl UgosMcp {
         &self,
         Parameters(p): Parameters<ImageLoadParam>,
     ) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.docker_image_load_path(&p.source).await {
                 Ok(()) => format!("Loading image from {}", p.source),
                 Err(e) => format!("error: {e}"),
@@ -1107,7 +1112,7 @@ impl UgosMcp {
 
     #[tool(description = "Add a Docker registry mirror source")]
     async fn ugos_docker_mirror_add(&self, Parameters(p): Parameters<MirrorAddParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.mirror_add(&p.alias, &p.address).await {
                 Ok(()) => format!("Added mirror {}", p.alias),
                 Err(e) => format!("error: {e}"),
@@ -1118,7 +1123,7 @@ impl UgosMcp {
 
     #[tool(description = "Delete a Docker registry mirror source")]
     async fn ugos_docker_mirror_delete(&self, Parameters(p): Parameters<MirrorIdParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.mirror_delete(p.id).await {
                 Ok(()) => format!("Deleted mirror {}", p.id),
                 Err(e) => format!("error: {e}"),
@@ -1129,7 +1134,7 @@ impl UgosMcp {
 
     #[tool(description = "Switch active Docker registry mirror source")]
     async fn ugos_docker_mirror_switch(&self, Parameters(p): Parameters<MirrorIdParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.mirror_switch(p.id).await {
                 Ok(()) => format!("Switched to mirror {}", p.id),
                 Err(e) => format!("error: {e}"),
@@ -1140,7 +1145,7 @@ impl UgosMcp {
 
     #[tool(description = "List containers in a Docker Compose project")]
     async fn ugos_docker_compose(&self, Parameters(p): Parameters<ComposeParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.compose_containers(&p.project).await {
                 Ok(v) => serde_json::to_string_pretty(&v).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
@@ -1151,7 +1156,7 @@ impl UgosMcp {
 
     #[tool(description = "Get Docker HTTP proxy configuration")]
     async fn ugos_docker_proxy_get(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.docker_proxy_get().await {
                 Ok(v) => serde_json::to_string_pretty(&v).unwrap_or_default(),
                 Err(e) => format!("error: {e}"),
@@ -1162,7 +1167,7 @@ impl UgosMcp {
 
     #[tool(description = "Set Docker HTTP proxy configuration")]
     async fn ugos_docker_proxy_set(&self, Parameters(p): Parameters<ProxySetParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.docker_proxy_set(&p.proxy).await {
                 Ok(()) => "Updated HTTP proxy".into(),
                 Err(e) => format!("error: {e}"),
@@ -1175,7 +1180,7 @@ impl UgosMcp {
 
     #[tool(description = "Create a KVM network")]
     async fn ugos_network_create(&self, Parameters(p): Parameters<NetworkCreateParam>) -> String {
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => {
                 let net = ugos_client::types::kvm::NetworkDetail {
                     network_name: p.name.clone(),
@@ -1199,7 +1204,7 @@ impl UgosMcp {
             Ok(s) => s,
             Err(e) => return format!("error parsing spec: {e}"),
         };
-        match self.client(p.target.as_deref()).await {
+        match self.client(&p.target).await {
             Ok(c) => match c.network_update(&net).await {
                 Ok(()) => format!("Updated network {}", net.network_name),
                 Err(e) => format!("error: {e}"),

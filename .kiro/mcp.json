@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "ugos": {
+      "command": "/Users/fabian/Source/ugos-cli/target/release/ugos-mcp",
+      "args": [],
+      "env": {
+        "UGOS_HOST_1": "192.168.2.5",
+        "UGOS_USER_1": "fabian",
+        "UGOS_PASSWORD_1": "virgin98",
+        "UGOS_NAME_1": "picard",
+        "UGOS_HOST_2": "192.168.2.4",
+        "UGOS_USER_2": "fabian",
+        "UGOS_PASSWORD_2": "virgin98",
+        "UGOS_NAME_2": "kirk"
+      }
+    }
+  }
+}
