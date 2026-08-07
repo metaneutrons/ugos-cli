@@ -706,9 +706,7 @@ fn build_container_spec(
     }
 
     // ── Build ───────────────────────────────────────────────────────
-    let (img_name, img_ver) = image
-        .split_once(':')
-        .map_or((image, "latest"), |(n, t)| (n, t));
+    let img_ver = image.split_once(':').map_or("latest", |(_, t)| t);
 
     let port_mapping: Vec<ugos_client::types::docker::PortMapping> = ports
         .iter()
@@ -749,7 +747,7 @@ fn build_container_spec(
     let cpu_limit = cpus.map_or(0, |c| (*c * 100.0) as i64);
 
     Ok(ugos_client::types::docker::ContainerDetail {
-        image_name: img_name.to_owned(),
+        image_name: image.to_owned(),
         image_version: img_ver.to_owned(),
         tag: image.to_owned(),
         container_name: name.to_owned(),
@@ -906,7 +904,7 @@ mod tests {
         assert!(spec.is_ok());
         let s = spec.unwrap();
         assert_eq!(s.container_name, "test");
-        assert_eq!(s.image_name, "nginx");
+        assert_eq!(s.image_name, "nginx:latest");
         assert_eq!(s.image_version, "latest");
         assert_eq!(s.tag, "nginx:latest");
         assert!(s.no_restrictions);
