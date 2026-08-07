@@ -75,11 +75,52 @@ All endpoints require authentication (see api-auth.md).
 
 ### CreateContainer
 - **Method**: POST
-- **Body**: Container spec object
+- **Body**: Container spec object — live-captured 2026-08-06 via a browser-side
+  `XMLHttpRequest.prototype.send` patch injected into the Docker app's iframe
+  (`window.fetch` alone did **not** catch it — the app makes its API calls
+  from inside an iframe with its own JS realm, `<iframe name="docker">`, not
+  the top-level `window`). Real request body for `nginx:latest` with one port
+  mapping:
+  ```json
+  {
+    "imageName": "nginx:latest",
+    "containerName": "nginx-2",
+    "cpuLimit": 0,
+    "memLimit": 0,
+    "abnormalReset": false,
+    "hardwareAcceleration": false,
+    "gpuIds": [],
+    "privilegedMode": false,
+    "networkMode": "bridge",
+    "subnetSettings": [{"networkName": "bridge", "subnet": "172.17.0.0/16"}],
+    "volumes": [],
+    "environmentVariables": [{"variable": "PATH", "price": "..."}],
+    "portMapping": [{"nasPort": 34817, "containerPort": 80, "portType": "tcp"}],
+    "containerRunCommand": ["nginx", "-g", "daemon off;"],
+    "permAndFunc": null,
+    "runContainer": true,
+    "imageId": "..."
+  }
+  ```
+  Notable quirks confirmed against the live API:
+  - `environmentVariables` items use `{variable, price}` — `price` is the
+    value, not a typo worth "fixing" on the wire.
+  - `cpuLimit`/`memLimit` of `0` means unlimited, not "field absent".
+  - `containerRunCommand` is a string array (Docker `Cmd` style), not a
+    single command string.
+  - `subnetSettings` is sent even for the default `bridge` network — not
+    tested whether omitting it is accepted.
+  - `permAndFunc` was `null` here, not `[]` — treat as optional/nullable
+    when deserializing.
+  - `portMapping` keys are `nasPort`/`containerPort`/`portType` — **not**
+    `hostPort`/`protocol`. The CLI's `build_container_spec` originally used
+    the wrong names here (fixed 2026-08-06); a container created via the CLI
+    before that fix would have had its `--port` mappings silently dropped or
+    defaulted by the backend.
 
 ### UpdateContainer
 - **Method**: POST
-- **Body**: Container spec object
+- **Body**: Container spec object (same shape as `CreateContainer`, unverified whether all fields are required for update-only calls)
 
 ### UpdateContainerBase
 - **Method**: POST

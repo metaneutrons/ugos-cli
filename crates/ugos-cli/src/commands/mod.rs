@@ -599,6 +599,20 @@ fn parse_mem_limit(s: &str) -> i64 {
         .unwrap_or_else(|| s.parse::<i64>().unwrap_or(0))
 }
 
+/// Live-captured default for `bridge` mode; UGOS sends this subnet
+/// explicitly even though it's the engine default. Only "bridge" and "host"
+/// are accepted by `build_container_spec`, and "host" needs no subnet entry.
+fn default_subnet_settings(network: &str) -> Vec<ugos_client::types::docker::SubnetSetting> {
+    if network == "bridge" {
+        vec![ugos_client::types::docker::SubnetSetting {
+            network_name: "bridge".to_owned(),
+            subnet: "172.17.0.0/16".to_owned(),
+        }]
+    } else {
+        vec![]
+    }
+}
+
 #[allow(clippy::too_many_arguments, clippy::similar_names)]
 fn build_container_spec(
     name: &str,
@@ -654,18 +668,18 @@ fn build_container_spec(
         .split_once(':')
         .map_or((image, "latest"), |(n, t)| (n, t));
 
-    let port_mapping: Vec<serde_json::Value> = ports
+    let port_mapping: Vec<ugos_client::types::docker::PortMapping> = ports
         .iter()
         .map(|p| {
             let (mapping, proto) = p
                 .split_once('/')
                 .map_or((p.as_str(), "tcp"), |(m, pr)| (m, pr));
             let (host, container) = mapping.split_once(':').unwrap_or(("0", mapping));
-            serde_json::json!({
-                "hostPort": host.parse::<u16>().unwrap_or(0),
-                "containerPort": container.parse::<u16>().unwrap_or(0),
-                "protocol": proto
-            })
+            ugos_client::types::docker::PortMapping {
+                nas_port: host.parse::<i64>().unwrap_or(0),
+                container_port: container.parse::<i64>().unwrap_or(0),
+                port_type: proto.to_owned(),
+            }
         })
         .collect();
 
@@ -702,6 +716,8 @@ fn build_container_spec(
         no_restrictions: mem_limit == 0 && cpu_limit == 0,
         network_mode: network.to_owned(),
         hardware_acceleration: false,
+        gpu_ids: vec![],
+        subnet_settings: default_subnet_settings(network),
         privileged_mode: privileged,
         abnormal_reset: restart != "no",
         run_container: true,
@@ -709,7 +725,7 @@ fn build_container_spec(
         volumes: if vols.is_empty() { None } else { Some(vols) },
         environment_variables: env_vars,
         container_run_command: vec![],
-        perm_and_func: vec![],
+        perm_and_func: None,
         project_name: String::new(),
         image_id: String::new(),
     })
