@@ -150,24 +150,37 @@ ugos-client = "0.1"
 
 | Resource | Operations |
 |----------|-----------|
-| **VM** | list, show, start, stop, force-stop, reboot, force-reboot, delete |
+| **VM** | list, show, start, stop, force-stop, reboot, force-reboot, delete, create, update |
 | **Snapshot** | list, create, delete, revert, rename |
 | **Network** | list, show |
 | **Storage** | list |
 | **Image** | list |
 | **USB** | list |
 | **Host** | info (CPU cores, memory) |
+| **Docker container** | list, show, create, start, stop, restart, kill, remove, update, clone, batch-operate, logs |
+| **Docker image** | list, search, download, delete, export, load (URL/path) |
+| **Docker registry** | list/add/delete/switch mirror, HTTP proxy get/set |
+| **Docker overview** | engine status, resource usage |
 | **Auth** | RSA key exchange, PKCS1v1.5 encryption, session tokens, auto re-auth |
+
+`Docker container create/update` were reverse-engineered against the real
+`CreateContainer` request body (live-captured 2026-08-06, see
+`.kiro/docs/api-docker.md`) — this caught two bugs that had never actually
+been exercised against a live NAS: `port_mapping` was built with wrong field
+names (`hostPort`/`protocol` instead of the real `nasPort`/`portType`), and
+`subnet_settings`/`gpu_ids` were entirely missing from `ContainerDetail`.
+Both are fixed now; the CLI's `docker container create --port` flag has been
+tested end-to-end against a real NAS (nginx container, port mapping,
+env vars).
 
 ### Not Yet Implemented
 
 | Resource | Notes |
 |----------|-------|
-| VM create/update | Complex schema, needs UI validation logic |
 | OVA import/export | |
 | Image upload | |
 | VNC link management | |
-| Docker management | Separate UGOS app |
+| Docker compose | Only `ShowOfflineContainers` covered; full compose lifecycle not implemented |
 | File management | Separate UGOS app |
 | Non-KVM modules | Photo, video, music, backup, etc. |
 

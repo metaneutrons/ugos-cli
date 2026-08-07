@@ -110,12 +110,20 @@ pub struct ContainerDetail {
     /// Restart policy.
     #[serde(default)]
     pub abnormal_reset: bool,
+    /// GPU device IDs passed through to the container (empty if none).
+    #[serde(default)]
+    pub gpu_ids: Vec<String>,
+    /// Bridge/macvlan subnet assignment. Required by the UGOS backend even
+    /// for the default `bridge` network — omitting it was not tested and
+    /// may be rejected.
+    #[serde(default)]
+    pub subnet_settings: Vec<SubnetSetting>,
     /// Whether the container should run after creation.
     #[serde(default)]
     pub run_container: bool,
     /// Port mappings.
     #[serde(default)]
-    pub port_mapping: Vec<serde_json::Value>,
+    pub port_mapping: Vec<PortMapping>,
     /// Volume mounts.
     pub volumes: Option<Vec<serde_json::Value>>,
     /// Environment variables.
@@ -124,12 +132,38 @@ pub struct ContainerDetail {
     /// Container run command.
     #[serde(default)]
     pub container_run_command: Vec<String>,
-    /// Linux capabilities.
+    /// Linux capabilities. The live API has been observed sending `null`
+    /// here (not an empty array) when none are set, hence `Option`.
     #[serde(default)]
-    pub perm_and_func: Vec<String>,
+    pub perm_and_func: Option<Vec<String>>,
     /// Compose project name.
     #[serde(default)]
     pub project_name: String,
+}
+
+/// Network/subnet assignment for a container, as sent alongside
+/// `network_mode`. Live-captured from `CreateContainer`: even the default
+/// `bridge` network is sent explicitly as `{networkName: "bridge", subnet:
+/// "172.17.0.0/16"}`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SubnetSetting {
+    /// Network name (e.g. "bridge", or a custom/macvlan network name).
+    pub network_name: String,
+    /// CIDR subnet for this network.
+    pub subnet: String,
+}
+
+/// A single container port mapping.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PortMapping {
+    /// Port on the NAS host (the UGOS UI auto-assigns one if left at 0).
+    pub nas_port: i64,
+    /// Port inside the container.
+    pub container_port: i64,
+    /// Protocol: "tcp" or "udp".
+    pub port_type: String,
 }
 
 /// Environment variable key-value pair.
