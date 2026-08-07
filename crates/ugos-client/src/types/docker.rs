@@ -260,9 +260,10 @@ pub struct ComposeProject {
     /// Creation timestamp.
     #[serde(default)]
     pub create_time: String,
-    /// Containers belonging to this project.
+    /// Containers belonging to this project. `None`/`null` briefly right
+    /// after creation, before UGOS finishes materializing them.
     #[serde(default)]
-    pub container_list: Vec<ComposeProjectContainer>,
+    pub container_list: Option<Vec<ComposeProjectContainer>>,
     /// Application label, if the project was created from a template.
     #[serde(default)]
     pub application: String,
