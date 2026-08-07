@@ -855,6 +855,7 @@ fn build_vm_spec(
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
 
