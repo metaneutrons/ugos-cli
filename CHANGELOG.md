@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.2](https://github.com/metaneutrons/ugos-cli/compare/v0.3.1...v0.3.2) (2026-08-07)
+
+
+### Bug Fixes
+
+* don't report false failure when CreateContainer needs to pull first ([1f5eb6e](https://github.com/metaneutrons/ugos-cli/commit/1f5eb6e1bdfc739490464fcdd3b8184d7eae5d7a))
+* GetDockerSharedFolder response is {result: string}, not a bare string ([3f99ddf](https://github.com/metaneutrons/ugos-cli/commit/3f99ddf546cdfbf6f6f72db4cddddedd822eb009))
+
 ## [0.3.1](https://github.com/metaneutrons/ugos-cli/compare/v0.3.0...v0.3.1) (2026-08-07)
 
 
