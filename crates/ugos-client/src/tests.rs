@@ -1,4 +1,5 @@
 //! Unit tests for the UGOS client library.
+#![allow(clippy::unwrap_used, clippy::panic)]
 
 use crate::client::UgosClient;
 use crate::error::UgosError;
