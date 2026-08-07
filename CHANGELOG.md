@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.3](https://github.com/metaneutrons/ugos-cli/compare/v0.3.2...v0.3.3) (2026-08-07)
+
+
+### Bug Fixes
+
+* ComposeProject.containerList can be null right after creation ([da6b772](https://github.com/metaneutrons/ugos-cli/commit/da6b772bd39f41aceca8cc6e927ab8ab9b7d9b42))
+
 ## [0.3.2](https://github.com/metaneutrons/ugos-cli/compare/v0.3.1...v0.3.2) (2026-08-07)
 
 
