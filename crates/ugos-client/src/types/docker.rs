@@ -233,6 +233,83 @@ pub struct ImagePage {
     pub result: Option<Vec<DockerImage>>,
 }
 
+// ── Compose Project ─────────────────────────────────────────────────
+
+/// Compose project from `GetProjectListV3`/`GetProjectInfoV2`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComposeProject {
+    /// Project name.
+    #[serde(default)]
+    pub name: String,
+    /// Storage path on the NAS (e.g. "/volume1/docker/<name>").
+    #[serde(default)]
+    pub path: String,
+    /// Project status (observed: 1 = up).
+    #[serde(default)]
+    pub status: i64,
+    /// Total container count.
+    #[serde(default)]
+    pub container_sum: i64,
+    /// Running container count.
+    #[serde(default)]
+    pub run_container_sum: i64,
+    /// Whether the compose file is missing from disk.
+    #[serde(default)]
+    pub config_file_missing: bool,
+    /// Creation timestamp.
+    #[serde(default)]
+    pub create_time: String,
+    /// Containers belonging to this project.
+    #[serde(default)]
+    pub container_list: Vec<ComposeProjectContainer>,
+    /// Application label, if the project was created from a template.
+    #[serde(default)]
+    pub application: String,
+    /// Total container count (duplicate of `container_sum` in list responses).
+    #[serde(default)]
+    pub container_num: i64,
+    /// Deployment progress percentage.
+    #[serde(default)]
+    pub progress: i64,
+    /// Whether any image in the project has an available update.
+    #[serde(default)]
+    pub img_has_update: bool,
+}
+
+/// A single container within a [`ComposeProject`].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComposeProjectContainer {
+    /// Container name (e.g. "re-test-web-1").
+    #[serde(default)]
+    pub container_name: String,
+    /// Container ID.
+    #[serde(default)]
+    pub container_id: String,
+    /// Image name (without tag).
+    #[serde(default)]
+    pub image_name: String,
+    /// Image tag.
+    #[serde(default)]
+    pub version: String,
+    /// Restart policy (e.g. "no").
+    #[serde(default)]
+    pub restart_policy: String,
+}
+
+/// Paginated compose project list response from `GetProjectListV3`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ComposeProjectPage {
+    /// Total projects (unfiltered).
+    #[serde(default)]
+    pub original_total: i64,
+    /// Projects on this page.
+    #[serde(default)]
+    pub list: Option<Vec<ComposeProject>>,
+}
+
 // ── Registry ────────────────────────────────────────────────────────
 
 /// Registry mirror source from `ShowMirrorList`.

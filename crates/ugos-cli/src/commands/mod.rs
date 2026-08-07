@@ -558,6 +558,48 @@ async fn docker(
             let data = client.compose_containers(project).await?;
             output::print_json(w, &data)?;
         }
+        DockerAction::ProjectLs => {
+            let projects = client.project_list().await?;
+            let rows: Vec<output::ComposeProjectRow> = projects.iter().map(Into::into).collect();
+            output::print_list(w, &rows, fmt)?;
+        }
+        DockerAction::ProjectShow { name } => {
+            let project = client.project_show(name).await?;
+            output::print_json(w, &project)?;
+        }
+        DockerAction::ProjectCreate {
+            name,
+            file,
+            path,
+            run,
+        } => {
+            let content = std::fs::read_to_string(file)
+                .map_err(|e| anyhow::anyhow!("reading {file}: {e}"))?;
+            let path = if let Some(p) = path {
+                p.clone()
+            } else {
+                let shared = client.project_shared_folder().await?;
+                format!("{}/{name}", shared.trim_end_matches('/'))
+            };
+            client.project_create(name, &path, &content, *run).await?;
+            output::print_success(w, &format!("Created project {name} at {path}"), fmt)?;
+        }
+        DockerAction::ProjectStart { name } => {
+            client.project_start(name).await?;
+            output::print_success(w, &format!("Started project {name}"), fmt)?;
+        }
+        DockerAction::ProjectStop { name } => {
+            client.project_stop(name).await?;
+            output::print_success(w, &format!("Stopped project {name}"), fmt)?;
+        }
+        DockerAction::ProjectRestart { name } => {
+            client.project_restart(name).await?;
+            output::print_success(w, &format!("Restarted project {name}"), fmt)?;
+        }
+        DockerAction::ProjectRm { name, del_images } => {
+            client.project_remove(name, *del_images).await?;
+            output::print_success(w, &format!("Removed project {name}"), fmt)?;
+        }
         DockerAction::ProxyGet => {
             let proxy = client.docker_proxy_get().await?;
             output::print_json(w, &proxy)?;

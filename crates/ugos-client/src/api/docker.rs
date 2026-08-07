@@ -4,7 +4,8 @@ use crate::client::UgosClient;
 use crate::error::Result;
 use crate::types::common::ResultWrapper;
 use crate::types::docker::{
-    ContainerDetail, ContainerPage, DockerImage, DockerOverview, ImagePage, Mirror,
+    ComposeProject, ComposeProjectPage, ContainerDetail, ContainerPage, DockerImage,
+    DockerOverview, ImagePage, Mirror,
 };
 
 /// Docker management operations on a UGOS NAS.
@@ -125,6 +126,51 @@ pub trait DockerApi {
         &self,
         project: &str,
     ) -> impl Future<Output = Result<serde_json::Value>> + Send;
+
+    /// Create a compose project from raw `docker-compose.yml` content.
+    ///
+    /// `path` is the NAS filesystem path the project's compose file and any
+    /// bind-mounted state live under (e.g. `/volume1/docker/<name>`) — the
+    /// UGOS UI derives this from `GetDockerSharedFolder` + the project name,
+    /// but any writable path is accepted.
+    fn project_create(
+        &self,
+        name: &str,
+        path: &str,
+        compose_content: &str,
+        run: bool,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// List all compose projects.
+    fn project_list(&self) -> impl Future<Output = Result<Vec<ComposeProject>>> + Send;
+
+    /// Show details of a single compose project.
+    fn project_show(&self, name: &str) -> impl Future<Output = Result<ComposeProject>> + Send;
+
+    /// Start a stopped compose project.
+    fn project_start(&self, name: &str) -> impl Future<Output = Result<()>> + Send;
+
+    /// Stop a running compose project (containers remain, not removed).
+    fn project_stop(&self, name: &str) -> impl Future<Output = Result<()>> + Send;
+
+    /// Restart a compose project.
+    fn project_restart(&self, name: &str) -> impl Future<Output = Result<()>> + Send;
+
+    /// Remove a compose project (`docker compose down`).
+    ///
+    /// `del_images` also removes the images pulled for the project.
+    fn project_remove(
+        &self,
+        name: &str,
+        del_images: bool,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Check whether a compose project name is available.
+    fn project_check_name(&self, name: &str) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Get the shared-folder root compose projects are stored under
+    /// (e.g. `/volume1/docker`).
+    fn project_shared_folder(&self) -> impl Future<Output = Result<String>> + Send;
 
     // ── Proxy ───────────────────────────────────────────────────────
 
@@ -316,6 +362,82 @@ impl DockerApi for UgosClient {
             &[("projectName", project)],
         )
         .await
+    }
+
+    async fn project_create(
+        &self,
+        name: &str,
+        path: &str,
+        compose_content: &str,
+        run: bool,
+    ) -> Result<()> {
+        let body = serde_json::json!({
+            "projectName": name,
+            "projectPath": path,
+            "projectContent": compose_content,
+            "runProject": run,
+            "cols": 60,
+            "latestImages": false,
+        });
+        let _: serde_json::Value = self.post("docker/compose/CreateProject", &body).await?;
+        Ok(())
+    }
+
+    async fn project_list(&self) -> Result<Vec<ComposeProject>> {
+        let body = serde_json::json!({
+            "projectName": "",
+            "projectFilter": {
+                "projectStatusFilter": [],
+                "projectTypeFilter": [],
+                "projectHasUpFilter": [],
+            },
+            "projectSort": {"projectSortEnum": 1, "projectSortOrder": 0},
+        });
+        let page: ComposeProjectPage = self.post("docker/compose/GetProjectListV3", &body).await?;
+        Ok(page.list.unwrap_or_default())
+    }
+
+    async fn project_show(&self, name: &str) -> Result<ComposeProject> {
+        self.get_with_params("docker/compose/GetProjectInfoV2", &[("projectName", name)])
+            .await
+    }
+
+    async fn project_start(&self, name: &str) -> Result<()> {
+        let _: serde_json::Value = self
+            .get_with_params("docker/compose/StartProject", &[("projectName", name)])
+            .await?;
+        Ok(())
+    }
+
+    async fn project_stop(&self, name: &str) -> Result<()> {
+        let _: serde_json::Value = self
+            .get_with_params("docker/compose/StopProject", &[("projectName", name)])
+            .await?;
+        Ok(())
+    }
+
+    async fn project_restart(&self, name: &str) -> Result<()> {
+        let _: serde_json::Value = self
+            .get_with_params("docker/compose/RestartProject", &[("projectName", name)])
+            .await?;
+        Ok(())
+    }
+
+    async fn project_remove(&self, name: &str, del_images: bool) -> Result<()> {
+        let body = serde_json::json!({"projectName": name, "delImages": del_images});
+        let _: serde_json::Value = self.post("docker/compose/DownProject", &body).await?;
+        Ok(())
+    }
+
+    async fn project_check_name(&self, name: &str) -> Result<bool> {
+        let resp: ResultWrapper<bool> = self
+            .get_with_params("docker/compose/CheckProjectName", &[("name", name)])
+            .await?;
+        Ok(resp.result)
+    }
+
+    async fn project_shared_folder(&self) -> Result<String> {
+        self.get("docker/compose/GetDockerSharedFolder").await
     }
 
     // ── Proxy ───────────────────────────────────────────────────────

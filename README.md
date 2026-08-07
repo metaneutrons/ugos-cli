@@ -161,6 +161,7 @@ ugos-client = "0.1"
 | **Docker image** | list, search, download, delete, export, load (URL/path) |
 | **Docker registry** | list/add/delete/switch mirror, HTTP proxy get/set |
 | **Docker overview** | engine status, resource usage |
+| **Docker compose (project)** | list, show, create, start, stop, restart, remove |
 | **Auth** | RSA key exchange, PKCS1v1.5 encryption, session tokens, auto re-auth |
 
 `Docker container create/update` were reverse-engineered against the real
@@ -173,6 +174,16 @@ Both are fixed now; the CLI's `docker container create --port` flag has been
 tested end-to-end against a real NAS (nginx container, port mapping,
 env vars).
 
+`Docker compose` project management (create/list/show/stop/remove) was
+reverse-engineered against the live `CreateProject`/`GetProjectListV3`/
+`StopProject`/`DownProject` endpoints (live-captured 2026-08-07, see
+`.kiro/docs/api-docker.md`) and tested end-to-end on nas1 (a two-service
+nginx+redis project, created, verified running, stopped, and removed). The
+`start`/`restart` endpoints (`StartProject`/`RestartProject`) are implemented
+by analogy with `StopProject` and the container-level start/restart pattern
+but have **not** been live-verified — confirm before relying on them for
+anything critical.
+
 ### Not Yet Implemented
 
 | Resource | Notes |
@@ -180,7 +191,6 @@ env vars).
 | OVA import/export | |
 | Image upload | |
 | VNC link management | |
-| Docker compose | Only `ShowOfflineContainers` covered; full compose lifecycle not implemented |
 | File management | Separate UGOS app |
 | Non-KVM modules | Photo, video, music, backup, etc. |
 
