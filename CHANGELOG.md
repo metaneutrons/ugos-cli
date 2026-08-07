@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/metaneutrons/ugos-cli/compare/v0.3.0...v0.3.1) (2026-08-07)
+
+
+### Bug Fixes
+
+* send full image:tag string in CreateContainer, not just repo name ([a68fb4a](https://github.com/metaneutrons/ugos-cli/commit/a68fb4a996b569f84e3fc8558ee82e3be8f1b63e))
+
 ## [0.3.0](https://github.com/metaneutrons/ugos-cli/compare/v0.2.0...v0.3.0) (2026-08-07)
 
 
