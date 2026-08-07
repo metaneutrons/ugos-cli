@@ -415,6 +415,150 @@ All endpoints require authentication (see api-auth.md).
 
 ## Compose (`docker/compose/`)
 
+Full lifecycle live-captured 2026-08-07 via the same iframe-XHR-patch technique
+used for `CreateContainer` (see above) — created, listed, inspected, stopped,
+and removed a real two-service project (`nginx`+`redis`) on picard.
+
+### GetUserId
+- **Method**: GET
+- **Response**: `{data: <userId>}`
+- Called by the "New Project" dialog before it lets you type a name — not
+  observed to gate anything else; likely just used to scope the default
+  storage path.
+
+### CheckProjectName
+- **Method**: GET
+- **Params**: `name=<name>`
+- **Response**: `{result: true}` (true = name is available)
+
+### GetDockerSharedFolder
+- **Method**: GET
+- **Response**: `{data: "/volume1/docker"}` (or similar) — the shared-folder
+  root the UI concatenates the project name onto to build `projectPath`
+  (`Freigegebener Ordner/docker/<name>` in the UI ↔
+  `/volume1/docker/<name>` on disk).
+
+### HasYAMLFile
+- **Method**: GET
+- **Params**: `path=<projectPath>`
+- **Response**: `{result: false}` — checks whether a `docker-compose.yml`
+  already exists at the target path (e.g. reusing a folder from an earlier
+  project) before letting `CreateProject` overwrite it.
+
+### CreateProject
+- **Method**: POST
+- **Body**:
+  ```json
+  {
+    "projectName": "re-test",
+    "projectPath": "/volume1/docker/re-test",
+    "projectContent": "services: {web: {image: \"nginx:latest\", ports: [\"8099:80\"]}, cache: {image: \"redis:alpine\"}}",
+    "runProject": true,
+    "cols": 60,
+    "latestImages": false
+  }
+  ```
+- **Response**: `{result: true}`
+- Notable quirks:
+  - `projectContent` is the raw `docker-compose.yml` text, sent verbatim as a
+    string (not parsed/re-serialized client-side) — any valid Compose YAML
+    works, block-style or flow-style.
+  - `cols` (terminal width, `60` observed) is passed through to whatever PTY
+    streams the `docker compose up` log — cosmetic, safe to hardcode.
+  - `latestImages: false` means "use the tags as written in the compose
+    file"; `true` presumably forces a pull/re-tag to `:latest` — not tested.
+  - `runProject: false` creates the project without starting it (untested via
+    live capture, but consistent with the UI's "sofort ausführen" toggle).
+
+### GetProjectListV3
+- **Method**: POST
+- **Body**:
+  ```json
+  {
+    "projectName": "",
+    "projectFilter": {
+      "projectStatusFilter": [],
+      "projectTypeFilter": [],
+      "projectHasUpFilter": []
+    },
+    "projectSort": { "projectSortEnum": 1, "projectSortOrder": 0 }
+  }
+  ```
+- **Response**: `{data: {list: [Project], originalTotal: N}}`
+  ```json
+  {
+    "name": "re-test",
+    "path": "/volume1/docker/re-test",
+    "status": 1,
+    "containerSum": 2,
+    "runContainerSum": 2,
+    "configFileMissing": false,
+    "createTime": "2026-08-07 ...",
+    "containerList": [
+      {
+        "containerName": "re-test-web-1",
+        "containerId": "...",
+        "imageName": "nginx",
+        "version": "latest",
+        "restartPolicy": "no"
+      },
+      {
+        "containerName": "re-test-cache-1",
+        "containerId": "...",
+        "imageName": "redis",
+        "version": "alpine",
+        "restartPolicy": "no"
+      }
+    ],
+    "quickAccess": null,
+    "application": "",
+    "containerNum": 2,
+    "progress": 100,
+    "imgHasUpdate": false
+  }
+  ```
+  `projectFilter`/`projectSort` fields are all empty/default in the captured
+  call (no filtering/sorting was exercised in the UI) — shapes are confirmed,
+  actual filter *values* are not.
+
+### GetProjectInfoV2
+- **Method**: GET
+- **Params**: `projectName=<name>`
+- Returns the same per-project shape as one `GetProjectListV3` list entry,
+  used by the project detail view (Container/Ressourcenüberwachung/Protokoll/
+  Compose-Konfiguration tabs).
+
+### StopProject
+- **Method**: GET
+- **Params**: `projectName=<name>`
+- **Response**: `{data: {result: "successful"}}`
+- Equivalent to `docker compose stop` — containers are stopped, not removed;
+  `DownProject` is still needed to actually delete them.
+
+### DownProject
+- **Method**: POST
+- **Body**: `{"projectName": "re-test", "delImages": false}`
+- **Response**: `{data: {result: true}}`
+- Equivalent to `docker compose down`; `delImages: true` presumably also
+  removes the images pulled for the project (untested — only `false` was
+  captured).
+
+### Start/Restart (not captured)
+The project action menu also has "Starten" and "Neu starten" entries; these
+were not exercised during this RE session. By analogy with `StopProject` and
+the container-level `StartContainer`/`RestartContainer` pattern, they are
+almost certainly:
+- `GET docker/compose/StartProject?projectName=<name>`
+- `GET docker/compose/RestartProject?projectName=<name>`
+but this is an **unverified guess**, not a live capture — confirm before
+relying on it.
+
+### ContainerListV2 / ShowContainerDetailListV2 project filter
+Both container-listing endpoints accept a `projectName` field in their POST
+body to scope results to one compose project (used by the project detail
+view's "Container" tab) — same request shape as the standalone calls
+documented above, just with `projectName` set instead of `""`.
+
 ### ShowOfflineContainers
 - **Method**: GET
 - **Params**: `projectName=<name>`

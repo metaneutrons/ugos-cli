@@ -5,7 +5,7 @@ use std::io::Write;
 use anyhow::Result;
 use serde::Serialize;
 use tabled::{Table, Tabled};
-use ugos_client::types::docker::{Container, DockerImage, Mirror};
+use ugos_client::types::docker::{ComposeProject, Container, DockerImage, Mirror};
 use ugos_client::types::kvm::{
     HostInfo, ImageInfo, LogEntry, NetworkDetail, NetworkSummary, Snapshot, StorageInfo, UsbDevice,
     VmDetail, VmSummary, VncLink,
@@ -490,6 +490,30 @@ impl From<&Mirror> for MirrorRow {
             name: m.alias.clone(),
             address: m.address.clone(),
             active: if m.status { "✓" } else { "✗" }.into(),
+        }
+    }
+}
+
+/// Table row for compose projects.
+#[derive(Tabled, Serialize)]
+pub struct ComposeProjectRow {
+    #[tabled(rename = "Name")]
+    pub name: String,
+    #[tabled(rename = "Path")]
+    pub path: String,
+    #[tabled(rename = "Containers")]
+    pub containers: String,
+    #[tabled(rename = "Status")]
+    pub status: String,
+}
+
+impl From<&ComposeProject> for ComposeProjectRow {
+    fn from(p: &ComposeProject) -> Self {
+        Self {
+            name: p.name.clone(),
+            path: p.path.clone(),
+            containers: format!("{}/{}", p.run_container_sum, p.container_sum),
+            status: if p.status == 1 { "up" } else { "down" }.into(),
         }
     }
 }

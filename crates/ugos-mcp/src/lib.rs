@@ -390,6 +390,43 @@ struct ComposeParam {
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct ProjectNameParam {
+    /// Compose project name.
+    name: String,
+    /// Target NAS name or host. Required when multiple targets are configured.
+    #[serde(default)]
+    target: String,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct ProjectRemoveParam {
+    /// Compose project name.
+    name: String,
+    /// Also remove images pulled for the project.
+    #[serde(default)]
+    del_images: bool,
+    /// Target NAS name or host. Required when multiple targets are configured.
+    #[serde(default)]
+    target: String,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+struct ProjectCreateParam {
+    /// Compose project name.
+    name: String,
+    /// NAS storage path for the project (e.g. "/volume1/docker/<name>").
+    path: String,
+    /// Raw `docker-compose.yml` content.
+    content: String,
+    /// Start the project immediately after creation.
+    #[serde(default)]
+    run: bool,
+    /// Target NAS name or host. Required when multiple targets are configured.
+    #[serde(default)]
+    target: String,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 struct ProxySetParam {
     /// Proxy configuration JSON object.
     proxy: serde_json::Value,
@@ -1148,6 +1185,85 @@ impl UgosMcp {
         match self.client(&p.target).await {
             Ok(c) => match c.compose_containers(&p.project).await {
                 Ok(v) => serde_json::to_string_pretty(&v).unwrap_or_default(),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List Docker Compose projects")]
+    async fn ugos_project_list(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => match c.project_list().await {
+                Ok(v) => serde_json::to_string_pretty(&v).unwrap_or_default(),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show details of a Docker Compose project")]
+    async fn ugos_project_show(&self, Parameters(p): Parameters<ProjectNameParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => match c.project_show(&p.name).await {
+                Ok(v) => serde_json::to_string_pretty(&v).unwrap_or_default(),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Create a Docker Compose project from raw docker-compose.yml content. Use ugos_project_list first to check the shared-folder root for the storage path."
+    )]
+    async fn ugos_project_create(&self, Parameters(p): Parameters<ProjectCreateParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => match c.project_create(&p.name, &p.path, &p.content, p.run).await {
+                Ok(()) => format!("Created project {}", p.name),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Start a Docker Compose project")]
+    async fn ugos_project_start(&self, Parameters(p): Parameters<ProjectNameParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => match c.project_start(&p.name).await {
+                Ok(()) => format!("Started project {}", p.name),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Stop a Docker Compose project (containers remain, not removed)")]
+    async fn ugos_project_stop(&self, Parameters(p): Parameters<ProjectNameParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => match c.project_stop(&p.name).await {
+                Ok(()) => format!("Stopped project {}", p.name),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Restart a Docker Compose project")]
+    async fn ugos_project_restart(&self, Parameters(p): Parameters<ProjectNameParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => match c.project_restart(&p.name).await {
+                Ok(()) => format!("Restarted project {}", p.name),
+                Err(e) => format!("error: {e}"),
+            },
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Remove a Docker Compose project (docker compose down)")]
+    async fn ugos_project_remove(&self, Parameters(p): Parameters<ProjectRemoveParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => match c.project_remove(&p.name, p.del_images).await {
+                Ok(()) => format!("Removed project {}", p.name),
                 Err(e) => format!("error: {e}"),
             },
             Err(e) => e,

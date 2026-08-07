@@ -91,6 +91,13 @@ mod tests {
             "ugos_docker_mirror_delete",
             "ugos_docker_mirror_switch",
             "ugos_docker_compose",
+            "ugos_project_list",
+            "ugos_project_show",
+            "ugos_project_create",
+            "ugos_project_start",
+            "ugos_project_stop",
+            "ugos_project_restart",
+            "ugos_project_remove",
             "ugos_docker_proxy_get",
             "ugos_docker_proxy_set",
         ];

@@ -544,6 +544,50 @@ pub enum DockerAction {
         /// Project name.
         project: String,
     },
+    /// List compose projects.
+    ProjectLs,
+    /// Show compose project details.
+    ProjectShow {
+        /// Project name.
+        name: String,
+    },
+    /// Create a compose project from a `docker-compose.yml` file.
+    ProjectCreate {
+        /// Project name.
+        name: String,
+        /// Path to a local `docker-compose.yml` file to upload.
+        #[arg(long)]
+        file: String,
+        /// NAS storage path for the project (default: `<shared-folder>/<name>`).
+        #[arg(long)]
+        path: Option<String>,
+        /// Start the project immediately after creation.
+        #[arg(long)]
+        run: bool,
+    },
+    /// Start a compose project.
+    ProjectStart {
+        /// Project name.
+        name: String,
+    },
+    /// Stop a compose project.
+    ProjectStop {
+        /// Project name.
+        name: String,
+    },
+    /// Restart a compose project.
+    ProjectRestart {
+        /// Project name.
+        name: String,
+    },
+    /// Remove a compose project (`docker compose down`).
+    ProjectRm {
+        /// Project name.
+        name: String,
+        /// Also remove images pulled for the project.
+        #[arg(long)]
+        del_images: bool,
+    },
     /// Show Docker HTTP proxy configuration.
     ProxyGet,
     /// Set Docker HTTP proxy configuration.
