@@ -141,10 +141,10 @@ pub struct ContainerDetail {
     pub project_name: String,
 }
 
-/// Network/subnet assignment for a container, as sent alongside
-/// `network_mode`. Live-captured from `CreateContainer`: even the default
-/// `bridge` network is sent explicitly as `{networkName: "bridge", subnet:
-/// "172.17.0.0/16"}`.
+/// Network/subnet assignment for a container, sent alongside `network_mode`.
+///
+/// Live-captured from `CreateContainer`: even the default `bridge` network
+/// is sent explicitly as `{networkName: "bridge", subnet: "172.17.0.0/16"}`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SubnetSetting {
