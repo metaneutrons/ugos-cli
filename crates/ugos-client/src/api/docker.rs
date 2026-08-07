@@ -1,12 +1,19 @@
 //! Docker container and image management API.
 
+use std::time::Duration;
+
 use crate::client::UgosClient;
-use crate::error::Result;
+use crate::error::{Result, UgosError};
 use crate::types::common::ResultWrapper;
 use crate::types::docker::{
     ComposeProject, ComposeProjectPage, ContainerDetail, ContainerPage, DockerImage,
     DockerOverview, ImagePage, Mirror,
 };
+
+/// How long to keep polling for a container that UGOS is still creating
+/// asynchronously (e.g. pulling an image) before giving up.
+const CREATE_POLL_ATTEMPTS: u32 = 30;
+const CREATE_POLL_INTERVAL: Duration = Duration::from_secs(3);
 
 /// Docker management operations on a UGOS NAS.
 #[allow(clippy::module_name_repetitions)]
@@ -209,8 +216,20 @@ impl DockerApi for UgosClient {
     }
 
     async fn container_create(&self, spec: &ContainerDetail) -> Result<()> {
-        let _: serde_json::Value = self.post("docker/container/CreateContainer", spec).await?;
-        Ok(())
+        let result: Result<serde_json::Value> =
+            self.post("docker/container/CreateContainer", spec).await;
+        match result {
+            Ok(_) => Ok(()),
+            // UGOS acks a create that needs to pull the image first with this
+            // exact message instead of a normal success response — the
+            // container actually does get created a few seconds later once
+            // the pull finishes, so poll for it rather than reporting a
+            // false failure. See docker.md's CreateContainer notes.
+            Err(UgosError::OperationFailed(msg)) if msg.contains("will take a long time") => {
+                self.wait_for_container(&spec.container_name).await
+            }
+            Err(e) => Err(e),
+        }
     }
 
     async fn container_start(&self, id: &str) -> Result<()> {
@@ -449,5 +468,29 @@ impl DockerApi for UgosClient {
     async fn docker_proxy_set(&self, proxy: &serde_json::Value) -> Result<()> {
         let _: serde_json::Value = self.post("docker/view/SetHttpProxy", proxy).await?;
         Ok(())
+    }
+}
+
+impl UgosClient {
+    /// Poll the container list until `name` appears, for containers UGOS is
+    /// still creating asynchronously in the background.
+    async fn wait_for_container(&self, name: &str) -> Result<()> {
+        for _ in 0..CREATE_POLL_ATTEMPTS {
+            tokio::time::sleep(CREATE_POLL_INTERVAL).await;
+            let page: ContainerPage = self.container_list(1, 100).await?;
+            if page
+                .result
+                .unwrap_or_default()
+                .iter()
+                .any(|c| c.name == name)
+            {
+                return Ok(());
+            }
+        }
+        Err(UgosError::OperationFailed(format!(
+            "container '{name}' still not visible after {}s — image pull may still be in \
+             progress; check `docker ps`",
+            u64::from(CREATE_POLL_ATTEMPTS) * CREATE_POLL_INTERVAL.as_secs()
+        )))
     }
 }
