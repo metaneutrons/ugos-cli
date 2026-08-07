@@ -456,7 +456,8 @@ impl DockerApi for UgosClient {
     }
 
     async fn project_shared_folder(&self) -> Result<String> {
-        self.get("docker/compose/GetDockerSharedFolder").await
+        let resp: ResultWrapper<String> = self.get("docker/compose/GetDockerSharedFolder").await?;
+        Ok(resp.result)
     }
 
     // ── Proxy ───────────────────────────────────────────────────────
