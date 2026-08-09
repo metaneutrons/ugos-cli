@@ -1,6 +1,16 @@
 //! Docker container and image management types.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
+
+/// Accept the UGOS convention of returning either an array or `null` for an
+/// optional list field while presenting callers with an ordinary empty vector.
+fn null_vec_as_empty<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<Vec<T>>::deserialize(deserializer).map(Option::unwrap_or_default)
+}
 
 // ── Overview ────────────────────────────────────────────────────────
 
@@ -111,26 +121,26 @@ pub struct ContainerDetail {
     #[serde(default)]
     pub abnormal_reset: bool,
     /// GPU device IDs passed through to the container (empty if none).
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_vec_as_empty")]
     pub gpu_ids: Vec<String>,
     /// Bridge/macvlan subnet assignment. Required by the UGOS backend even
     /// for the default `bridge` network — omitting it was not tested and
     /// may be rejected.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_vec_as_empty")]
     pub subnet_settings: Vec<SubnetSetting>,
     /// Whether the container should run after creation.
     #[serde(default)]
     pub run_container: bool,
     /// Port mappings.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_vec_as_empty")]
     pub port_mapping: Vec<PortMapping>,
     /// Volume mounts.
     pub volumes: Option<Vec<serde_json::Value>>,
     /// Environment variables.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_vec_as_empty")]
     pub environment_variables: Vec<EnvVar>,
     /// Container run command.
-    #[serde(default)]
+    #[serde(default, deserialize_with = "null_vec_as_empty")]
     pub container_run_command: Vec<String>,
     /// Linux capabilities. The live API has been observed sending `null`
     /// here (not an empty array) when none are set, hence `Option`.

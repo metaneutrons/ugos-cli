@@ -266,6 +266,24 @@ fn deserialize_container_detail() {
 }
 
 #[test]
+fn deserialize_container_detail_null_lists() {
+    let json = r#"{
+        "containerName": "one-shot",
+        "gpuIds": null,
+        "subnetSettings": null,
+        "portMapping": null,
+        "environmentVariables": null,
+        "containerRunCommand": null
+    }"#;
+    let detail: ContainerDetail = serde_json::from_str(json).unwrap();
+    assert!(detail.gpu_ids.is_empty());
+    assert!(detail.subnet_settings.is_empty());
+    assert!(detail.port_mapping.is_empty());
+    assert!(detail.environment_variables.is_empty());
+    assert!(detail.container_run_command.is_empty());
+}
+
+#[test]
 fn deserialize_container_page_null_result() {
     let json = r#"{"originalTotal": 0, "result": null, "total": 0}"#;
     let p: ContainerPage = serde_json::from_str(json).unwrap();
