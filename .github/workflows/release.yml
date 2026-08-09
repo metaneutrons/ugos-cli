@@ -1,8 +1,21 @@
 name: Release
 
 on:
-  push:
-    tags: ["v*"]
+  workflow_call:
+    inputs:
+      tag:
+        description: Existing release tag to build and publish.
+        required: true
+        type: string
+    secrets:
+      HOMEBREW_UPDATE_TOKEN:
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to build and publish.
+        required: true
+        type: string
 
 env:
   CARGO_TERM_COLOR: always
@@ -28,6 +41,8 @@ jobs:
             os: windows-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
@@ -63,6 +78,7 @@ jobs:
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ inputs.tag }}
           files: ugos-cli-*/*
 
   update-homebrew:
@@ -76,15 +92,16 @@ jobs:
       - name: Calculate checksums and update tap
         env:
           TAP_TOKEN: ${{ secrets.HOMEBREW_UPDATE_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag }}
         run: |
-          VERSION=${GITHUB_REF_NAME#v}
+          VERSION="${RELEASE_TAG#v}"
 
           MAC_X64_SHA=$(sha256sum ./artifacts/ugos-cli-x86_64-apple-darwin/ugos-cli-x86_64-apple-darwin.tar.gz | cut -d' ' -f1)
           MAC_ARM64_SHA=$(sha256sum ./artifacts/ugos-cli-aarch64-apple-darwin/ugos-cli-aarch64-apple-darwin.tar.gz | cut -d' ' -f1)
           LINUX_X64_SHA=$(sha256sum ./artifacts/ugos-cli-x86_64-unknown-linux-gnu/ugos-cli-x86_64-unknown-linux-gnu.tar.gz | cut -d' ' -f1)
           LINUX_ARM64_SHA=$(sha256sum ./artifacts/ugos-cli-aarch64-unknown-linux-gnu/ugos-cli-aarch64-unknown-linux-gnu.tar.gz | cut -d' ' -f1)
 
-          git clone https://x-access-token:${TAP_TOKEN}@github.com/metaneutrons/homebrew-tap.git
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/metaneutrons/homebrew-tap.git"
           cd homebrew-tap
           mkdir -p Formula
 
