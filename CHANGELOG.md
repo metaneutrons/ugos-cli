@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.4](https://github.com/metaneutrons/ugos-cli/compare/v0.3.3...v0.3.4) (2026-08-09)
+
+
+### Bug Fixes
+
+* **docker:** accept null container list fields ([ecc0bd0](https://github.com/metaneutrons/ugos-cli/commit/ecc0bd09d123df929debab6bb0aa570cc6d000a7))
+
 ## [0.3.3](https://github.com/metaneutrons/ugos-cli/compare/v0.3.2...v0.3.3) (2026-08-07)
 
 
