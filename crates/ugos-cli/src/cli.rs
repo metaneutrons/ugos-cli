@@ -1,6 +1,6 @@
 //! Command-line argument definitions.
 
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Args, Parser, Subcommand, ValueEnum};
 
 /// UGOS NAS management CLI.
 #[derive(Debug, Parser)]
@@ -10,7 +10,7 @@ pub struct Cli {
     #[arg(long, env = "UGOS_HOST", global = true)]
     pub host: Option<String>,
 
-    /// Username.
+    /// Username. Falls back to `UGOS_USERNAME` when `UGOS_USER` is unset.
     #[arg(long, env = "UGOS_USER", global = true)]
     pub user: Option<String>,
 
@@ -133,59 +133,184 @@ pub enum VmAction {
         name: String,
     },
     /// Create a VM.
-    Create {
-        /// Display name for the VM.
-        name: String,
-        /// OS type: linux, windows, other.
-        #[arg(long, default_value = "linux")]
-        os: String,
-        /// Number of CPU cores.
-        #[arg(long)]
-        cores: i64,
-        /// Memory in MiB.
-        #[arg(long)]
-        memory: i64,
-        /// Disk size in MiB.
-        #[arg(long)]
-        disk: i64,
-        /// ISO image path on the NAS (optional).
-        #[arg(long)]
-        iso: Option<String>,
-        /// KVM network name (default: vnet-bridge0).
-        #[arg(long, default_value = "vnet-bridge0")]
-        network: String,
-        /// Boot type: uefi or bios.
-        #[arg(long, default_value = "uefi")]
-        boot_type: String,
-        /// Storage volume name (e.g. `volume1`).
-        #[arg(long, default_value = "volume1")]
-        storage: String,
-        /// Auto-start on NAS boot.
-        #[arg(long)]
-        autostart: bool,
-    },
+    Create(Box<VmCreateArgs>),
     /// Update a VM (must be shut off). Only specified flags are changed.
-    Update {
-        /// VM name or UUID.
-        name: String,
-        /// Number of CPU cores.
-        #[arg(long)]
-        cores: Option<i64>,
-        /// Memory in MiB.
-        #[arg(long)]
-        memory: Option<i64>,
-        /// Auto-start on NAS boot.
-        #[arg(long)]
-        autostart: Option<bool>,
-        /// Boot type: uefi or bios.
-        #[arg(long)]
-        boot_type: Option<String>,
-    },
+    Update(Box<VmUpdateArgs>),
     /// Snapshot management.
     Snapshot {
         #[command(subcommand)]
         action: SnapshotAction,
     },
+}
+
+/// Flags for `vm create`.
+///
+/// Every device flag is repeatable and accepts either a short form or a
+/// `key=value,...` list. Sizes take a unit suffix (`k`, `m`, `g`, `t`); a bare
+/// number means MiB.
+#[derive(Debug, Default, Args)]
+pub struct VmCreateArgs {
+    /// Display name for the VM.
+    pub name: String,
+
+    /// Use this JSON file as the base spec (`-` reads stdin); flags override it.
+    #[arg(long, value_name = "PATH")]
+    pub spec_file: Option<String>,
+
+    /// Print the spec that would be sent instead of creating the VM.
+    #[arg(long)]
+    pub dry_run: bool,
+
+    #[command(flatten)]
+    pub spec: VmSpecFlags,
+}
+
+/// Flags for `vm update`.
+///
+/// The VM's current configuration is the base; only what the flags name is
+/// changed. Device flags come in three forms: `--disk` and friends replace the
+/// whole list, `--set-*` edits one existing entry selected with `match=`,
+/// `--add-*` appends and `--rm-*` removes.
+#[derive(Debug, Default, Args)]
+pub struct VmUpdateArgs {
+    /// VM name or UUID.
+    pub name: String,
+
+    /// New display name for the VM. Not verified against a live NAS.
+    #[arg(long, value_name = "NAME")]
+    pub rename: Option<String>,
+
+    /// Use this JSON file as the base spec instead of the VM's current one
+    /// (`-` reads stdin); the VM's UUID is always kept.
+    #[arg(long, value_name = "PATH")]
+    pub spec_file: Option<String>,
+
+    /// Print the spec that would be sent instead of updating the VM.
+    #[arg(long)]
+    pub dry_run: bool,
+
+    #[command(flatten)]
+    pub spec: VmSpecFlags,
+
+    #[command(flatten)]
+    pub edits: VmEditFlags,
+}
+
+/// Device and resource flags shared by `vm create` and `vm update`.
+///
+/// Repeatable device flags replace the corresponding list wholesale.
+#[derive(Debug, Default, Args)]
+pub struct VmSpecFlags {
+    /// OS type: linux, windows, other [create default: linux].
+    #[arg(long)]
+    pub os: Option<String>,
+
+    /// OS version tag (e.g. `win11`).
+    #[arg(long)]
+    pub os_version: Option<String>,
+
+    /// Number of CPU cores.
+    #[arg(long)]
+    pub cores: Option<i64>,
+
+    /// Memory, e.g. `8192` (MiB) or `8g`.
+    #[arg(long)]
+    pub memory: Option<String>,
+
+    /// Disk (repeatable): `40g` or `size=40g,bus=virtio,dev=vda,order=1,path=...`.
+    #[arg(long, value_name = "SPEC")]
+    pub disk: Vec<String>,
+
+    /// ISO image (repeatable): `/path.iso` or `path=/path.iso,dev=hda,order=2`.
+    #[arg(long, value_name = "SPEC")]
+    pub iso: Vec<String>,
+
+    /// Network interface (repeatable): `vnet-bridge0` or `name=...,type=virtio,mac=...`.
+    #[arg(long, value_name = "SPEC")]
+    pub nic: Vec<String>,
+
+    /// KVM network name; shorthand for a single `--nic` [create default: vnet-bridge0].
+    #[arg(long)]
+    pub network: Option<String>,
+
+    /// USB passthrough device (repeatable): `vendor-id=0x8087,product-id=0x0033,bus-id=1,device-id=4`
+    /// or a raw JSON object. Schema not verified against a live NAS.
+    #[arg(long, value_name = "SPEC")]
+    pub usb: Vec<String>,
+
+    /// Number of USB controllers [create default: 2].
+    #[arg(long)]
+    pub usb_controller: Option<i64>,
+
+    /// Graphics card type [create default: virtio].
+    #[arg(long)]
+    pub graphics: Option<String>,
+
+    /// Keyboard language [create default: en].
+    #[arg(long)]
+    pub keyboard: Option<String>,
+
+    /// Shared directory (repeatable): `key=value,...` or a raw JSON object.
+    /// Schema not verified against a live NAS.
+    #[arg(long, value_name = "SPEC")]
+    pub share: Vec<String>,
+
+    /// Boot type: uefi or bios [create default: uefi].
+    #[arg(long)]
+    pub boot_type: Option<String>,
+
+    /// Storage volume name [create default: volume1].
+    #[arg(long)]
+    pub storage: Option<String>,
+
+    /// Auto-start on NAS boot (`--autostart` or `--autostart false`).
+    #[arg(long, num_args = 0..=1, default_missing_value = "true")]
+    pub autostart: Option<bool>,
+}
+
+/// Incremental device edits, `vm update` only.
+///
+/// `--set-*` takes a `match=<selector>` key naming the entry to edit; the
+/// remaining keys are the same as on the corresponding `--disk`, `--iso` or
+/// `--nic` flag. Edits are applied after any replacing flag, in the order
+/// remove, set, add.
+#[derive(Debug, Default, Args)]
+pub struct VmEditFlags {
+    /// Append a disk (repeatable), same syntax as `--disk`.
+    #[arg(long, value_name = "SPEC")]
+    pub add_disk: Vec<String>,
+
+    /// Append an ISO image (repeatable), same syntax as `--iso`.
+    #[arg(long, value_name = "SPEC")]
+    pub add_iso: Vec<String>,
+
+    /// Append a network interface (repeatable), same syntax as `--nic`.
+    #[arg(long, value_name = "SPEC")]
+    pub add_nic: Vec<String>,
+
+    /// Edit a disk (repeatable): `match=vda,size=80g`.
+    #[arg(long, value_name = "SPEC")]
+    pub set_disk: Vec<String>,
+
+    /// Edit an ISO image (repeatable): `match=hda,path=/volume1/iso/other.iso`.
+    #[arg(long, value_name = "SPEC")]
+    pub set_iso: Vec<String>,
+
+    /// Edit a network interface (repeatable): `match=vnet-bridge0,type=e1000`.
+    #[arg(long, value_name = "SPEC")]
+    pub set_nic: Vec<String>,
+
+    /// Remove a disk by device name (repeatable), e.g. `vdb`.
+    #[arg(long, value_name = "DEV")]
+    pub rm_disk: Vec<String>,
+
+    /// Remove an ISO image by device name or path (repeatable).
+    #[arg(long, value_name = "DEV|PATH")]
+    pub rm_iso: Vec<String>,
+
+    /// Remove a network interface by name or MAC address (repeatable).
+    #[arg(long, value_name = "NAME|MAC")]
+    pub rm_nic: Vec<String>,
 }
 
 /// Snapshot subcommands.
