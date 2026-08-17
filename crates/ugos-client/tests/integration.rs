@@ -39,7 +39,7 @@ async fn auth_and_session() {
 async fn vm_list() {
     let client = connect().await;
     let vms = client.vm_list().await.expect("vm_list failed");
-    // nas1 always has at least one VM
+    // the test NAS always has at least one VM
     assert!(!vms.is_empty(), "expected at least one VM");
     for vm in &vms {
         assert!(!vm.vir_name.is_empty());

@@ -315,7 +315,7 @@ ugos-client = "0.1"
 
 `Docker container create/update` were reverse-engineered against the real
 `CreateContainer` request body (live-captured 2026-08-06, see
-`.kiro/docs/api-docker.md`) — this caught two bugs that had never actually
+[docs/api-docker.md](docs/api-docker.md)) — this caught two bugs that had never actually
 been exercised against a live NAS: `port_mapping` was built with wrong field
 names (`hostPort`/`protocol` instead of the real `nasPort`/`portType`), and
 `subnet_settings`/`gpu_ids` were entirely missing from `ContainerDetail`.
@@ -326,7 +326,7 @@ env vars).
 `Docker compose` project management (create/list/show/stop/remove) was
 reverse-engineered against the live `CreateProject`/`GetProjectListV3`/
 `StopProject`/`DownProject` endpoints (live-captured 2026-08-07, see
-`.kiro/docs/api-docker.md`) and tested end-to-end on nas1 (a two-service
+[docs/api-docker.md](docs/api-docker.md)) and tested end-to-end on a live NAS (a two-service
 nginx+redis project, created, verified running, stopped, and removed). The
 `start`/`restart` endpoints (`StartProject`/`RestartProject`) are implemented
 by analogy with `StopProject` and the container-level start/restart pattern
@@ -355,10 +355,10 @@ The client handles this automatically, including transparent re-authentication w
 
 ## Tested Devices
 
-| NAS | Model | UGOS Version |
-|-----|-------|-------------|
-| nas1 | DXP480T Plus | 1.14.1.0107 |
-| nas2 | DXP4800 Plus | 1.14.x |
+| Model | UGOS Version |
+|-------|-------------|
+| DXP480T Plus | 1.14.1.0107 |
+| DXP4800 Plus | 1.14.x |
 
 ## Requirements
 
