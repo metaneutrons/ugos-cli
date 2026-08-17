@@ -136,8 +136,12 @@ pub async fn login(
     });
 
     let resp = client.post(&url).json(&body).send().await?;
-    let api: crate::types::common::ApiResponse<LoginData> = resp.json().await?;
-    let data = api.into_result()?;
+
+    // Check the status code before decoding: a rejected login carries no
+    // token, and decoding first would report "missing field `token`" instead
+    // of what actually went wrong.
+    let api: crate::types::common::ApiResponse<serde_json::Value> = resp.json().await?;
+    let data: LoginData = serde_json::from_value(api.into_result()?)?;
 
     Ok(Session { token: data.token })
 }
