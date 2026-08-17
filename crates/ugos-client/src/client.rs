@@ -150,7 +150,7 @@ impl UgosClient {
         let token = self.session.read().await.token.clone();
         let url = Self::append_token(&format!("{}/{path}", self.base_url), &token);
 
-        let resp: ApiResponse<T> = self
+        let resp: ApiResponse<serde_json::Value> = self
             .http
             .get(&url)
             .query(params)
@@ -158,7 +158,7 @@ impl UgosClient {
             .await?
             .json()
             .await?;
-        resp.into_result()
+        Self::decode(resp)
     }
 
     /// Internal POST without retry.
@@ -170,8 +170,18 @@ impl UgosClient {
         let token = self.session.read().await.token.clone();
         let url = Self::append_token(&format!("{}/{path}", self.base_url), &token);
 
-        let resp: ApiResponse<T> = self.http.post(&url).json(body).send().await?.json().await?;
-        resp.into_result()
+        let resp: ApiResponse<serde_json::Value> =
+            self.http.post(&url).json(body).send().await?.json().await?;
+        Self::decode(resp)
+    }
+
+    /// Check the status code first, then deserialize the payload.
+    ///
+    /// The order matters: on an error code UGOS sends a `data` payload that
+    /// does not match the success shape, so decoding first would report a
+    /// deserialization failure and swallow the actual error message.
+    fn decode<T: DeserializeOwned>(resp: ApiResponse<serde_json::Value>) -> Result<T> {
+        Ok(serde_json::from_value(resp.into_result()?)?)
     }
 
     /// Re-authenticate and update the stored session.
