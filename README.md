@@ -26,7 +26,7 @@ UGOS provides a web UI for KVM virtual machine management but no CLI or API docu
 ```bash
 # Set credentials (or use --host, --user, --password flags)
 export UGOS_HOST=192.168.2.5
-export UGOS_USER=admin
+export UGOS_USER=admin          # UGOS_USERNAME works too
 export UGOS_PASSWORD=<password>
 
 # List VMs
@@ -43,6 +43,13 @@ ugos-cli vm stop --force CachyOS
 # Snapshots
 ugos-cli vm snapshot list CachyOS
 ugos-cli vm snapshot create CachyOS my-snapshot
+
+# Create a VM
+ugos-cli vm create debian --cores 4 --memory 8g --disk 50g \
+    --iso /volume1/iso/debian.iso
+
+# Print the request body instead of creating anything (works offline)
+ugos-cli vm create debian --cores 4 --memory 8g --disk 50g --dry-run
 
 # Other resources
 ugos-cli network list
@@ -119,6 +126,145 @@ Multiple NAS targets are supported:
 }
 ```
 
+## Creating and updating VMs
+
+`vm create` and `vm update` map directly onto the fields of the
+`CreateVirtualMachine` and `UpdateVirtualMachine` request bodies and take the
+same flags. Device flags are repeatable and take either a short form or a
+`key=value,...` list; sizes accept `k`, `m`, `g` and `t` suffixes, and a bare
+number means MiB. UGOS itself counts in KiB — the CLI converts, so `--disk 40g`
+really is 40 GiB.
+
+```bash
+# Two disks on different buses, two NICs, two ISOs, USB passthrough
+ugos-cli vm create win11 \
+    --os windows --os-version win11 \
+    --cores 8 --memory 16g \
+    --disk size=60g,bus=ide \
+    --disk size=500g,bus=sata \
+    --iso /volume1/iso/win11.iso \
+    --iso /volume1/iso/virtio-drivers.iso \
+    --nic name=vnet-bridge0,type=e1000e \
+    --nic name=vnet-nat,type=e1000e,mac=52:54:00:12:34:56 \
+    --usb vendor-id=0x8087,product-id=0x0033,bus-id=1,device-id=4 \
+    --graphics qxl --keyboard de --autostart
+```
+
+| Flag | Short form | Keys |
+|------|-----------|------|
+| `--disk` | `40g` | `size`, `bus`, `dev`, `path`, `order` |
+| `--iso` | `/path.iso` | `path`, `dev`, `order` |
+| `--nic` | `vnet-bridge0` | `name`, `type`, `mac` |
+| `--usb` | — | `vendor-id`, `product-id`, `bus-id`, `device-id`, `vendor-name`, `product-name` |
+| `--share` | — | passed through verbatim |
+
+On `create`, device names (`vda`, `sda`, `hda`, …) are derived from the bus
+type and boot order is numbered disks-first, unless `dev=` or `order=` says
+otherwise. On `update`, a newly added disk is left unnamed on purpose, because
+UGOS insists on naming it (see below). `--usb` and `--share` also accept a raw
+JSON object when the generated body needs to look different.
+
+### Updating
+
+`vm update` starts from the VM's current configuration, so only what a flag
+names is changed and everything else is sent back verbatim. The VM has to be
+shut off — UGOS answers `3002, Fail to edit virtual machine` for a running one
+— and its UUID is always the one of the VM named on the command line.
+
+Besides the flags above, which replace a whole device list, `update` edits
+lists incrementally. `--set-*` picks the entry to change with a `match=`
+selector (disk by `dev`, ISO by `dev` or path, NIC by name or MAC):
+
+```bash
+# Grow a disk, keeping its backing file
+ugos-cli vm update CachyOS --set-disk match=vda,size=200g
+
+# Attach a second disk and an install ISO, drop a NIC
+ugos-cli vm update CachyOS \
+    --add-disk 500g \
+    --add-iso /volume1/iso/rescue.iso \
+    --rm-nic vnet-nat
+
+# Plain resource changes
+ugos-cli vm update CachyOS --cores 8 --memory 32g --autostart
+
+# Preview instead of sending
+ugos-cli vm update CachyOS --set-nic match=vnet-bridge0,type=e1000 --dry-run
+```
+
+| Operation | Flags |
+|-----------|-------|
+| Replace the whole list | `--disk`, `--iso`, `--nic`, `--usb`, `--share` |
+| Append one entry | `--add-disk`, `--add-iso`, `--add-nic` |
+| Edit one entry | `--set-disk`, `--set-iso`, `--set-nic` |
+| Remove one entry | `--rm-disk`, `--rm-iso`, `--rm-nic` |
+
+Edits run in the order remove, set, add, so a `--rm-disk vdb --add-disk 100g`
+pair really does replace that disk rather than cancelling out — though for a
+pure resize `--set-disk` is the better tool, since it keeps the existing
+backing file instead of starting from an empty one. A selector that matches
+nothing is an error rather than a silent no-op.
+
+### Spec files
+
+Anything the flags do not cover can come from a full JSON spec, which the flags
+then override. For `create`, `--dry-run` prints the request body instead of
+sending it and needs no NAS connection, so specs can be built and inspected
+offline; for `update` it still reads the VM's current configuration first.
+
+```bash
+# Clone the configuration of an existing VM under a new name
+ugos-cli -o json vm show CachyOS > spec.json
+ugos-cli vm create CachyOS-2 --spec-file spec.json --memory 32g
+
+# Import an OVA (parse, then create from the parsed spec)
+ugos-cli -o json ova parse /volume1/ova/appliance.ova > spec.json
+ugos-cli vm create appliance --spec-file spec.json
+
+# Inspect what would be sent
+ugos-cli vm create test --spec-file - --dry-run < spec.json
+```
+
+A repeatable flag replaces the corresponding list from the spec file rather
+than appending to it. The UUID in a spec file is never used: `create` always
+generates a fresh one, and `update` always keeps the one of the VM it was
+pointed at.
+
+### What the live tests showed
+
+`create` and `update` were verified end to end against a real NAS (UGOS app
+build 656, 2026-08-18): a VM is created and starts; CPU, memory and disk size
+are changed and it starts again; a second disk is added and removed; it is
+renamed, force-stopped and deleted. Five findings from those runs are baked
+into the client:
+
+- **Sizes are KiB, not bytes** — for disks just as for memory. Sending bytes
+  asks for 1024 times the intended size; UGOS accepts the create but the
+  domain then fails to start.
+- **`keyboardLanguage` must be a real QEMU keymap.** The web UI sends
+  `en-us`; a plain `en` is accepted by `CreateVirtualMachine` and then makes
+  every start fail with `3037, Failed to start`.
+- **`storageUUID` is mandatory** on `CreateVirtualMachine` — without it the
+  answer is `3000, Fail to create virtual machine`. The client resolves it
+  from `storage_name`, so `--storage volume1` is enough, but a `--dry-run`
+  body shows it empty because resolving needs the NAS.
+- **UGOS assigns the VM UUID itself** and ignores `virtualMachineName` in the
+  body, so `vm create` reports the UUID it finds in the listing afterwards.
+- **A newly added disk must carry neither `dev` nor `path`.** UGOS assigns
+  both and answers `3002, Fail to edit virtual machine` when the body names
+  them itself, so `vm create` names its disks and `vm update` leaves new ones
+  unnamed. Growing an existing disk with `--set-disk` keeps its backing file.
+
+One difference to the web UI remains: it picks **defaults per OS type** that
+this CLI does not — `ide` plus an `e1000e` NIC for Windows and `other`,
+`virtio` for Linux. `vm create` always defaults to `virtio`, so a Windows
+guest without virtio drivers needs
+`--disk size=60g,bus=ide --nic name=vnet-bridge0,type=e1000e`.
+
+> **Still inferred.** USB passthrough and shared-directory bodies have never
+> been sent to a NAS, and a second NIC was accepted but not exercised on a
+> running guest. Use `--dry-run` to inspect a body before sending it.
+
 ## Installation
 
 ### From GitHub Releases
@@ -152,10 +298,13 @@ ugos-client = "0.1"
 |----------|-----------|
 | **VM** | list, show, start, stop, force-stop, reboot, force-reboot, delete, create, update |
 | **Snapshot** | list, create, delete, revert, rename |
-| **Network** | list, show |
-| **Storage** | list |
-| **Image** | list |
+| **Network** | list, show, create, update, delete |
+| **Storage** | list, usage, add, delete |
+| **Image** | list, delete, usage |
 | **USB** | list |
+| **VNC** | list links, generate noVNC link |
+| **OVA** | export, parse |
+| **Log** | search audit log, list operators |
 | **Host** | info (CPU cores, memory) |
 | **Docker container** | list, show, create, start, stop, restart, kill, remove, update, clone, batch-operate, logs |
 | **Docker image** | list, search, download, delete, export, load (URL/path) |
@@ -188,9 +337,8 @@ anything critical.
 
 | Resource | Notes |
 |----------|-------|
-| OVA import/export | |
+| OVA import (one step) | `ova parse` reads an OVA into a VM spec; creating the VM from it is still a manual second step |
 | Image upload | |
-| VNC link management | |
 | File management | Separate UGOS app |
 | Non-KVM modules | Photo, video, music, backup, etc. |
 
