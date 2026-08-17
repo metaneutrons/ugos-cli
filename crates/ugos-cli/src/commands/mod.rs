@@ -1,5 +1,7 @@
 //! Command dispatch — maps CLI actions to API calls and output.
 
+pub mod vmspec;
+
 use std::io::Write;
 
 use anyhow::Result;
@@ -78,59 +80,33 @@ async fn vm(
             client.vm_delete(name).await?;
             output::print_success(w, &format!("Deleted {name}"), fmt)?;
         }
-        VmAction::Create {
-            name,
-            os,
-            cores,
-            memory,
-            disk,
-            iso,
-            network,
-            boot_type,
-            storage,
-            autostart,
-        } => {
-            let spec = build_vm_spec(
-                name,
-                os,
-                *cores,
-                *memory,
-                *disk,
-                iso.as_ref(),
-                network,
-                boot_type,
-                storage,
-                *autostart,
-            )?;
-            let uuid = client.vm_create(&spec).await?;
-            output::print_success(w, &format!("Created VM {name} ({uuid})"), fmt)?;
+        VmAction::Create(args) => {
+            let spec = vmspec::build(args)?;
+            if args.dry_run {
+                output::print_json(w, &spec)?;
+            } else {
+                let uuid = client.vm_create(&spec).await?;
+                let msg = if uuid.is_empty() {
+                    format!("Created VM {}", args.name)
+                } else {
+                    format!("Created VM {} ({uuid})", args.name)
+                };
+                output::print_success(w, &msg, fmt)?;
+            }
         }
-        VmAction::Update {
-            name,
-            cores,
-            memory,
-            autostart,
-            boot_type,
-        } => {
-            let mut spec = client.vm_show(name).await?;
-            if let Some(c) = cores {
-                spec.core.value = *c;
+        VmAction::Update(args) => {
+            let current = client.vm_show(&args.name).await?;
+            let spec = vmspec::update(&current, args)?;
+            if args.dry_run {
+                output::print_json(w, &spec)?;
+            } else {
+                client.vm_update(&spec).await?;
+                output::print_success(
+                    w,
+                    &format!("Updated VM {}", spec.virtual_machine_display_name),
+                    fmt,
+                )?;
             }
-            if let Some(m) = memory {
-                spec.memory.value = *m * 1024; // MiB → KiB
-            }
-            if let Some(a) = autostart {
-                spec.other_config.auto_matic_start_up = *a;
-            }
-            if let Some(bt) = boot_type {
-                spec.device.boot_type = bt.clone();
-            }
-            client.vm_update(&spec).await?;
-            output::print_success(
-                w,
-                &format!("Updated VM {}", spec.virtual_machine_display_name),
-                fmt,
-            )?;
         }
         VmAction::Snapshot { action } => snapshot(client, action, fmt, w).await?,
     }
@@ -771,87 +747,6 @@ fn build_container_spec(
     })
 }
 
-#[allow(clippy::too_many_arguments, clippy::similar_names)]
-fn build_vm_spec(
-    name: &str,
-    os: &str,
-    cores: i64,
-    memory_mib: i64,
-    disk_mib: i64,
-    iso: Option<&String>,
-    network: &str,
-    boot_type: &str,
-    storage: &str,
-    autostart: bool,
-) -> Result<ugos_client::types::kvm::VmDetail> {
-    use ugos_client::types::kvm::{
-        VmDetail, VmDevice, VmDisk, VmImage, VmNetwork, VmOtherConfig, VmResource,
-    };
-
-    // ── Validate ────────────────────────────────────────────────────
-    anyhow::ensure!(!name.is_empty(), "VM name cannot be empty");
-    anyhow::ensure!(
-        matches!(os, "linux" | "windows" | "other"),
-        "invalid OS type '{os}', expected: linux, windows, other"
-    );
-    anyhow::ensure!(cores > 0, "cores must be > 0, got {cores}");
-    anyhow::ensure!(memory_mib > 0, "memory must be > 0 MiB, got {memory_mib}");
-    anyhow::ensure!(disk_mib > 0, "disk must be > 0 MiB, got {disk_mib}");
-    anyhow::ensure!(
-        matches!(boot_type, "uefi" | "bios"),
-        "invalid boot type '{boot_type}', expected: uefi, bios"
-    );
-
-    // ── Build ───────────────────────────────────────────────────────
-
-    let memory_kib = memory_mib * 1024;
-    let disk_bytes = disk_mib * 1024 * 1024;
-
-    let images = iso
-        .map(|path| {
-            vec![VmImage {
-                path: path.clone(),
-                dev: "hda".into(),
-                order: 2,
-            }]
-        })
-        .unwrap_or_default();
-
-    Ok(VmDetail {
-        virtual_machine_name: String::new(), // vm_create generates UUID
-        virtual_machine_display_name: name.to_owned(),
-        system_type: os.to_owned(),
-        system_version: String::new(),
-        core: VmResource { value: cores },
-        memory: VmResource { value: memory_kib },
-        images,
-        dists: vec![VmDisk {
-            bus: "virtio".into(),
-            size: disk_bytes,
-            dev: "vda".into(),
-            path: String::new(),
-            order: 1,
-        }],
-        networks: vec![VmNetwork {
-            name: network.to_owned(),
-            mac_address: String::new(),
-            nic_type: "virtio".into(),
-        }],
-        device: VmDevice {
-            usb_controller: 2,
-            usb_devices: vec![],
-            graphics_card: "virtio".into(),
-            boot_type: boot_type.to_owned(),
-        },
-        other_config: VmOtherConfig {
-            auto_matic_start_up: autostart,
-            keyboard_language: "en".into(),
-            share_directory: vec![],
-        },
-        storage_name: storage.to_owned(),
-    })
-}
-
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
@@ -1068,140 +963,5 @@ mod tests {
         )
         .unwrap();
         assert!(spec.abnormal_reset);
-    }
-
-    // ── build_vm_spec validation ────────────────────────────────────
-
-    #[test]
-    fn vm_spec_valid() {
-        let spec = build_vm_spec(
-            "TestVM",
-            "linux",
-            4,
-            8192,
-            51200,
-            None,
-            "vnet-bridge0",
-            "uefi",
-            "volume1",
-            false,
-        );
-        assert!(spec.is_ok());
-        let s = spec.unwrap();
-        assert_eq!(s.virtual_machine_display_name, "TestVM");
-        assert_eq!(s.core.value, 4);
-        assert_eq!(s.memory.value, 8192 * 1024);
-        assert_eq!(s.dists[0].size, 51200 * 1024 * 1024);
-        assert!(!s.other_config.auto_matic_start_up);
-    }
-
-    #[test]
-    fn vm_spec_with_iso() {
-        let iso = "/volume1/iso/ubuntu.iso".to_string();
-        let spec = build_vm_spec(
-            "TestVM",
-            "linux",
-            2,
-            4096,
-            20480,
-            Some(&iso),
-            "vnet-bridge0",
-            "uefi",
-            "volume1",
-            true,
-        )
-        .unwrap();
-        assert_eq!(spec.images.len(), 1);
-        assert_eq!(spec.images[0].path, "/volume1/iso/ubuntu.iso");
-        assert!(spec.other_config.auto_matic_start_up);
-    }
-
-    #[test]
-    fn vm_spec_bad_os() {
-        let err = build_vm_spec(
-            "Test",
-            "freebsd",
-            2,
-            4096,
-            20480,
-            None,
-            "vnet-bridge0",
-            "uefi",
-            "volume1",
-            false,
-        );
-        assert!(err.unwrap_err().to_string().contains("invalid OS type"));
-    }
-
-    #[test]
-    fn vm_spec_zero_cores() {
-        let err = build_vm_spec(
-            "Test",
-            "linux",
-            0,
-            4096,
-            20480,
-            None,
-            "vnet-bridge0",
-            "uefi",
-            "volume1",
-            false,
-        );
-        assert!(err.unwrap_err().to_string().contains("cores must be > 0"));
-    }
-
-    #[test]
-    fn vm_spec_zero_memory() {
-        let err = build_vm_spec(
-            "Test",
-            "linux",
-            2,
-            0,
-            20480,
-            None,
-            "vnet-bridge0",
-            "uefi",
-            "volume1",
-            false,
-        );
-        assert!(err.unwrap_err().to_string().contains("memory must be > 0"));
-    }
-
-    #[test]
-    fn vm_spec_bad_boot_type() {
-        let err = build_vm_spec(
-            "Test",
-            "linux",
-            2,
-            4096,
-            20480,
-            None,
-            "vnet-bridge0",
-            "grub",
-            "volume1",
-            false,
-        );
-        assert!(err.unwrap_err().to_string().contains("invalid boot type"));
-    }
-
-    #[test]
-    fn vm_spec_empty_name() {
-        let err = build_vm_spec(
-            "",
-            "linux",
-            2,
-            4096,
-            20480,
-            None,
-            "vnet-bridge0",
-            "uefi",
-            "volume1",
-            false,
-        );
-        assert!(
-            err.unwrap_err()
-                .to_string()
-                .contains("VM name cannot be empty")
-        );
     }
 }
