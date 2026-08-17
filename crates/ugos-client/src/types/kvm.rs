@@ -5,45 +5,67 @@ use serde::{Deserialize, Serialize};
 // ── VM ──────────────────────────────────────────────────────────────
 
 /// Summary of a VM as returned by `ShowLocalVirtualList`.
+///
+/// Only the two identity fields are required. Everything else is telemetry
+/// that UGOS has already changed once between releases (`virID` disappeared),
+/// so a missing field must not fail the whole listing.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VmSummary {
     /// VM UUID (used as the API identifier).
     pub vir_name: String,
-    /// Numeric VM ID.
-    #[serde(rename = "virID")]
-    pub vir_id: i64,
     /// Human-readable display name.
     pub vir_display_name: String,
+    /// Numeric VM ID. Absent since UGOS 1.4.
+    #[serde(default, rename = "virID")]
+    pub vir_id: i64,
     /// Storage volume name.
+    #[serde(default)]
     pub storage_name: String,
     /// OS type: "linux", "windows", "other".
+    #[serde(default)]
     pub system_type: String,
     /// OS version (e.g. "win11", or empty).
+    #[serde(default)]
     pub system_version: String,
+    /// Graphics card type.
+    #[serde(default)]
+    pub graphic: String,
     /// Guest CPU usage percentage.
+    #[serde(default)]
     pub guest_cpu_percent: i64,
     /// Guest total memory in KiB.
+    #[serde(default)]
     pub guest_total_memory: i64,
     /// Guest used memory in KiB.
+    #[serde(default)]
     pub guest_used_memory: i64,
     /// Host CPU usage percentage.
+    #[serde(default)]
     pub host_cpu_percent: i64,
     /// Host used memory in KiB.
+    #[serde(default)]
     pub host_used_memory: i64,
     /// Host total memory in KiB.
+    #[serde(default)]
     pub host_total_memory: i64,
     /// Upload bytes/s.
+    #[serde(default)]
     pub upload: i64,
     /// Download bytes/s.
+    #[serde(default)]
     pub download: i64,
     /// VM status: "running" or "shutoff".
+    #[serde(default)]
     pub status: String,
     /// Process status (e.g. "createSuccess").
+    #[serde(default)]
     pub process_status: String,
     /// Progress percentage (0-100).
+    #[serde(default)]
     pub progress: i64,
     /// Unix timestamp of creation.
+    #[serde(default)]
     pub create_time: i64,
 }
 
@@ -75,6 +97,17 @@ pub struct VmDetail {
     pub other_config: VmOtherConfig,
     /// Storage volume name.
     pub storage_name: String,
+    /// Storage volume UUID.
+    ///
+    /// Required by `CreateVirtualMachine`: without it the endpoint answers
+    /// with code 3000, "Fail to create virtual machine" (verified against
+    /// UGOS on 2026-08-17). [`KvmApi::vm_create`] fills it in from
+    /// [`storage_name`] when it is empty.
+    ///
+    /// [`KvmApi::vm_create`]: crate::api::kvm::KvmApi::vm_create
+    /// [`storage_name`]: Self::storage_name
+    #[serde(default, rename = "storageUUID")]
+    pub storage_uuid: String,
 }
 
 /// A simple `{value: N}` resource field.
@@ -100,11 +133,17 @@ pub struct VmImage {
 pub struct VmDisk {
     /// Bus type (e.g. "virtio").
     pub bus: String,
-    /// Disk size in bytes.
+    /// Disk size in KiB.
     pub size: i64,
     /// Device name (e.g. "vda").
+    ///
+    /// Omitted from the request when empty: UGOS rejects an update whose newly
+    /// added disk carries a device name (`3002`) and assigns one itself.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub dev: String,
-    /// File path to the qcow2 image.
+    /// File path to the qcow2 image. Empty, and omitted, for a disk UGOS has
+    /// yet to create.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
     pub path: String,
     /// Boot order.
     pub order: i64,
