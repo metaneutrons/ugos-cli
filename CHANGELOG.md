@@ -1,5 +1,20 @@
 # Changelog
 
+## [0.4.0](https://github.com/metaneutrons/ugos-cli/compare/v0.3.4...v0.4.0) (2026-08-17)
+
+
+### Features
+
+* **vm:** flexible create/update, plus KVM fixes verified on a live NAS ([9bffe0f](https://github.com/metaneutrons/ugos-cli/commit/9bffe0fef8fcf65a1e27fbda1c1e0e15a7262363))
+* **vm:** give create and update the full device surface ([9cd74bd](https://github.com/metaneutrons/ugos-cli/commit/9cd74bd62307c09a8d48fff94f5e6718e9d9701b))
+
+
+### Bug Fixes
+
+* **client:** report API error codes instead of decode failures ([fca1b27](https://github.com/metaneutrons/ugos-cli/commit/fca1b27872728c57134ffab98b3cdb5a0207d030))
+* **kvm:** correct the create and update request bodies ([0c66d44](https://github.com/metaneutrons/ugos-cli/commit/0c66d44cba7d94672ed9685bed822515e02b3525))
+* **release:** publish directly from release please ([c9c39e1](https://github.com/metaneutrons/ugos-cli/commit/c9c39e13a812173e7962292580002d7990fc5191))
+
 ## [0.3.4](https://github.com/metaneutrons/ugos-cli/compare/v0.3.3...v0.3.4) (2026-08-09)
 
 
