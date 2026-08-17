@@ -19,21 +19,26 @@ async fn main() -> Result<()> {
 
     let cli = cli::Cli::parse();
 
+    if run_offline(&cli)? {
+        return Ok(());
+    }
+
     let host = cli
         .host
         .as_deref()
         .context("--host or UGOS_HOST required")?;
     let user = cli
         .user
-        .as_deref()
-        .context("--user or UGOS_USER required")?;
+        .clone()
+        .or_else(|| env_var("UGOS_USERNAME"))
+        .context("--user, UGOS_USER or UGOS_USERNAME required")?;
     let password = cli
         .password
         .as_deref()
         .context("--password or UGOS_PASSWORD required")?;
 
     let creds = Credentials {
-        username: user.to_owned(),
+        username: user.clone(),
         password: password.to_owned(),
     };
 
@@ -59,7 +64,7 @@ async fn main() -> Result<()> {
         let cached = session::CachedSession {
             host: host.to_owned(),
             port: cli.port,
-            user: user.to_owned(),
+            user: user.clone(),
             token: sess.token,
             created_at: session::unix_now(),
         };
@@ -69,6 +74,32 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Read an environment variable, treating an empty value as unset.
+fn env_var(name: &str) -> Option<String> {
+    std::env::var(name).ok().filter(|v| !v.is_empty())
+}
+
+/// Handle commands that need no NAS connection.
+///
+/// Returns `true` when the command was handled and the process should exit.
+fn run_offline(cli: &cli::Cli) -> Result<bool> {
+    let cli::Resource::Vm {
+        action: cli::VmAction::Create(args),
+    } = &cli.command
+    else {
+        return Ok(false);
+    };
+    if !args.dry_run {
+        return Ok(false);
+    }
+
+    let spec = commands::vmspec::build(args)?;
+    let mut stdout = BufWriter::new(std::io::stdout().lock());
+    output::print_json(&mut stdout, &spec)?;
+    stdout.flush().context("flushing stdout")?;
+    Ok(true)
 }
 
 /// Build a [`UgosClient`], using the session cache when possible.

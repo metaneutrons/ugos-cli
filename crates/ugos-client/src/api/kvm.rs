@@ -28,7 +28,12 @@ pub trait KvmApi {
     fn vm_reboot(&self, name: &str, force: bool) -> impl Future<Output = Result<()>> + Send;
     /// Delete a VM.
     fn vm_delete(&self, name: &str) -> impl Future<Output = Result<()>> + Send;
-    /// Create a new VM from a `VmDetail` spec. Generates a UUID automatically.
+    /// Create a new VM from a `VmDetail` spec.
+    ///
+    /// `storage_uuid` is filled in from `storage_name` when empty. The UUID in
+    /// `virtual_machine_name` is ignored by UGOS, which assigns its own; the
+    /// assigned one is returned, or an empty string if the new VM cannot be
+    /// found in the listing afterwards.
     fn vm_create(&self, spec: &VmDetail) -> impl Future<Output = Result<String>> + Send;
     /// Update an existing VM (must be shut off).
     fn vm_update(&self, spec: &VmDetail) -> impl Future<Output = Result<()>> + Send;
@@ -142,6 +147,29 @@ pub trait KvmApi {
 
 // ── Name resolution ─────────────────────────────────────────────────
 
+/// Fill in `storage_uuid` from `storage_name` when the caller left it empty.
+///
+/// `CreateVirtualMachine` rejects a body without `storageUUID`, and the name
+/// is the only part a human can reasonably supply.
+async fn resolve_storage_uuid(client: &UgosClient, spec: &mut VmDetail) -> Result<()> {
+    if !spec.storage_uuid.is_empty() {
+        return Ok(());
+    }
+    let volumes: ResultWrapper<Vec<StorageInfo>> =
+        client.get("kvm/storage/ShowStorageList").await?;
+    let volume = volumes
+        .result
+        .iter()
+        .find(|v| v.name == spec.storage_name || v.label == spec.storage_name)
+        .ok_or_else(|| UgosError::NotFound {
+            kind: "storage volume",
+            name: spec.storage_name.clone(),
+        })?;
+    spec.storage_uuid.clone_from(&volume.uuid);
+    volume.name.clone_into(&mut spec.storage_name);
+    Ok(())
+}
+
 async fn resolve_vm(client: &UgosClient, name: &str) -> Result<(String, String)> {
     let vms: ResultWrapper<Vec<VmSummary>> = client.get("kvm/manager/ShowLocalVirtualList").await?;
     let vm = vms
@@ -241,16 +269,26 @@ impl KvmApi for UgosClient {
 
     async fn vm_create(&self, spec: &VmDetail) -> Result<String> {
         let mut spec = spec.clone();
-        if spec.virtual_machine_name.is_empty() {
-            spec.virtual_machine_name = uuid::Uuid::new_v4().to_string();
-        }
-        let uuid = spec.virtual_machine_name.clone();
+        resolve_storage_uuid(self, &mut spec).await?;
         let _: ResultWrapper<String> = self.post("kvm/manager/CreateVirtualMachine", &spec).await?;
-        Ok(uuid)
+
+        // UGOS assigns the UUID itself and ignores whatever the body carried,
+        // so the only way to learn it is to look the VM up again.
+        let vms: ResultWrapper<Vec<VmSummary>> =
+            self.get("kvm/manager/ShowLocalVirtualList").await?;
+        Ok(vms
+            .result
+            .iter()
+            .filter(|v| v.vir_display_name == spec.virtual_machine_display_name)
+            .max_by_key(|v| v.create_time)
+            .map(|v| v.vir_name.clone())
+            .unwrap_or_default())
     }
 
     async fn vm_update(&self, spec: &VmDetail) -> Result<()> {
-        let _: ResultWrapper<String> = self.post("kvm/manager/UpdateVirtualMachine", spec).await?;
+        let mut spec = spec.clone();
+        resolve_storage_uuid(self, &mut spec).await?;
+        let _: ResultWrapper<String> = self.post("kvm/manager/UpdateVirtualMachine", &spec).await?;
         Ok(())
     }
 
