@@ -91,6 +91,20 @@ pub fn vm_detail_rows(d: &VmDetail) -> Vec<VmDetailRow> {
             value: d.other_config.auto_matic_start_up.to_string(),
         },
     ]
+    .into_iter()
+    .chain(d.dists.iter().map(|disk| VmDetailRow {
+        field: format!("Disk {}", disk.dev),
+        value: format!("{} ({})", format_mib(disk.size), disk.bus),
+    }))
+    .chain(d.images.iter().map(|image| VmDetailRow {
+        field: format!("ISO {}", image.dev),
+        value: image.path.clone(),
+    }))
+    .chain(d.networks.iter().map(|net| VmDetailRow {
+        field: format!("NIC {}", net.name),
+        value: format!("{} {}", net.nic_type, net.mac_address),
+    }))
+    .collect()
 }
 
 /// Table row for snapshots.

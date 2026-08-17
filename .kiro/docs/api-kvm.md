@@ -7,6 +7,12 @@ All endpoints require authentication (see api-auth.md).
 All GET endpoints pass parameters as query strings.
 All POST endpoints send JSON bodies.
 
+The web UI additionally encrypts every call (`encrypt_query` on GET,
+`encrypt_req_body` on POST). That layer is optional — plain query strings and
+plain JSON bodies with `?token=` are accepted, which is what this client
+sends. A HAR capture of the web UI therefore shows opaque bodies; the UI
+bundle at `/kvm/assets/main-*.js` carries the field names in the clear.
+
 ## VM Manager (`kvm/manager/`)
 
 ### ShowLocalVirtualList
@@ -18,8 +24,9 @@ All POST endpoints send JSON bodies.
 // VmSummary
 {
   "virName": "797fb54f-...",        // UUID, used as identifier
-  "virID": 4,
   "virDisplayName": "CachyOS",
+  "virID": 4,                       // gone since app build 656 — treat as optional
+  "graphic": "",                    // undocumented, present since build 656
   "storageName": "Volume 1",
   "systemType": "linux",            // "linux" | "windows" | "other"
   "systemVersion": "",              // "win11" | "" etc.
@@ -56,7 +63,9 @@ All POST endpoints send JSON bodies.
     {"path": "/volume1/@appstore/com.ugreen.kvm/iso/CachyOS.iso", "dev": "hda", "order": 2}
   ],
   "dists": [
-    {"bus": "virtio", "size": 1048576000, "dev": "vda", "path": "...qcow2", "order": 1}
+    // size is KiB, like memory. usedBytes is read-only.
+    {"bus": "virtio", "size": 1048576000, "dev": "vda", "path": "...qcow2",
+     "order": 1, "usedBytes": 251928576}
   ],
   "networks": [
     {"name": "vnet-bridge0", "macAddress": "52:54:00:d7:38:b5", "type": "virtio"}
@@ -73,9 +82,14 @@ All POST endpoints send JSON bodies.
     "shareDirectory": []
   },
   "storageName": "volume1",
-  "ovaPath": ""
+  "storageUUID": "Csuzof-...",      // required by CreateVirtualMachine
+  "ovaPath": "",
+  "guestToolStatus": 0
 }
 ```
+
+The read endpoint also returns `device.pciPassthroughDevices` (null when
+unused) and `images[].name`; neither is required in a write body.
 
 ### ShowNativeInfo
 - **Method**: GET
@@ -95,9 +109,32 @@ All POST endpoints send JSON bodies.
 - **Body**: VmDetail object (same schema as ShowLocalVirtualMachine response)
 - **Timeout**: unlimited
 
+Verified against a live NAS (app build 656, 2026-08-18):
+
+- `storageUUID` is **required**. Without it: `3000, Fail to create virtual
+  machine`.
+- `virtualMachineName` may be empty and is ignored either way — UGOS assigns
+  the UUID. Read it back from `ShowLocalVirtualList`.
+- `dists[].size` is **KiB**, not bytes. A body in bytes is accepted, and the
+  domain then fails to start.
+- `otherConfig.keyboardLanguage` must be a QEMU keymap (`en-us`, `de`, …).
+  A plain `en` is accepted here and makes every later `PowerOn` fail with
+  `3037`.
+- The web UI omits `dists[].dev` and `dists[].path` and lets UGOS assign both.
+
+The web UI form defaults, per OS type: Windows `ide` disk (60 GiB) plus an
+`e1000e` NIC, Linux `virtio` (20 GiB), other `ide` (10 GiB) plus `e1000e`.
+
 ### UpdateVirtualMachine
 - **Method**: POST
 - **Body**: VmDetail object
+
+- The VM must be shut off, otherwise `3002, Fail to edit virtual machine`.
+- A **newly added** disk must carry neither `dev` nor `path` — with either of
+  them the call fails with `3002`. Existing disks keep both.
+- The web UI drops `storageUUID`, `systemVersion`, `ovaPath`,
+  `guestToolStatus` and `macAddress` from the body here; sending them anyway
+  works.
 
 ### DeleteVirtualMachine
 - **Method**: GET
