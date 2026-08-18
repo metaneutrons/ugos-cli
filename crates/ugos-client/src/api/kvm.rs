@@ -101,6 +101,33 @@ pub trait KvmApi {
     /// Check if an image name is available.
     fn image_check_name(&self, name: &str) -> impl Future<Output = Result<bool>> + Send;
 
+    /// Upload an ISO image, sending it in chunks.
+    ///
+    /// `progress` is called after each chunk with `(finished, total)`. Returns
+    /// the file name the image was stored under.
+    fn image_upload(
+        &self,
+        path: &std::path::Path,
+        iso_name: &str,
+        progress: &(dyn Fn(usize, usize) + Send + Sync),
+    ) -> impl Future<Output = Result<String>> + Send;
+
+    // `kvm/image/RenameImage` exists but is deliberately not wrapped: it
+    // answers `successful` to every body tried so far and renames nothing.
+    // The web UI never calls it either, so the field names are unknown.
+
+    /// Download an ISO from a URL into a temporary file and upload it.
+    ///
+    /// `progress` reports both phases: while downloading it is called with
+    /// `(bytes so far, 0)`, while uploading with `(finished chunk, total
+    /// chunks)`. A total of `0` therefore marks the download phase.
+    fn image_upload_url(
+        &self,
+        url: &str,
+        iso_name: &str,
+        progress: &(dyn Fn(usize, usize) + Send + Sync),
+    ) -> impl Future<Output = Result<String>> + Send;
+
     // ── USB ─────────────────────────────────────────────────────────
 
     /// List USB devices for a VM.
@@ -143,6 +170,39 @@ pub trait KvmApi {
 
     /// Parse an OVA file and return the VM configuration it contains.
     fn ova_parse(&self, ova_path: &str) -> impl Future<Output = Result<VmDetail>> + Send;
+}
+
+/// Chunk size the web UI uses for image uploads.
+const CHUNK_SIZE: u64 = 10 * 1024 * 1024;
+
+/// Find a free image file name, appending `-2`, `-3`, … when taken.
+async fn unique_file_name(client: &UgosClient, wanted: &str) -> Result<String> {
+    let images: ResultWrapper<Vec<ImageInfo>> = client.get("kvm/image/ShowImageList").await?;
+    let taken: Vec<&str> = images.result.iter().map(|i| i.file_name.as_str()).collect();
+    if !taken.contains(&wanted) {
+        return Ok(wanted.to_owned());
+    }
+    let (stem, ext) = wanted.rsplit_once('.').unwrap_or((wanted, ""));
+    for n in 2..1000 {
+        let candidate = if ext.is_empty() {
+            format!("{stem}-{n}")
+        } else {
+            format!("{stem}-{n}.{ext}")
+        };
+        if !taken.contains(&candidate.as_str()) {
+            return Ok(candidate);
+        }
+    }
+    Err(UgosError::Encryption(format!(
+        "no free file name for '{wanted}'"
+    )))
+}
+
+fn ensure_nonempty(size: u64) -> Result<()> {
+    if size == 0 {
+        return Err(UgosError::Encryption("file is empty".to_owned()));
+    }
+    Ok(())
 }
 
 // ── Name resolution ─────────────────────────────────────────────────
@@ -421,7 +481,7 @@ impl KvmApi for UgosClient {
         let _: ResultWrapper<String> = self
             .get_with_params(
                 "kvm/image/DeleteImage",
-                &[("fileName", file_name), ("name", image_name)],
+                &[("fileName", file_name), ("imageName", image_name)],
             )
             .await?;
         Ok(())
@@ -439,6 +499,107 @@ impl KvmApi for UgosClient {
             .get_with_params("kvm/image/CheckImageName", &[("name", name)])
             .await?;
         Ok(resp.result)
+    }
+
+    async fn image_upload(
+        &self,
+        path: &std::path::Path,
+        iso_name: &str,
+        progress: &(dyn Fn(usize, usize) + Send + Sync),
+    ) -> Result<String> {
+        use std::io::Read;
+
+        let wanted = path.file_name().map_or_else(
+            || format!("{iso_name}.iso"),
+            |n| n.to_string_lossy().into_owned(),
+        );
+        // UGOS answers 9999 when the file name is taken, which is why the web
+        // UI uses random names. A suffix keeps the name readable instead.
+        let file_name = unique_file_name(self, &wanted).await?;
+
+        let mut file = std::fs::File::open(path)
+            .map_err(|e| UgosError::Encryption(format!("opening '{}': {e}", path.display())))?;
+        let size = file
+            .metadata()
+            .map_err(|e| UgosError::Encryption(format!("reading file size: {e}")))?
+            .len();
+        ensure_nonempty(size)?;
+
+        // The web UI splits uploads into 10 MiB parts and numbers them from 0.
+        let total = usize::try_from(size.div_ceil(CHUNK_SIZE))
+            .map_err(|_| UgosError::Encryption("file too large to chunk".to_owned()))?;
+        let chunk_len = usize::try_from(CHUNK_SIZE)
+            .map_err(|_| UgosError::Encryption("chunk size unsupported here".to_owned()))?;
+        let mut buf = vec![0u8; chunk_len];
+
+        for index in 0..total {
+            let mut filled = 0;
+            while filled < buf.len() {
+                let n = file
+                    .read(&mut buf[filled..])
+                    .map_err(|e| UgosError::Encryption(format!("reading chunk {index}: {e}")))?;
+                if n == 0 {
+                    break;
+                }
+                filled += n;
+            }
+
+            let part = reqwest::multipart::Part::bytes(buf[..filled].to_vec())
+                .file_name("blob")
+                .mime_str("application/octet-stream")
+                .map_err(|e| UgosError::Encryption(format!("building chunk: {e}")))?;
+            let form = reqwest::multipart::Form::new()
+                .text("isoName", iso_name.to_owned())
+                .text("fileName", file_name.clone())
+                .text("size", size.to_string())
+                .text("chunks", total.to_string())
+                .text("chunk", index.to_string())
+                .part("file", part);
+
+            let _: ResultWrapper<String> = self.post_multipart("kvm/image/UploadUpk", form).await?;
+            progress(index + 1, total);
+        }
+
+        Ok(file_name)
+    }
+
+    async fn image_upload_url(
+        &self,
+        url: &str,
+        iso_name: &str,
+        progress: &(dyn Fn(usize, usize) + Send + Sync),
+    ) -> Result<String> {
+        use std::io::Write;
+
+        let file_name = url
+            .rsplit('/')
+            .next()
+            .filter(|n| !n.is_empty())
+            .map_or_else(|| format!("{iso_name}.iso"), ToOwned::to_owned);
+        let temp = std::env::temp_dir().join(&file_name);
+
+        // A separate client: the authenticated one carries NAS cookies and
+        // trusts invalid certificates, neither of which belongs on a download
+        // from an arbitrary host.
+        let plain = reqwest::Client::builder()
+            .build()
+            .map_err(|e| UgosError::Encryption(format!("HTTP client build: {e}")))?;
+        let mut resp = plain.get(url).send().await?.error_for_status()?;
+
+        let mut out = std::fs::File::create(&temp)
+            .map_err(|e| UgosError::Encryption(format!("creating '{}': {e}", temp.display())))?;
+        let mut downloaded = 0usize;
+        while let Some(chunk) = resp.chunk().await? {
+            out.write_all(&chunk)
+                .map_err(|e| UgosError::Encryption(format!("writing download: {e}")))?;
+            downloaded += chunk.len();
+            progress(downloaded, 0);
+        }
+        drop(out);
+
+        let result = self.image_upload(&temp, iso_name, progress).await;
+        let _ = std::fs::remove_file(&temp);
+        result
     }
 
     // ── USB ─────────────────────────────────────────────────────────

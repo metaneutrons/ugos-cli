@@ -175,6 +175,33 @@ impl UgosClient {
         Self::decode(resp)
     }
 
+    /// Perform a POST request with a `multipart/form-data` body.
+    ///
+    /// Used for chunked uploads, which is the only place UGOS expects a
+    /// multipart body rather than JSON.
+    ///
+    /// # Errors
+    ///
+    /// Returns the appropriate [`UgosError`] on API or network failure.
+    pub async fn post_multipart<T: DeserializeOwned + Send>(
+        &self,
+        path: &str,
+        form: reqwest::multipart::Form,
+    ) -> Result<T> {
+        let token = self.session.read().await.token.clone();
+        let url = Self::append_token(&format!("{}/{path}", self.base_url), &token);
+
+        let resp: ApiResponse<serde_json::Value> = self
+            .http
+            .post(&url)
+            .multipart(form)
+            .send()
+            .await?
+            .json()
+            .await?;
+        Self::decode(resp)
+    }
+
     /// Check the status code first, then deserialize the payload.
     ///
     /// The order matters: on an error code UGOS sends a `data` payload that

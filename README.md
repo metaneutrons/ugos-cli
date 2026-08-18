@@ -51,6 +51,10 @@ ugos-cli vm create debian --cores 4 --memory 8g --disk 50g \
 # Print the request body instead of creating anything (works offline)
 ugos-cli vm create debian --cores 4 --memory 8g --disk 50g --dry-run
 
+# Upload an ISO, from a local file or a URL
+ugos-cli image upload ~/Downloads/debian.iso
+ugos-cli image upload https://example.org/debian.iso --name debian-13
+
 # Other resources
 ugos-cli network list
 ugos-cli storage list
@@ -300,7 +304,7 @@ ugos-client = "0.1"
 | **Snapshot** | list, create, delete, revert, rename |
 | **Network** | list, show, create, update, delete |
 | **Storage** | list, usage, add, delete |
-| **Image** | list, delete, usage |
+| **Image** | list, upload (file or URL), delete, usage |
 | **USB** | list |
 | **VNC** | list links, generate noVNC link |
 | **OVA** | export, parse |
@@ -337,6 +341,7 @@ anything critical.
 
 | Resource | Notes |
 |----------|-------|
+| Image rename | `RenameImage` answers `successful` and renames nothing; field names unknown |
 | OVA import (one step) | `ova parse` reads an OVA into a VM spec; creating the VM from it is still a manual second step |
 | Image upload | |
 | File management | Separate UGOS app |
