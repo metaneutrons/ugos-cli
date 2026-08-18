@@ -68,6 +68,20 @@ All subsequent API calls require **both**:
 
 The `auth_type` field in the login response indicates the token delivery method. Despite `auth_type: "header"`, the KVM app requires `?token=` as a URL parameter (combined with cookies).
 
+### The token in a query parameter has a cost
+
+Because the token travels in the URL, anything that reports a URL reports a
+live credential — and transport errors quote the URL they failed on. Tokens
+stay valid for 25 minutes, and error text is routinely pasted into bug
+reports, so the client replaces the values of `token`, `password` and
+`passwd` with `REDACTED` before an error is rendered. The URL of the
+underlying transport error is dropped as well, since error reporters print
+the `source()` chain and would otherwise show the unredacted original one
+line further down.
+
+The path survives redaction, because knowing which endpoint failed is the
+useful part of the message.
+
 ## Reference Implementation (Python)
 
 This working code was used to validate the auth flow against nas1 (DXP480T Plus, UGOS 1.14.1.0107):

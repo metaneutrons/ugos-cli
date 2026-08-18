@@ -41,8 +41,16 @@ pub enum UgosError {
     Encryption(String),
 
     /// HTTP transport error.
-    #[error(transparent)]
-    Http(#[from] reqwest::Error),
+    ///
+    /// Carries the request URL for context, with sensitive query parameters
+    /// replaced. See [`redact_url`] for why that matters.
+    #[error("request to {url} failed")]
+    Http {
+        /// The request URL, with sensitive query parameters redacted.
+        url: String,
+        /// The underlying transport error, stripped of its own URL.
+        source: reqwest::Error,
+    },
 
     /// JSON serialization/deserialization error.
     #[error(transparent)]
@@ -60,3 +68,113 @@ pub enum UgosError {
 
 /// Convenience alias used throughout the library.
 pub type Result<T> = std::result::Result<T, UgosError>;
+
+/// Query parameters whose values must never reach an error message.
+///
+/// `encrypt_query` is deliberately absent: it carries the token too, but
+/// encrypted, and seeing that a request was encrypted is useful when
+/// debugging.
+const SENSITIVE_PARAMS: [&str; 3] = ["token", "password", "passwd"];
+
+/// Render a URL with sensitive query parameters replaced.
+///
+/// UGOS passes the session token as `?token=`, and a token stays valid for
+/// 25 minutes. Error text is routinely pasted into bug reports, so leaving
+/// it in would publish a live credential.
+#[must_use]
+pub fn redact_url(url: &reqwest::Url) -> String {
+    if url.query().is_none() {
+        return url.to_string();
+    }
+
+    let pairs: Vec<(String, String)> = url
+        .query_pairs()
+        .map(|(key, value)| {
+            let value = if SENSITIVE_PARAMS.contains(&key.as_ref()) {
+                "REDACTED".to_owned()
+            } else {
+                value.into_owned()
+            };
+            (key.into_owned(), value)
+        })
+        .collect();
+
+    let mut clean = url.clone();
+    let _serializer = clean.query_pairs_mut().clear().extend_pairs(pairs);
+    clean.to_string()
+}
+
+impl From<reqwest::Error> for UgosError {
+    /// Redact the URL before it can reach a log or a bug report.
+    ///
+    /// The error's own copy of the URL is removed as well: it is reachable
+    /// through `source()`, which error reporters print, so redacting only
+    /// the outer message would leave the token visible one line down.
+    fn from(err: reqwest::Error) -> Self {
+        let url = err
+            .url()
+            .map_or_else(|| "<unknown URL>".to_owned(), redact_url);
+        Self::Http {
+            url,
+            source: err.without_url(),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn url(input: &str) -> reqwest::Url {
+        reqwest::Url::parse(input).unwrap_or_else(|_| {
+            reqwest::Url::parse("https://invalid.example/").unwrap_or_else(|_| unreachable!())
+        })
+    }
+
+    #[test]
+    fn removes_the_session_token() {
+        let shown = redact_url(&url("https://nas:9443/ugreen/v1/vm?token=SECRET123"));
+        assert!(!shown.contains("SECRET123"));
+        // Deliberately free of URL-escapable characters, so the redaction
+        // stays readable in the rendered URL.
+        assert!(shown.contains("token=REDACTED"));
+    }
+
+    #[test]
+    fn keeps_the_path_for_debugging() {
+        let shown = redact_url(&url(
+            "https://nas:9443/ugreen/v1/sysinfo/machine/common?token=X",
+        ));
+        assert!(shown.contains("/ugreen/v1/sysinfo/machine/common"));
+        assert!(shown.contains("nas:9443"));
+    }
+
+    #[test]
+    fn keeps_harmless_parameters() {
+        let shown = redact_url(&url("https://nas/v1/kvm/PowerOn?name=debian&token=X"));
+        assert!(shown.contains("name=debian"));
+        assert!(!shown.contains("token=X"));
+    }
+
+    #[test]
+    fn redacts_a_token_in_any_position() {
+        let shown = redact_url(&url(
+            "https://nas/v1/x?token=SECRET&name=a&password=HUNTER2",
+        ));
+        assert!(!shown.contains("SECRET"));
+        assert!(!shown.contains("HUNTER2"));
+    }
+
+    #[test]
+    fn leaves_a_url_without_a_query_alone() {
+        let plain = "https://nas:9443/ugreen/v1/verify/login";
+        assert_eq!(redact_url(&url(plain)), plain);
+    }
+
+    #[test]
+    fn keeps_the_encrypted_query_visible() {
+        // Encrypted queries carry the token too, but not in the clear.
+        let shown = redact_url(&url("https://nas/v2/filemgr/list?encrypt_query=AbCd"));
+        assert!(shown.contains("encrypt_query=AbCd"));
+    }
+}
