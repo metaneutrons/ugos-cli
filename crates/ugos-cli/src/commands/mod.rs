@@ -7,11 +7,12 @@ use std::io::Write;
 use anyhow::Result;
 use ugos_client::UgosClient;
 use ugos_client::api::docker::DockerApi;
+use ugos_client::api::download::DownloadApi;
 use ugos_client::api::kvm::KvmApi;
 use ugos_client::api::system::SystemApi;
 
 use crate::cli::{
-    DockerAction, ImageAction, LogAction, NetworkAction, OutputFormat, OvaAction,
+    DockerAction, DownloadAction, ImageAction, LogAction, NetworkAction, OutputFormat, OvaAction,
     PassthroughAction, Resource, SnapshotAction, StorageAction, SystemAction, UsbAction, VmAction,
     VncAction,
 };
@@ -42,7 +43,64 @@ pub async fn run(
         Resource::Overview => overview(client, fmt, w).await,
         Resource::Passthrough { action } => passthrough(client, action, fmt, w).await,
         Resource::System { action } => system(client, action, fmt, w).await,
+        Resource::Download { action } => download(client, action, fmt, w).await,
     }
+}
+
+async fn download(
+    client: &UgosClient,
+    action: &DownloadAction,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
+    match action {
+        DownloadAction::List => {
+            let mut tasks = client.download_list().await?;
+            tasks.extend(client.download_completed().await?);
+            match fmt {
+                OutputFormat::Table => {
+                    let rows: Vec<output::DownloadRow> = tasks.iter().map(Into::into).collect();
+                    output::print_list(w, &rows, fmt)?;
+                }
+                OutputFormat::Json => output::print_json(w, &tasks)?,
+            }
+        }
+        DownloadAction::Add { url, dir } => {
+            client.download_add(url, dir.as_deref()).await?;
+            output::print_success(w, &format!("Queued {url}"), fmt)?;
+        }
+        DownloadAction::Check { url } => {
+            let status = client.download_check(url).await?;
+            let msg = if status == 0 {
+                format!("{url} can be downloaded")
+            } else {
+                format!("{url} was rejected (status {status})")
+            };
+            output::print_success(w, &msg, fmt)?;
+        }
+        DownloadAction::Rm {
+            id,
+            delete_file,
+            running,
+        } => {
+            client.download_remove(id, *delete_file, *running).await?;
+            output::print_success(w, &format!("Removed task {id}"), fmt)?;
+        }
+        DownloadAction::Status => {
+            let path = client.download_path().await?;
+            let speed = client.download_speed().await?;
+            match fmt {
+                OutputFormat::Table => {
+                    let rows = output::download_status_rows(&path, &speed);
+                    output::print_list(w, &rows, fmt)?;
+                }
+                OutputFormat::Json => {
+                    output::print_json(w, &serde_json::json!({"path": path, "speed": speed}))?;
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 async fn system(

@@ -96,6 +96,11 @@ pub enum Resource {
     Info,
     /// Show host load and every VM at once.
     Overview,
+    /// Download Center: fetch files straight to the NAS.
+    Download {
+        #[command(subcommand)]
+        action: DownloadAction,
+    },
     /// NAS hardware and monitoring.
     System {
         #[command(subcommand)]
@@ -105,6 +110,40 @@ pub enum Resource {
     Passthrough {
         #[command(subcommand)]
         action: PassthroughAction,
+    },
+}
+
+/// Download Center subcommands.
+#[derive(Debug, Subcommand)]
+pub enum DownloadAction {
+    /// Show running and finished downloads.
+    List,
+    /// Queue a URL for the NAS to fetch.
+    Add {
+        /// The URL to download.
+        url: String,
+        /// Target directory [default: the configured one].
+        #[arg(long)]
+        dir: Option<String>,
+    },
+    /// Check whether a URL can be downloaded, without queueing it.
+    Check {
+        /// The URL to test.
+        url: String,
+    },
+    /// Show target directory, free space and current rates.
+    Status,
+    /// Remove a task from the list.
+    Rm {
+        /// Numeric task id from `download list -o json` — the `id` field,
+        /// not `task_id`, which the endpoint rejects.
+        id: String,
+        /// Also delete what was already fetched.
+        #[arg(long)]
+        delete_file: bool,
+        /// Mark the task as still running rather than finished.
+        #[arg(long)]
+        running: bool,
     },
 }
 

@@ -34,26 +34,40 @@ captured because the NAS had no tasks — see below.
 - Settings include `default_save_path`, `auto_listen_path`,
   `max_concurrent_task`.
 
-## Blocked: adding a task
+## Adding a task
 
-`download/addV2` (POST, JSON) accepts `download_url`, `save_dir` and
-`task_name` — with those names it answers `1302, Path does not exist`,
-whereas any other field naming answers `9999`, so the names are right. But
-`1302` persists for every path tried, including `/volume1/download` (which
-`getPath` reports as valid) and `/volume1`, and with no path at all. The app
-reports `setup/isInit: true`, so it is configured.
+### download/add
+- **Method**: POST, **multipart/form-data** — not JSON, which is what made
+  earlier attempts fail with a misleading `1302, Path does not exist`
+- **Fields**: `is_batch` ("false"), `save_dir`, `download_url`
+- On the UI's no-encryption whitelist, so it takes plain requests
 
-Some other required field is missing, and its absence is reported as a path
-error. `download/add` (the older sibling) takes **FormData**, not JSON, and
-sets `is_batch`. `download/deleteTask` uses HTTP **DELETE** with query
-parameters, a method this client does not implement yet.
+### download/checkLinks
+- **Method**: POST, multipart
+- **Field**: `download_url`
+- **Response**: `{status: 0}` when the link is usable
 
-Resolving this needs a capture of the web UI adding a download.
+### download/deleteTask
+- **Method**: **DELETE**, encrypted
+- **Params**: `ids`, `delete_file`, `is_download`
 
-## Task fields, from the UI's response mapper
+`ids` is the **numeric `id`** from the listing. Passing the `task_id` string
+answers `9999`.
 
-Not verified against live data, listed for whoever picks this up:
-`id`, `task_name`, `save_dir`, `download_url`, `download_start_time`,
-`download_completed_time`, `uploaded_size`, `upload_speed`, `share_ratio`,
-`uname`, `path_is_exist`. A second mapper exposes them as `fileName`,
-`status`, `url`, `savePath`, `fileSize`, `downloadSize`, `speed`, `overTime`.
+## Task fields
+
+A running task and a finished one report different keys, so everything
+defaults:
+
+- Running: `downloaded_size`, `download_speed`, `task_status`, `plan`
+  (percent), `remaining_time`, `error_code`, `created_at`, `ext`, `index`
+- Finished: `download_completed_time`, `uploaded_size`, `seeding_status`,
+  `is_zip_mode`
+- Both: `id`, `task_id`, `download_file_name`, `download_url`, `save_dir`,
+  `total_size`, `uname`, `link_type`
+
+`error_code` is non-zero on failure — 9 for a URL the NAS cannot reach, in
+which case `total_size` stays 0.
+
+Verified end to end on 2026-08-18: queueing a URL, watching it finish,
+listing running and finished tasks, and removing both.

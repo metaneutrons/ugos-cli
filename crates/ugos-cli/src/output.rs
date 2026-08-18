@@ -656,6 +656,104 @@ fn format_rate(bytes_per_second: f64) -> String {
     }
 }
 
+/// Table row for download tasks.
+#[derive(Tabled, Serialize)]
+pub struct DownloadRow {
+    #[tabled(rename = "File")]
+    pub file: String,
+    #[tabled(rename = "Size")]
+    pub size: String,
+    #[tabled(rename = "Progress")]
+    pub progress: String,
+    #[tabled(rename = "Speed")]
+    pub speed: String,
+    #[tabled(rename = "Target")]
+    pub target: String,
+}
+
+impl From<&ugos_client::types::download::DownloadTask> for DownloadRow {
+    fn from(t: &ugos_client::types::download::DownloadTask) -> Self {
+        let progress = if t.error_code != 0 {
+            format!("failed ({})", t.error_code)
+        } else if t.download_completed_time > 0 {
+            "done".into()
+        } else if t.plan > 0 {
+            format!("{}%", t.plan)
+        } else if t.total_size > 0 && t.downloaded_size > 0 {
+            format!("{}%", t.downloaded_size * 100 / t.total_size)
+        } else {
+            "waiting".into()
+        };
+        Self {
+            file: t.download_file_name.clone(),
+            size: format_bytes(t.total_size),
+            progress,
+            speed: if t.download_speed > 0 {
+                format!("{}/s", format_bytes(t.download_speed))
+            } else {
+                String::new()
+            },
+            target: t.save_dir.clone(),
+        }
+    }
+}
+
+/// Rows for `download status`.
+pub fn download_status_rows(
+    path: &ugos_client::types::download::DownloadPath,
+    speed: &ugos_client::types::download::DownloadSpeed,
+) -> Vec<VmDetailRow> {
+    vec![
+        VmDetailRow {
+            field: "Target".into(),
+            value: format!(
+                "{} ({}){}",
+                path.path,
+                path.path_display,
+                if path.path_is_validity {
+                    ""
+                } else {
+                    " — missing"
+                }
+            ),
+        },
+        VmDetailRow {
+            field: "Free".into(),
+            value: format_gib(path.available_size),
+        },
+        VmDetailRow {
+            field: "Tasks".into(),
+            value: format!(
+                "{} running, {} finished",
+                speed.downloading_num, speed.completed_num
+            ),
+        },
+        VmDetailRow {
+            field: "Rate".into(),
+            value: format!(
+                "down {}/s, up {}/s",
+                format_bytes(speed.download_speed),
+                format_bytes(speed.upload_speed)
+            ),
+        },
+    ]
+}
+
+/// Format a byte count with a binary unit.
+#[allow(clippy::cast_precision_loss)]
+fn format_bytes(bytes: i64) -> String {
+    let b = bytes as f64;
+    if b >= 1_073_741_824.0 {
+        format!("{:.1} GiB", b / 1_073_741_824.0)
+    } else if b >= 1_048_576.0 {
+        format!("{:.1} MiB", b / 1_048_576.0)
+    } else if b >= 1024.0 {
+        format!("{:.0} KiB", b / 1024.0)
+    } else {
+        format!("{bytes} B")
+    }
+}
+
 /// Format bytes as human-readable GiB.
 #[allow(clippy::cast_precision_loss)]
 pub fn format_gib(bytes: i64) -> String {

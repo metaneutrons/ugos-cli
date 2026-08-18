@@ -280,6 +280,37 @@ impl UgosClient {
         Self::decode_encrypted(raw, &key)
     }
 
+    /// Perform an encrypted DELETE, which the Download Center uses.
+    ///
+    /// # Errors
+    ///
+    /// Returns the appropriate [`UgosError`] on API, crypto or network failure.
+    pub async fn delete_encrypted<T: DeserializeOwned + Send>(
+        &self,
+        path: &str,
+        params: &[(&str, &str)],
+    ) -> Result<T> {
+        let public_key = self.public_key().await?;
+        let key = RequestKey::generate(&public_key)?;
+        let token = self.session.read().await.token.clone();
+
+        let raw: serde_json::Value = self
+            .http
+            .delete(self.url_for(path))
+            .query(&[(
+                "encrypt_query",
+                key.encrypt(&Self::with_token(params, &token))?,
+            )])
+            .header("X-Ugreen-Security-Code", &key.security_code)
+            .header("X-Ugreen-Security-Key", md5_hex(&token))
+            .header("X-Ugreen-Token", rsa_seal(&public_key, &token)?)
+            .send()
+            .await?
+            .json()
+            .await?;
+        Self::decode_encrypted(raw, &key)
+    }
+
     /// Perform an encrypted POST, for endpoints that reject plain requests.
     ///
     /// # Errors
