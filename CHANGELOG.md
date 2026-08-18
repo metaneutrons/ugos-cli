@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.9.0](https://github.com/metaneutrons/ugos-cli/compare/v0.8.0...v0.9.0) (2026-08-18)
+
+
+### ⚠ BREAKING CHANGES
+
+* **tls:** UgosClient::connect and from_session take a TlsPolicy. Connections to a host whose certificate was never recorded now pin it on first use instead of accepting anything.
+
+### Features
+
+* **tls:** pin the NAS certificate on first use ([246de01](https://github.com/metaneutrons/ugos-cli/commit/246de018ed35ab9d347465f4929dab85ec5634cd))
+
+
+### Bug Fixes
+
+* **error:** keep the session token out of error messages ([e349b62](https://github.com/metaneutrons/ugos-cli/commit/e349b62c786b24103d0449ff670b76f00fce3cb6))
+
 ## [0.8.0](https://github.com/metaneutrons/ugos-cli/compare/v0.7.0...v0.8.0) (2026-08-18)
 
 
