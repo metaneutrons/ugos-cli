@@ -96,11 +96,33 @@ pub enum Resource {
     Info,
     /// Show host load and every VM at once.
     Overview,
+    /// NAS hardware and monitoring.
+    System {
+        #[command(subcommand)]
+        action: SystemAction,
+    },
     /// PCI passthrough devices.
     Passthrough {
         #[command(subcommand)]
         action: PassthroughAction,
     },
+}
+
+/// System subcommands.
+#[derive(Debug, Subcommand)]
+pub enum SystemAction {
+    /// Model, serial, firmware and installed hardware.
+    Info,
+    /// Current CPU, memory, disk, network and fan readings.
+    Stat,
+    /// Running processes, busiest first.
+    Processes {
+        /// How many to show.
+        #[arg(long, default_value = "20")]
+        limit: usize,
+    },
+    /// Installed services and their resource use.
+    Services,
 }
 
 /// PCI passthrough subcommands.

@@ -8,10 +8,12 @@ use anyhow::Result;
 use ugos_client::UgosClient;
 use ugos_client::api::docker::DockerApi;
 use ugos_client::api::kvm::KvmApi;
+use ugos_client::api::system::SystemApi;
 
 use crate::cli::{
     DockerAction, ImageAction, LogAction, NetworkAction, OutputFormat, OvaAction,
-    PassthroughAction, Resource, SnapshotAction, StorageAction, UsbAction, VmAction, VncAction,
+    PassthroughAction, Resource, SnapshotAction, StorageAction, SystemAction, UsbAction, VmAction,
+    VncAction,
 };
 use crate::output;
 
@@ -39,7 +41,59 @@ pub async fn run(
         Resource::Info => info(client, fmt, w).await,
         Resource::Overview => overview(client, fmt, w).await,
         Resource::Passthrough { action } => passthrough(client, action, fmt, w).await,
+        Resource::System { action } => system(client, action, fmt, w).await,
     }
+}
+
+async fn system(
+    client: &UgosClient,
+    action: &SystemAction,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
+    match action {
+        SystemAction::Info => {
+            let info = client.machine_info().await?;
+            match fmt {
+                OutputFormat::Table => {
+                    let rows = output::machine_info_rows(&info);
+                    output::print_list(w, &rows, fmt)?;
+                }
+                OutputFormat::Json => output::print_json(w, &info)?,
+            }
+        }
+        SystemAction::Stat => {
+            let stats = client.system_stats().await?;
+            match fmt {
+                OutputFormat::Table => {
+                    let rows = output::system_stat_rows(&stats);
+                    output::print_list(w, &rows, fmt)?;
+                }
+                OutputFormat::Json => output::print_json(w, &stats)?,
+            }
+        }
+        SystemAction::Processes { limit } => {
+            let procs = client.processes().await?;
+            match fmt {
+                OutputFormat::Table => {
+                    let rows = output::process_rows(&procs, *limit);
+                    output::print_list(w, &rows, fmt)?;
+                }
+                OutputFormat::Json => output::print_json(w, &procs)?,
+            }
+        }
+        SystemAction::Services => {
+            let svcs = client.services().await?;
+            match fmt {
+                OutputFormat::Table => {
+                    let rows = output::service_rows(&svcs);
+                    output::print_list(w, &rows, fmt)?;
+                }
+                OutputFormat::Json => output::print_json(w, &svcs)?,
+            }
+        }
+    }
+    Ok(())
 }
 
 async fn overview(client: &UgosClient, fmt: OutputFormat, w: &mut impl Write) -> Result<()> {

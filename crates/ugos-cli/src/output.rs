@@ -433,6 +433,229 @@ pub fn storage_usage_rows(usage: &[ugos_client::types::kvm::StorageUsage]) -> Ve
     rows
 }
 
+/// Rows for `system info`: identity first, then hardware.
+#[allow(clippy::cast_precision_loss)]
+pub fn machine_info_rows(m: &ugos_client::types::system::MachineInfo) -> Vec<VmDetailRow> {
+    let c = &m.common;
+    let mut rows = vec![
+        VmDetailRow {
+            field: "Name".into(),
+            value: c.nas_name.clone(),
+        },
+        VmDetailRow {
+            field: "Model".into(),
+            value: format!("{} ({})", c.model, c.product_series),
+        },
+        VmDetailRow {
+            field: "Serial".into(),
+            value: c.serial.clone(),
+        },
+        VmDetailRow {
+            field: "UGOS".into(),
+            value: format!(
+                "{}{}",
+                c.system_version,
+                if c.beta { " (beta)" } else { "" }
+            ),
+        },
+        VmDetailRow {
+            field: "Booted".into(),
+            value: format!("{} (up {})", c.last_turn_on_time, format_uptime(c.run_time)),
+        },
+    ];
+    rows.extend(m.hardware.cpu.iter().map(|cpu| VmDetailRow {
+        field: "CPU".into(),
+        value: format!(
+            "{} — {} cores / {} threads, {} °C",
+            cpu.model, cpu.core, cpu.thread, cpu.temperature
+        ),
+    }));
+    rows.extend(m.hardware.mem.iter().map(|mem| VmDetailRow {
+        field: "Memory".into(),
+        value: format!(
+            "{} {} ({}, {}{})",
+            format_gib(mem.size),
+            mem.mhz,
+            mem.manufacturer,
+            mem.model,
+            if mem.is_ecc { ", ECC" } else { "" }
+        ),
+    }));
+    rows.extend(m.hardware.net.iter().map(|net| VmDetailRow {
+        field: format!("Net {}", net.model),
+        value: format!("{} / {} — {} Mbit/s", net.ip, net.mac, net.speed),
+    }));
+    rows
+}
+
+/// Rows for `system stat`: one line per subsystem.
+#[allow(clippy::cast_precision_loss)]
+pub fn system_stat_rows(s: &ugos_client::types::system::SystemStats) -> Vec<VmDetailRow> {
+    let mut rows = Vec::new();
+    if let Some(cpu) = s.cpu.first() {
+        rows.push(VmDetailRow {
+            field: "CPU".into(),
+            value: format!("{:.1}% at {:.0} °C", cpu.used_percent, cpu.temp),
+        });
+    }
+    if let Some(mem) = s.mem.first() {
+        rows.push(VmDetailRow {
+            field: "Memory".into(),
+            value: format!("{:.1}%", mem.used_percent),
+        });
+    }
+    if let Some(disk) = s.disk.first() {
+        rows.push(VmDetailRow {
+            field: "Disk".into(),
+            value: format!(
+                "read {}/s, write {}/s",
+                format_rate(disk.read_rate),
+                format_rate(disk.write_rate)
+            ),
+        });
+    }
+    if let Some(vol) = s.volume.first() {
+        // These are totals since boot, not rates — see IoStat.
+        rows.push(VmDetailRow {
+            field: "Volume total".into(),
+            value: format!(
+                "{} read, {} written",
+                format_gib(bytes_to_i64(vol.read_rate)),
+                format_gib(bytes_to_i64(vol.write_rate))
+            ),
+        });
+    }
+    if let Some(net) = s.net.first() {
+        rows.push(VmDetailRow {
+            field: "Network".into(),
+            value: format!(
+                "in {}/s, out {}/s",
+                format_rate(net.recv_rate),
+                format_rate(net.send_rate)
+            ),
+        });
+    }
+    for (i, fan) in s.cpu_fan.iter().enumerate() {
+        rows.push(VmDetailRow {
+            field: format!("CPU fan {}", i + 1),
+            value: format!("{} rpm", fan.speed),
+        });
+    }
+    for (i, fan) in s.device_fan.iter().enumerate() {
+        rows.push(VmDetailRow {
+            field: format!("Case fan {}", i + 1),
+            value: format!("{} rpm", fan.speed),
+        });
+    }
+    rows.extend(
+        s.gpu
+            .iter()
+            .filter(|g| !g.gpu_name.is_empty())
+            .map(|g| VmDetailRow {
+                field: "GPU".into(),
+                value: format!(
+                    "{} — {:.1}% at {:.0} °C",
+                    g.gpu_name, g.used_percent, g.temp
+                ),
+            }),
+    );
+    rows
+}
+
+/// Table row for processes and services.
+#[derive(Tabled, Serialize)]
+pub struct ProcessRow {
+    #[tabled(rename = "ID")]
+    pub pid: String,
+    #[tabled(rename = "Name")]
+    pub name: String,
+    #[tabled(rename = "Status")]
+    pub status: String,
+    #[tabled(rename = "CPU%")]
+    pub cpu: String,
+    #[tabled(rename = "Memory")]
+    pub memory: String,
+}
+
+/// Rows for `system processes`, heaviest first.
+pub fn process_rows(p: &ugos_client::types::system::ProcessList, limit: usize) -> Vec<ProcessRow> {
+    let mut procs: Vec<_> = p.list.iter().collect();
+    procs.sort_by(|a, b| {
+        b.consume
+            .cpu_used_percent
+            .total_cmp(&a.consume.cpu_used_percent)
+            .then(b.consume.mem_used.cmp(&a.consume.mem_used))
+    });
+    procs
+        .into_iter()
+        .take(limit)
+        .map(|proc| ProcessRow {
+            pid: proc.pid.to_string(),
+            name: proc.name.clone(),
+            status: proc.status.clone(),
+            cpu: format!("{:.1}%", proc.consume.cpu_used_percent),
+            memory: format_gib(proc.consume.mem_used),
+        })
+        .collect()
+}
+
+/// Rows for `system services`.
+pub fn service_rows(s: &ugos_client::types::system::ServiceList) -> Vec<ProcessRow> {
+    s.list
+        .iter()
+        .map(|svc| ProcessRow {
+            pid: svc.id.clone(),
+            name: format!("{} ({})", svc.name, svc.appid),
+            status: if svc.can_be_operated {
+                "controllable".into()
+            } else {
+                String::new()
+            },
+            cpu: format!("{:.1}%", svc.consume.cpu_used_percent),
+            memory: format_gib(svc.consume.mem_used),
+        })
+        .collect()
+}
+
+/// Clamp a byte count that arrives as a float into an integer.
+///
+/// The casts are deliberate: these are byte counters, where a rounded value
+/// and a saturating upper bound are exactly what the display needs.
+#[allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
+fn bytes_to_i64(bytes: f64) -> i64 {
+    if bytes.is_finite() && bytes > 0.0 {
+        bytes.min(i64::MAX as f64).round() as i64
+    } else {
+        0
+    }
+}
+
+/// Format seconds as `Nd Nh Nm`.
+fn format_uptime(seconds: i64) -> String {
+    let (d, h, m) = (
+        seconds / 86400,
+        (seconds % 86400) / 3600,
+        (seconds % 3600) / 60,
+    );
+    if d > 0 {
+        format!("{d}d {h}h {m}m")
+    } else {
+        format!("{h}h {m}m")
+    }
+}
+
+/// Format a byte rate.
+#[allow(clippy::cast_precision_loss)]
+fn format_rate(bytes_per_second: f64) -> String {
+    if bytes_per_second >= 1_048_576.0 {
+        format!("{:.1} MiB", bytes_per_second / 1_048_576.0)
+    } else if bytes_per_second >= 1024.0 {
+        format!("{:.0} KiB", bytes_per_second / 1024.0)
+    } else {
+        format!("{bytes_per_second:.0} B")
+    }
+}
+
 /// Format bytes as human-readable GiB.
 #[allow(clippy::cast_precision_loss)]
 pub fn format_gib(bytes: i64) -> String {

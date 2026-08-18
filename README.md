@@ -58,6 +58,11 @@ ugos-cli image upload https://example.org/debian.iso --name debian-13
 # Host load and all VMs in one call
 ugos-cli overview
 
+# NAS hardware, firmware and live readings
+ugos-cli system info
+ugos-cli system stat
+ugos-cli system processes --limit 10
+
 # How much space KVM uses, per volume and per VM
 ugos-cli storage df
 
@@ -323,6 +328,7 @@ ugos-client = "0.1"
 | **OVA** | export, parse |
 | **Log** | search audit log, list operators |
 | **Host** | info (CPU cores, memory), overview (load plus every VM) |
+| **System** | hardware and firmware info, live CPU/memory/disk/network/fan readings, processes, services |
 | **Docker container** | list, show, create, start, stop, restart, kill, remove, update, clone, batch-operate, logs |
 | **Docker image** | list, search, download, delete, export, load (URL/path) |
 | **Docker registry** | list/add/delete/switch mirror, HTTP proxy get/set |
