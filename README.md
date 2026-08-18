@@ -1,8 +1,7 @@
 # ugos-cli
 
 [![CI](https://github.com/metaneutrons/ugos-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/metaneutrons/ugos-cli/actions/workflows/ci.yml)
-[![crates.io](https://img.shields.io/crates/v/ugos-client.svg)](https://crates.io/crates/ugos-client)
-[![docs.rs](https://docs.rs/ugos-client/badge.svg)](https://docs.rs/ugos-client)
+[![MSRV](https://img.shields.io/badge/MSRV-1.88-orange.svg)](https://releases.rs/docs/1.88.0/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 CLI, MCP server, and Rust client library for managing **UGREEN NAS** (UGOS) devices.
@@ -324,9 +323,11 @@ cargo install --git https://github.com/metaneutrons/ugos-cli ugos-mcp
 
 ### Library
 
+The crates are not published on crates.io. Depend on the repository directly:
+
 ```toml
 [dependencies]
-ugos-client = "0.7"
+ugos-client = { git = "https://github.com/metaneutrons/ugos-cli", tag = "v0.8.0" }
 ```
 
 ## Implementation Status
@@ -399,6 +400,26 @@ UGOS uses a multi-step auth flow:
 4. **Authenticated requests** — cookies + `?token=` query parameter
 
 The client handles this automatically, including transparent re-authentication when tokens expire (UGOS error code 1024).
+
+## Transport security
+
+UGOS serves a self-signed **X.509 version 1** certificate, which no ordinary
+certificate parser will accept. Rather than trusting whatever is presented,
+the client pins the certificate on first contact and refuses anything else
+afterwards, the way SSH treats host keys. Fingerprints are stored per
+`host:port` in `known_hosts.json` in the user's config directory.
+
+| Flag | Effect |
+|------|--------|
+| *(none)* | Pin on first contact, require a match afterwards |
+| `--tls-trust-new` | Record a changed certificate, for renewals or reinstalls |
+| `--tls-insecure` | Skip the check entirely |
+
+The first connection is only as trustworthy as the network it happens on, so
+the fingerprint is printed for comparison against the device. The handshake
+signature is verified against the pinned certificate's own key, which is what
+makes the pin meaningful — see [docs/api-tls.md](docs/api-tls.md) for why that
+needs handling by hand, and why requests are not all encrypted.
 
 ## Tested Devices
 

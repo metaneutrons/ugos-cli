@@ -17,6 +17,9 @@ workspace = true
 [dependencies]
 base64.workspace = true
 reqwest.workspace = true
+rustls.workspace = true
+dirs.workspace = true
+der.workspace = true
 rsa.workspace = true
 sha2.workspace = true
 md-5.workspace = true

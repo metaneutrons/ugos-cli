@@ -30,6 +30,20 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub no_cache: bool,
 
+    /// Do not check the NAS certificate at all.
+    ///
+    /// Restores the behaviour of releases before 0.9 and offers no
+    /// protection against an active man-in-the-middle.
+    #[arg(long, global = true)]
+    pub tls_insecure: bool,
+
+    /// Accept and record the certificate currently presented.
+    ///
+    /// Needed after the NAS certificate legitimately changes, for instance
+    /// when it is renewed or the device is reinstalled.
+    #[arg(long, global = true)]
+    pub tls_trust_new: bool,
+
     /// Resource to manage.
     #[command(subcommand)]
     pub command: Resource,

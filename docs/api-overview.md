@@ -15,6 +15,7 @@ Base URL: `https://<nas-ip>:9443/ugreen/v1/`
 | **Download Center** | com.ugreen.downloadCenter | Complete | [api-downloadcenter.md](api-downloadcenter.md) |
 | **System / monitoring** | core | Complete | [api-system.md](api-system.md) |
 | **Request encryption** | — | Complete | [api-encryption.md](api-encryption.md) |
+| **Transport security** | — | Complete | [api-tls.md](api-tls.md) |
 | **Backup** | — | No API exists | [api-backup.md](api-backup.md) |
 
 ### Known but Undocumented (endpoints found in main JS bundle)

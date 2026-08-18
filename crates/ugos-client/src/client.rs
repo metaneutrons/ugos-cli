@@ -27,19 +27,19 @@ pub struct UgosClient {
 impl UgosClient {
     /// Create a new client and authenticate.
     ///
-    /// Builds a reqwest client with cookie storage and self-signed cert
-    /// support, then performs the full login flow.
+    /// Builds a reqwest client that enforces `tls`, then performs the full
+    /// login flow. See [`crate::tls::TlsPolicy`] for what the policies mean.
     ///
     /// # Errors
     ///
     /// Returns an error if the HTTP client cannot be built or login fails.
-    pub async fn connect(host: &str, port: u16, creds: Credentials) -> Result<Self> {
-        let http = reqwest::Client::builder()
-            .cookie_store(true)
-            .danger_accept_invalid_certs(true)
-            .timeout(std::time::Duration::from_secs(30))
-            .build()
-            .map_err(|e| UgosError::Encryption(format!("HTTP client build: {e}")))?;
+    pub async fn connect(
+        host: &str,
+        port: u16,
+        creds: Credentials,
+        tls: &crate::tls::TlsPolicy,
+    ) -> Result<Self> {
+        let http = crate::tls::http_client(tls)?;
 
         let base_url = format!("https://{host}:{port}/ugreen");
         let session = auth::login(&http, &base_url, &creds).await?;
@@ -63,13 +63,9 @@ impl UgosClient {
         port: u16,
         creds: Credentials,
         session: Session,
+        tls: &crate::tls::TlsPolicy,
     ) -> Result<Self> {
-        let http = reqwest::Client::builder()
-            .cookie_store(true)
-            .danger_accept_invalid_certs(true)
-            .timeout(std::time::Duration::from_secs(30))
-            .build()
-            .map_err(|e| UgosError::Encryption(format!("HTTP client build: {e}")))?;
+        let http = crate::tls::http_client(tls)?;
 
         let base_url = format!("https://{host}:{port}/ugreen");
 

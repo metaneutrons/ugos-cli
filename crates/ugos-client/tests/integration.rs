@@ -21,7 +21,7 @@ fn creds() -> (String, Credentials) {
 
 async fn connect() -> UgosClient {
     let (host, creds) = creds();
-    UgosClient::connect(&host, 9443, creds)
+    UgosClient::connect(&host, 9443, creds, &ugos_client::TlsPolicy::Insecure)
         .await
         .expect("failed to connect")
 }

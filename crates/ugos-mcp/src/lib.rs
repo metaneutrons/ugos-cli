@@ -20,7 +20,7 @@ use rmcp::{
 use tokio::sync::OnceCell;
 use ugos_client::api::docker::DockerApi;
 use ugos_client::api::kvm::KvmApi;
-use ugos_client::{Credentials, UgosClient};
+use ugos_client::{Credentials, TlsPolicy, UgosClient, tls};
 
 // ── Target config ───────────────────────────────────────────────────
 
@@ -496,7 +496,12 @@ impl UgosMcp {
             .get(&cfg.name)
             .ok_or("internal: missing client cell")?;
         cell.get_or_try_init(|| async {
-            UgosClient::connect(&cfg.host, cfg.port, cfg.creds.clone())
+            // Same trust-on-first-use store the CLI writes, so a host pinned
+            // there is already authenticated here.
+            let tls = resolve_tls(&cfg.host, cfg.port)
+                .await
+                .map_err(|e| format!("tls setup for {}: {e}", cfg.name))?;
+            UgosClient::connect(&cfg.host, cfg.port, cfg.creds.clone(), &tls)
                 .await
                 .map_err(|e| format!("auth failed for {}: {e}", cfg.name))
         })
@@ -1360,3 +1365,20 @@ impl ServerHandler for UgosMcp {
 
 #[cfg(test)]
 mod tests;
+
+/// Pin a host's certificate on first contact, then require it to match.
+///
+/// There is no terminal here to warn on, so an unknown host is recorded
+/// silently; the CLI prints the fingerprint when it does the same.
+///
+/// # Errors
+///
+/// Returns an error if the host cannot be reached or the store is unusable.
+async fn resolve_tls(host: &str, port: u16) -> Result<TlsPolicy, ugos_client::error::UgosError> {
+    if let Some(fp) = tls::known_hosts::get(host, port)? {
+        return Ok(TlsPolicy::Pinned(fp));
+    }
+    let seen = tls::probe_fingerprint(host, port).await?;
+    tls::known_hosts::put(host, port, &seen)?;
+    Ok(TlsPolicy::Pinned(seen))
+}

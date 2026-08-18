@@ -10,7 +10,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         username: std::env::var("UGOS_USER")?,
         password: std::env::var("UGOS_PASSWORD")?,
     };
-    let client = UgosClient::connect(&std::env::var("UGOS_HOST")?, 9443, creds).await?;
+    let client = UgosClient::connect(
+        &std::env::var("UGOS_HOST")?,
+        9443,
+        creds,
+        &ugos_client::TlsPolicy::Insecure,
+    )
+    .await?;
     let mut args = std::env::args().skip(1);
     let Some(path) = args.next() else {
         return Err("usage: enc <path> [json-body]".into());

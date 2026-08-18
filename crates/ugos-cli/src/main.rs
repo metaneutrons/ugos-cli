@@ -2,6 +2,7 @@
 
 mod cli;
 mod commands;
+
 mod output;
 mod session;
 
@@ -9,7 +10,8 @@ use std::io::{BufWriter, Write};
 
 use anyhow::{Context, Result, bail};
 use clap::Parser;
-use ugos_client::{Credentials, Session, UgosClient};
+use ugos_client::tls::known_hosts;
+use ugos_client::{Credentials, Session, TlsPolicy, UgosClient, tls};
 
 #[tokio::main]
 async fn main() -> Result<()> {
@@ -42,7 +44,8 @@ async fn main() -> Result<()> {
         password: password.to_owned(),
     };
 
-    let client = build_client(host, cli.port, &creds, cli.no_cache).await?;
+    let tls = resolve_tls(host, cli.port, cli.tls_insecure, cli.tls_trust_new).await?;
+    let client = build_client(host, cli.port, &creds, cli.no_cache, &tls).await?;
 
     let mut stdout = BufWriter::new(std::io::stdout().lock());
     let result = commands::run(&client, &cli.command, cli.output, &mut stdout).await;
@@ -103,12 +106,56 @@ fn run_offline(cli: &cli::Cli) -> Result<bool> {
     Ok(true)
 }
 
+/// Write a notice to stderr, so it stays out of piped output.
+///
+/// A failed write is dropped: losing a notice must not abort the command
+/// the user actually asked for.
+fn notice(message: &str) {
+    let mut err = std::io::stderr();
+    let _ = writeln!(err, "{message}");
+}
+
+/// Settle on a TLS policy for this host, pinning on first contact.
+///
+/// Trust on first use: the first connection to an unknown host records the
+/// certificate it presents, and every later one must match it. That first
+/// contact is only as trustworthy as the network it happens on, so the
+/// fingerprint is shown for the user to compare against the device.
+async fn resolve_tls(host: &str, port: u16, insecure: bool, trust_new: bool) -> Result<TlsPolicy> {
+    if insecure {
+        notice("warning: certificate checking disabled (--tls-insecure)");
+        return Ok(TlsPolicy::Insecure);
+    }
+
+    if trust_new {
+        let seen = tls::probe_fingerprint(host, port).await?;
+        known_hosts::put(host, port, &seen)?;
+        notice(&format!(
+            "recorded new certificate for {host}:{port}\n  {seen}"
+        ));
+        return Ok(TlsPolicy::Pinned(seen));
+    }
+
+    if let Some(fp) = known_hosts::get(host, port)? {
+        return Ok(TlsPolicy::Pinned(fp));
+    }
+
+    let seen = tls::probe_fingerprint(host, port).await?;
+    known_hosts::put(host, port, &seen)?;
+    notice(&format!(
+        "first contact with {host}:{port}, trusting its certificate\n  {seen}\n\
+         Compare it against the NAS before using this connection for anything sensitive."
+    ));
+    Ok(TlsPolicy::Pinned(seen))
+}
+
 /// Build a [`UgosClient`], using the session cache when possible.
 async fn build_client(
     host: &str,
     port: u16,
     creds: &Credentials,
     no_cache: bool,
+    tls: &TlsPolicy,
 ) -> Result<UgosClient> {
     // Try cached session first.
     if !no_cache && let Some(cached) = session::load(host, port, &creds.username) {
@@ -122,12 +169,13 @@ async fn build_client(
             port,
             creds.clone(),
             session,
+            tls,
         )?);
     }
 
     // Fresh login.
     tracing::debug!("performing fresh login");
-    let client = UgosClient::connect(host, port, creds.clone()).await?;
+    let client = UgosClient::connect(host, port, creds.clone(), tls).await?;
 
     // Cache the new session.
     if !no_cache {
