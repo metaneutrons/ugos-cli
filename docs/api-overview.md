@@ -69,6 +69,6 @@ Each UGOS app is a separate Vue.js SPA served under its own path (`/kvm/`, `/doc
 
 ## UGOS Version Tested
 
-- **System**: 1.14.1.0107
+- **System**: 1.18.1.0098 (earlier work against 1.14.1.0107)
 - **KVM App**: build 899 (7418da87#282), 2026-03-11
 - **Hardware**: DXP480T Plus (nas1)

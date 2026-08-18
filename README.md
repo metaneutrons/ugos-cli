@@ -6,9 +6,11 @@
 
 CLI, MCP server, and Rust client library for managing **UGREEN NAS** (UGOS) devices.
 
-UGOS provides a web UI for KVM virtual machine management but no CLI or API documentation. Direct use of `virsh`/`qemu` on the host causes UGOS to lose track of VMs. This project provides a programmatic interface through the official (undocumented) API.
+UGOS ships a web UI but no CLI and no API documentation. Reaching past it with `virsh`/`qemu` makes UGOS lose track of its own VMs, so this project drives the same (undocumented) API the web UI uses — reverse-engineered from its bundles and verified against real hardware.
 
-> **⚠️ Work in Progress** — This project currently implements a subset of the UGOS API focused on KVM virtual machine management. See the [implementation status](#implementation-status) below.
+Covers virtual machines, Docker, files, downloads, system monitoring, logs and users.
+
+> **⚠️ Work in Progress** — A large subset of the UGOS API, not all of it. See the [implementation status](#implementation-status) for what is covered and what is deliberately left out.
 
 ## Crates
 
@@ -83,15 +85,39 @@ ugos-cli system processes --limit 10
 # How much space KVM uses, per volume and per VM
 ugos-cli storage df
 
+# Docker containers
+ugos-cli docker ps
+ugos-cli docker show nginx
+ugos-cli docker create nginx --image nginx:latest --publish 8080:80
+ugos-cli docker start nginx
+ugos-cli docker logs nginx
+
+# Docker images and compose projects
+ugos-cli docker images
+ugos-cli docker pull redis:7
+ugos-cli docker project-ls
+ugos-cli docker project-create myapp --file ./compose.yaml
+
+# Passthrough hardware
+ugos-cli usb list
+ugos-cli passthrough list
+
+# Remote console
+ugos-cli vnc list
+ugos-cli vnc generate CachyOS
+
 # Other resources
 ugos-cli network list
 ugos-cli storage list
 ugos-cli image list
 ugos-cli info
 
-# JSON output
+# JSON output, for scripting
 ugos-cli -o json vm list
 ```
+
+Every command group has more than is shown here; `ugos-cli <group> --help`
+lists the rest.
 
 ### Library
 
@@ -327,8 +353,27 @@ The crates are not published on crates.io. Depend on the repository directly:
 
 ```toml
 [dependencies]
-ugos-client = { git = "https://github.com/metaneutrons/ugos-cli", tag = "v0.8.0" }
+ugos-client = { git = "https://github.com/metaneutrons/ugos-cli", tag = "v0.9.0" }
 ```
+
+## API documentation
+
+UGOS publishes no API documentation, so everything here was reconstructed
+from the web UI's JavaScript bundles and verified against real hardware. The
+notes are kept because the reasoning is easy to lose and expensive to redo.
+
+| Document | Covers |
+|----------|--------|
+| [api-overview.md](docs/api-overview.md) | Every module found, and which are documented |
+| [api-auth.md](docs/api-auth.md) | Login flow, RSA key exchange, session tokens |
+| [api-tls.md](docs/api-tls.md) | The version 1 certificate and how it is pinned |
+| [api-encryption.md](docs/api-encryption.md) | The AES-GCM request wrapping and when UGOS uses it |
+| [api-kvm.md](docs/api-kvm.md) | Virtual machines, snapshots, networks, storage, images |
+| [api-docker.md](docs/api-docker.md) | Containers, images, compose projects |
+| [api-files.md](docs/api-files.md) | File manager, including upload and download |
+| [api-downloadcenter.md](docs/api-downloadcenter.md) | Queuing downloads for the NAS to fetch |
+| [api-system.md](docs/api-system.md) | Machine info, monitoring, processes, services |
+| [api-backup.md](docs/api-backup.md) | Why no backup commands exist |
 
 ## Implementation Status
 
@@ -341,23 +386,24 @@ ugos-client = { git = "https://github.com/metaneutrons/ugos-cli", tag = "v0.8.0"
 | **Network** | list, show, create, update, delete |
 | **Storage** | list (with VM count), usage, add, delete, df (usage per VM) |
 | **Image** | list, upload (file or URL), register, delete, usage |
-| **USB** | list |
-| **PCI** | list passthrough devices |
+| **USB** (`usb`) | list |
+| **PCI passthrough** (`passthrough`) | list devices |
 | **VNC** | list links, generate noVNC link |
 | **OVA** | export, parse |
 | **Log** | system log across all modules, with filters |
-| **VM log** | KVM audit log, list operators |
+| **VM log** (`vm log`) | KVM audit log, list operators |
 | **User** | list accounts, show own account |
-| **Host** | info (CPU cores, memory), overview (load plus every VM) |
+| **Host** (`info`, `overview`) | CPU cores and memory; load plus every VM at once |
 | **System** | hardware and firmware info, live CPU/memory/disk/network/fan readings, processes, services |
 | **Download** | queue a URL for the NAS to fetch, list, check, status, remove |
-| **Files** | list a directory, list volumes, upload, download, create, rename, delete |
-| **Docker container** | list, show, create, start, stop, restart, kill, remove, update, clone, batch-operate, logs |
+| **Files** (`fs`) | list a directory, list volumes, upload, download, create, rename, delete |
+| **Docker container** (`docker`) | list, show, create, start, stop, restart, kill, remove, update, clone, batch-operate, logs |
 | **Docker image** | list, search, download, delete, export, load (URL/path) |
 | **Docker registry** | list/add/delete/switch mirror, HTTP proxy get/set |
 | **Docker overview** | engine status, resource usage |
-| **Docker compose (project)** | list, show, create, start, stop, restart, remove |
+| **Docker compose** (`docker project-*`) | list, show, create, start, stop, restart, remove |
 | **Auth** | RSA key exchange, PKCS1v1.5 encryption, session tokens, auto re-auth |
+| **Transport** | certificate pinning on first use, shared by CLI and MCP server |
 
 `Docker container create/update` were reverse-engineered against the real
 `CreateContainer` request body (live-captured 2026-08-06, see
@@ -423,16 +469,22 @@ needs handling by hand, and why requests are not all encrypted.
 
 ## Tested Devices
 
-| Model | UGOS Version |
-|-------|-------------|
-| DXP480T Plus | 1.14.1.0107 |
-| DXP4800 Plus | 1.14.x |
+| Model | UGOS Version | Notes |
+|-------|--------------|-------|
+| DXP480T Plus | 1.18.1.0098 | Everything in this README is verified against this machine |
+| DXP480T Plus | 1.14.1.0107 | Earlier verification |
+| DXP4800 Plus | 1.14.x | Reported working, not verified here |
+
+UGOS moves fields around between builds, so a mismatch is worth reporting.
+`virID` vanished from the VM listing in one such build and broke `vm list`
+until every field but the name was made optional.
 
 ## Requirements
 
 - Rust 1.88+ (edition 2024)
-- UGOS NAS with KVM app installed
-- Network access to the NAS (HTTPS port 9443)
+- Network access to the NAS over HTTPS (port 9443)
+- The KVM app for `vm`, `network`, `storage`, `image`, `usb`, `vnc` and `ova`;
+  the Docker app for `docker`. The remaining groups need neither.
 
 ## License
 
