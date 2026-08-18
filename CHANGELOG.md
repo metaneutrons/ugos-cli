@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.8.0](https://github.com/metaneutrons/ugos-cli/compare/v0.7.0...v0.8.0) (2026-08-18)
+
+
+### ⚠ BREAKING CHANGES
+
+* **deps:** the minimum supported Rust version is now 1.88.
+
+### Bug Fixes
+
+* **deps:** raise MSRV to 1.88 so time can be updated ([1e069d6](https://github.com/metaneutrons/ugos-cli/commit/1e069d60297a2fe9a3bcc775f907277dfb3fae53))
+
 ## [0.7.0](https://github.com/metaneutrons/ugos-cli/compare/v0.6.0...v0.7.0) (2026-08-18)
 
 
