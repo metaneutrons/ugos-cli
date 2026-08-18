@@ -261,14 +261,14 @@ impl UgosClient {
         let key = RequestKey::generate(&public_key)?;
         let token = self.session.read().await.token.clone();
 
-        let resp: ApiResponse<serde_json::Value> = self
+        let raw: serde_json::Value = self
             .http
             .get(self.url_for(path))
-            // The token key stays in the encrypted query with an empty
-            // value; the value itself travels RSA-sealed in the header.
+            // The token rides inside the encrypted query, and RSA-sealed in
+            // the header alongside an MD5 of it.
             .query(&[(
                 "encrypt_query",
-                key.encrypt(&Self::with_empty_token(params))?,
+                key.encrypt(&Self::with_token(params, &token))?,
             )])
             .header("X-Ugreen-Security-Code", &key.security_code)
             .header("X-Ugreen-Security-Key", md5_hex(&token))
@@ -277,7 +277,7 @@ impl UgosClient {
             .await?
             .json()
             .await?;
-        Self::decode_encrypted(resp, &key)
+        Self::decode_encrypted(raw, &key)
     }
 
     /// Perform an encrypted POST, for endpoints that reject plain requests.
@@ -300,10 +300,13 @@ impl UgosClient {
             "req_body_sha256": sha256_hex(&json),
         });
 
-        let resp: ApiResponse<serde_json::Value> = self
+        let raw: serde_json::Value = self
             .http
             .post(self.url_for(path))
-            .query(&[("encrypt_query", key.encrypt(&Self::with_empty_token(&[]))?)])
+            .query(&[(
+                "encrypt_query",
+                key.encrypt(&Self::with_token(&[], &token))?,
+            )])
             .header("X-Ugreen-Security-Code", &key.security_code)
             .header("X-Ugreen-Security-Key", md5_hex(&token))
             .header("X-Ugreen-Token", rsa_seal(&public_key, &token)?)
@@ -312,27 +315,32 @@ impl UgosClient {
             .await?
             .json()
             .await?;
-        Self::decode_encrypted(resp, &key)
+        Self::decode_encrypted(raw, &key)
     }
 
-    /// Render params with a trailing empty `token=`, matching the web UI.
-    fn with_empty_token(params: &[(&str, &str)]) -> String {
+    /// Render params with the session token appended.
+    fn with_token(params: &[(&str, &str)], token: &str) -> String {
         let mut all: Vec<(&str, &str)> = params.to_vec();
-        all.push(("token", ""));
+        all.push(("token", token));
         query_string(&all)
     }
 
-    /// Check the status code, then decrypt and deserialize the payload.
+    /// Unwrap an encrypted response.
+    ///
+    /// An encrypted answer arrives as a bare `{"encrypt_resp_body": "..."}`
+    /// without the usual `code`/`msg`/`data` envelope; the envelope is inside.
+    /// A plain answer keeps the envelope, so both shapes are handled.
     fn decode_encrypted<T: DeserializeOwned>(
-        resp: ApiResponse<serde_json::Value>,
+        raw: serde_json::Value,
         key: &RequestKey,
     ) -> Result<T> {
-        let data = resp.into_result()?;
-        if let Some(sealed) = data.get("encrypt_resp_body").and_then(|v| v.as_str()) {
-            let plain = key.decrypt(sealed)?;
-            return Ok(serde_json::from_str(&plain)?);
-        }
-        Ok(serde_json::from_value(data)?)
+        let envelope: ApiResponse<serde_json::Value> =
+            if let Some(sealed) = raw.get("encrypt_resp_body").and_then(|v| v.as_str()) {
+                serde_json::from_str(&key.decrypt(sealed)?)?
+            } else {
+                serde_json::from_value(raw)?
+            };
+        Ok(serde_json::from_value(envelope.into_result()?)?)
     }
 
     /// Check the status code first, then deserialize the payload.

@@ -34,19 +34,25 @@ The UI keeps a `WHITE_LIST_FORM_ENCRYPT`, among them `verify/login`,
 notably `downloadCenter/download/add` — but **not** its successor `addV2`,
 which is why that one rejects plain requests.
 
-## Status: not working
+## Two details that cost the most time
 
-`crates/ugos-client/src/crypto.rs` implements all of the above. Its unit
-tests pass, and every value it produces matches the capture in length. But
-the NAS answers `1010, Token cannot be empty!` — including for
-`kvm/manager/ShowLocalVirtualList`, which works fine unencrypted. The server
-therefore cannot read the encrypted query, which points at the key exchange
-rather than at AES.
+**The session token belongs inside the encrypted query**, with its real
+value, *and* RSA-sealed in `X-Ugreen-Token`, *and* as an MD5 in
+`X-Ugreen-Security-Key`. Sending it in only one or two of those three places
+yields `1010, Token cannot be empty!` — the same message whether the token is
+missing or the server simply cannot decrypt the query, which makes the error
+misleading.
 
-The prime suspect: the UI reads its key from `localStorage.enPublicKey`,
-set from the login response field `public_key`. This client uses exactly that
-field, but the two were never compared directly.
+**An encrypted response has no envelope.** It arrives as a bare
+`{"encrypt_resp_body": "..."}`; the usual `code`/`msg`/`data` structure is
+*inside* the ciphertext. Decoding it as the normal envelope fails with
+"missing field `code`" — which reads like a protocol error but actually means
+the decryption step was skipped.
 
-**Next step**: in the browser console on a logged-in session, run
-`localStorage.getItem('enPublicKey')` and compare it with the PEM the login
-returns. If they differ, that is the answer.
+## Verified
+
+Against a live NAS on 2026-08-18: `kvm/manager/ShowLocalVirtualList` returns
+the same data encrypted as it does plain, and `v2/filemgr/getDirFileListV2`
+— which never answers a plain request — returns a directory listing. A path
+the user cannot reach answers `1301, Access not allowed`, an ordinary
+application error, which confirms the transport is sound.

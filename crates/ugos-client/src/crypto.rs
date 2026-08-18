@@ -15,12 +15,8 @@
 //!    where it normally rides — is now encrypted.
 //! 5. Decrypt `encrypt_resp_body` with the same key.
 //!
-//! **Not working yet.** Every value this produces matches the web UI's in
-//! length — 344 characters for both RSA payloads, 32 for the MD5 — but the
-//! NAS still answers `1010, Token cannot be empty!`, even for endpoints that
-//! work fine unencrypted. The remaining suspect is the RSA key: the UI keeps
-//! an `enPublicKey` in local storage that may differ from the one the login
-//! response carries. See `docs/api-encryption.md`.
+//! Verified against a live NAS on 2026-08-18, including the file manager's
+//! v2 API, which never answers plain requests.
 
 use aes_gcm::aead::{Aead, KeyInit, Payload};
 use aes_gcm::{Aes256Gcm, Nonce};
