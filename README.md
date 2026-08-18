@@ -58,8 +58,13 @@ ugos-cli image upload https://example.org/debian.iso --name debian-13
 # Host load and all VMs in one call
 ugos-cli overview
 
-# System log, filterable
+# System log, filterable — the KVM audit log is `vm log`
 ugos-cli log --module login --size 10
+ugos-cli vm log list
+
+# User accounts
+ugos-cli user list
+ugos-cli user me
 
 # Browse the NAS
 ugos-cli fs ls /volume1/download
@@ -321,7 +326,7 @@ cargo install --git https://github.com/metaneutrons/ugos-cli ugos-mcp
 
 ```toml
 [dependencies]
-ugos-client = "0.1"
+ugos-client = "0.7"
 ```
 
 ## Implementation Status
@@ -379,8 +384,10 @@ anything critical.
 |----------|-------|
 | Image rename | `RenameImage` answers `successful` and renames nothing; field names unknown |
 | OVA import (one step) | `ova parse` reads an OVA into a VM spec; creating the VM from it is still a manual second step |
-| File management | Separate UGOS app |
-| Non-KVM modules | Photo, video, music, backup, etc. |
+| Backup | There is no backup API. The only three `backup_restore` paths appear solely in the UI's encryption whitelist, nothing calls them, and the group has no status or listing endpoint — see [docs/api-backup.md](docs/api-backup.md) |
+| Snapshots (filesystem) | The `snapshot` app's endpoints sit in lazily loaded chunks and could not be resolved from its entry bundle |
+| Log deletion | `DeleteLogs` is destructive and was not probed |
+| Non-KVM modules | Photo, video, music, etc. |
 
 ## Authentication
 
