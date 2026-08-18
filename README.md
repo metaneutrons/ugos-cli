@@ -356,7 +356,6 @@ anything critical.
 |----------|-------|
 | Image rename | `RenameImage` answers `successful` and renames nothing; field names unknown |
 | OVA import (one step) | `ova parse` reads an OVA into a VM spec; creating the VM from it is still a manual second step |
-| Image upload | |
 | File management | Separate UGOS app |
 | Non-KVM modules | Photo, video, music, backup, etc. |
 
