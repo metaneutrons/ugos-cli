@@ -656,6 +656,88 @@ fn format_rate(bytes_per_second: f64) -> String {
     }
 }
 
+/// Table row for a directory listing.
+#[derive(Tabled, Serialize)]
+pub struct FileRow {
+    #[tabled(rename = "Name")]
+    pub name: String,
+    #[tabled(rename = "Type")]
+    pub kind: String,
+    #[tabled(rename = "Size")]
+    pub size: String,
+    #[tabled(rename = "Modified")]
+    pub modified: String,
+}
+
+impl From<&ugos_client::types::files::FileEntry> for FileRow {
+    fn from(e: &ugos_client::types::files::FileEntry) -> Self {
+        Self {
+            name: e.name.clone(),
+            kind: if e.is_dir() {
+                "dir".into()
+            } else {
+                e.ext.clone()
+            },
+            size: if e.is_dir() {
+                String::new()
+            } else {
+                format_bytes(e.size)
+            },
+            modified: format_unix(e.mtime),
+        }
+    }
+}
+
+/// Table row for volumes as the file manager reports them.
+#[derive(Tabled, Serialize)]
+pub struct VolumeRow {
+    #[tabled(rename = "Name")]
+    pub name: String,
+    #[tabled(rename = "Path")]
+    pub path: String,
+    #[tabled(rename = "Filesystem")]
+    pub fs_type: String,
+    #[tabled(rename = "Used")]
+    pub used: String,
+    #[tabled(rename = "Free")]
+    pub free: String,
+}
+
+impl From<&ugos_client::types::files::Volume> for VolumeRow {
+    fn from(v: &ugos_client::types::files::Volume) -> Self {
+        Self {
+            name: v.name.clone(),
+            path: v.path.clone(),
+            fs_type: v.fs_type.clone(),
+            used: format_gib(v.used),
+            free: format_gib(v.free),
+        }
+    }
+}
+
+/// Format a unix timestamp as `YYYY-MM-DD HH:MM` in UTC.
+fn format_unix(ts: i64) -> String {
+    if ts <= 0 {
+        return String::new();
+    }
+    // Days since the epoch, converted with the civil-from-days algorithm.
+    let (days, secs) = (ts.div_euclid(86400), ts.rem_euclid(86400));
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z.rem_euclid(146_097);
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let day = doy - (153 * mp + 2) / 5 + 1;
+    let month = if mp < 10 { mp + 3 } else { mp - 9 };
+    let year = yoe + era * 400 + i64::from(month <= 2);
+    format!(
+        "{year:04}-{month:02}-{day:02} {:02}:{:02}",
+        secs / 3600,
+        (secs % 3600) / 60
+    )
+}
+
 /// Table row for download tasks.
 #[derive(Tabled, Serialize)]
 pub struct DownloadRow {

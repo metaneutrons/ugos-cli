@@ -8,13 +8,14 @@ use anyhow::Result;
 use ugos_client::UgosClient;
 use ugos_client::api::docker::DockerApi;
 use ugos_client::api::download::DownloadApi;
+use ugos_client::api::files::FilesApi;
 use ugos_client::api::kvm::KvmApi;
 use ugos_client::api::system::SystemApi;
 
 use crate::cli::{
-    DockerAction, DownloadAction, ImageAction, LogAction, NetworkAction, OutputFormat, OvaAction,
-    PassthroughAction, Resource, SnapshotAction, StorageAction, SystemAction, UsbAction, VmAction,
-    VncAction,
+    DockerAction, DownloadAction, FsAction, ImageAction, LogAction, NetworkAction, OutputFormat,
+    OvaAction, PassthroughAction, Resource, SnapshotAction, StorageAction, SystemAction, UsbAction,
+    VmAction, VncAction,
 };
 use crate::output;
 
@@ -44,7 +45,60 @@ pub async fn run(
         Resource::Passthrough { action } => passthrough(client, action, fmt, w).await,
         Resource::System { action } => system(client, action, fmt, w).await,
         Resource::Download { action } => download(client, action, fmt, w).await,
+        Resource::Fs { action } => fs(client, action, fmt, w).await,
     }
+}
+
+async fn fs(
+    client: &UgosClient,
+    action: &FsAction,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
+    match action {
+        FsAction::Ls { path } => {
+            let entries = client.fs_list(path).await?;
+            match fmt {
+                OutputFormat::Table => {
+                    let rows: Vec<output::FileRow> = entries.iter().map(Into::into).collect();
+                    output::print_list(w, &rows, fmt)?;
+                }
+                OutputFormat::Json => output::print_json(w, &entries)?,
+            }
+        }
+        FsAction::Volumes => {
+            let vols = client.fs_volumes().await?;
+            match fmt {
+                OutputFormat::Table => {
+                    let rows: Vec<output::VolumeRow> = vols.iter().map(Into::into).collect();
+                    output::print_list(w, &rows, fmt)?;
+                }
+                OutputFormat::Json => output::print_json(w, &vols)?,
+            }
+        }
+        FsAction::Mkdir { path } => {
+            client.fs_mkdir(path).await?;
+            output::print_success(w, &format!("Created {path}"), fmt)?;
+        }
+        FsAction::Rm { paths, forever } => {
+            client.fs_remove(paths, *forever).await?;
+            let where_to = if *forever {
+                "permanently"
+            } else {
+                "to the recycle bin"
+            };
+            output::print_success(
+                w,
+                &format!("Deleted {} entries {where_to}", paths.len()),
+                fmt,
+            )?;
+        }
+        FsAction::Mv { path, new_name } => {
+            client.fs_rename(path, new_name).await?;
+            output::print_success(w, &format!("Renamed to {new_name}"), fmt)?;
+        }
+    }
+    Ok(())
 }
 
 async fn download(

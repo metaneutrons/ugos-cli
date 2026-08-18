@@ -96,6 +96,11 @@ pub enum Resource {
     Info,
     /// Show host load and every VM at once.
     Overview,
+    /// Files on the NAS.
+    Fs {
+        #[command(subcommand)]
+        action: FsAction,
+    },
     /// Download Center: fetch files straight to the NAS.
     Download {
         #[command(subcommand)]
@@ -110,6 +115,38 @@ pub enum Resource {
     Passthrough {
         #[command(subcommand)]
         action: PassthroughAction,
+    },
+}
+
+/// File manager subcommands.
+#[derive(Debug, Subcommand)]
+pub enum FsAction {
+    /// List a directory.
+    Ls {
+        /// Absolute path on the NAS, e.g. `/volume1/download`.
+        path: String,
+    },
+    /// List the storage volumes.
+    Volumes,
+    /// Create a directory.
+    Mkdir {
+        /// Absolute path of the directory to create.
+        path: String,
+    },
+    /// Delete files or directories.
+    Rm {
+        /// Absolute paths to delete (repeatable).
+        paths: Vec<String>,
+        /// Bypass the recycle bin.
+        #[arg(long)]
+        forever: bool,
+    },
+    /// Rename a file or directory.
+    Mv {
+        /// Absolute path of the entry.
+        path: String,
+        /// New base name (not a path).
+        new_name: String,
     },
 }
 
