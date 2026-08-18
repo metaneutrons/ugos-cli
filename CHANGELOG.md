@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.6.0](https://github.com/metaneutrons/ugos-cli/compare/v0.5.0...v0.6.0) (2026-08-18)
+
+
+### Features
+
+* **storage:** report how many VMs each volume holds ([7da654e](https://github.com/metaneutrons/ugos-cli/commit/7da654e0da72522fdd98b309e676a9db89ef16c1))
+
 ## [0.5.0](https://github.com/metaneutrons/ugos-cli/compare/v0.4.0...v0.5.0) (2026-08-18)
 
 
