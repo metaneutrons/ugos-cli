@@ -1,9 +1,18 @@
 # Request encryption
 
-Most UGOS endpoints accept plain requests. Some do not: the file manager's
-v2 API and `downloadCenter/download/addV2` answer with an empty body unless
-the payload is encrypted. This is what the web UI does, reconstructed from
-its bundle (`desktop/static/main-*.js`, class `RequestEncrypt`).
+UGOS can wrap request payloads in AES-GCM under an RSA-wrapped key. This is
+what the web UI does, reconstructed from its bundle
+(`desktop/static/main-*.js`, class `RequestEncrypt`).
+
+**It is a substitute for TLS, not an addition to it.** The UI encrypts only
+when the connection is *not* HTTPS — see [When the UI
+encrypts](#when-the-ui-encrypts). Over HTTPS, which is all this client
+speaks, the official UI sends plain requests too.
+
+An earlier version of this document claimed that the file manager's v2 API
+and `downloadCenter/download/addV2` reject plain requests. That was wrong on
+both counts, and is corrected under [What actually
+requires it](#what-actually-requires-it).
 
 ## The scheme
 
@@ -71,10 +80,76 @@ misleading.
 "missing field `code`" — which reads like a protocol error but actually means
 the decryption step was skipped.
 
+## When the UI encrypts
+
+The decision sits in one condition in the desktop bundle:
+
+```js
+const s = e.baseURL?.startsWith?.("https") || false;   // is the connection HTTPS?
+const c = this.whiteContentType.includes(contentType); // exempt content type?
+const u = !WHITE_LIST_FORM_ENCRYPT.find(t => e.url.indexOf(t) !== -1);
+
+if (!c && u && !s) {          // note the !s
+    // encrypt: params -> encrypt_query, body -> encrypt_req_body
+}
+```
+
+Encryption happens only when **`!s`**, that is when the base URL does not
+start with `https`. UGOS is reachable over plain HTTP on port 9999 as well
+as over HTTPS on 9443, and the wrapping exists to protect the former. On an
+HTTPS connection the UI skips it entirely.
+
+That explains the whole design. It also means a client using HTTPS behaves
+exactly like the official UI by *not* encrypting.
+
+## What actually requires it
+
+Nothing that has been found. Measured against a live NAS on 2026-08-18,
+across roughly twenty endpoints spanning KVM, Docker, sysinfo, taskmgr,
+user, network, time and the file manager's v2 API: every one returned the
+same result encrypted as in the clear, errors included. That covers reads,
+writes (`v2/filemgr/rename`, `v2/filemgr/delPaths`,
+`downloadCenter/download/addV2`, `docker/container/CreateContainer`) and a
+12 KB payload.
+
+Two earlier claims in this document were wrong:
+
+- **`v2/filemgr/getDirFileListV2`** was said never to answer a plain
+  request. It does. The original failure predates the commit that let a path
+  choose its API version, so the request was going to a `v1` URL and failing
+  for that reason.
+- **`downloadCenter/download/addV2`** was said to reject plain requests. It
+  does not; it answers `1302, Path does not exist` identically either way.
+  The original failure was a payload-shape problem.
+
+The lesson generalises: an endpoint failing plain and succeeding encrypted
+is not evidence that it demands encryption, because the encrypted path was
+usually fixed at the same time as something else.
+
+## Should the client encrypt everything?
+
+No, on the current evidence. The wrapping adds nothing over HTTPS, which is
+the only transport this client uses, and the UI itself does not do it there.
+Certificate pinning is what protects this connection — see
+[api-tls.md](api-tls.md).
+
+The scenario worth guarding against is UGOS one day requiring encryption
+regardless of transport. That would mean breaking its own HTTPS clients, so
+it is unlikely; and if it happened the change would be cheap, because the
+implementation already exists and every endpoint tested accepts it.
+
+Three things could never be wrapped in any case:
+
+- `verify/check` hands out the RSA key the scheme needs.
+- `verify/login` has no session token yet, which the scheme needs in three
+  places at once. The password there is separately RSA-encrypted.
+- Multipart uploads and binary downloads carry byte streams. The UI exempts
+  these by content type, independently of the URL whitelist.
+
 ## Verified
 
 Against a live NAS on 2026-08-18: `kvm/manager/ShowLocalVirtualList` returns
 the same data encrypted as it does plain, and `v2/filemgr/getDirFileListV2`
-— which never answers a plain request — returns a directory listing. A path
+returns a directory listing either way. A path
 the user cannot reach answers `1301, Access not allowed`, an ordinary
 application error, which confirms the transport is sound.

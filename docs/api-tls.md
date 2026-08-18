@@ -64,12 +64,17 @@ JSON endpoint accepts that wrapping transparently — 14 endpoints across
 KVM, Docker, sysinfo, log and user behaved identically encrypted and in the
 clear, errors included, at a cost of roughly 11 ms per call.
 
-It is nonetheless used only where an endpoint demands it. The wrapping sits
-*inside* TLS, so it adds nothing against a passive eavesdropper that TLS
-does not already handle. Against an active man-in-the-middle it also adds
-nothing, because the same attacker answers `verify/check` and thereby
-chooses the RSA key that gets used. Certificate pinning is what closes that
-gap, which is why the effort went there.
+It is nonetheless used only where the client already relied on it. No
+endpoint has been found that demands it, and the UI's own rule explains
+why: it encrypts only when the connection is **not** HTTPS. The wrapping is
+UGOS' substitute for TLS on the plain-HTTP port, not a second layer on top
+of it.
+
+That also settles the security question. Inside TLS the wrapping adds
+nothing against a passive eavesdropper. Against an active
+man-in-the-middle it adds nothing either, because the same attacker answers
+`verify/check` and thereby chooses the RSA key that gets used. Certificate
+pinning is what closes that gap, which is why the effort went there.
 
 Three things cannot be wrapped at all:
 
