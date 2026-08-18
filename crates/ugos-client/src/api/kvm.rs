@@ -481,7 +481,7 @@ impl KvmApi for UgosClient {
         let _: ResultWrapper<String> = self
             .get_with_params(
                 "kvm/image/DeleteImage",
-                &[("fileName", file_name), ("name", image_name)],
+                &[("fileName", file_name), ("imageName", image_name)],
             )
             .await?;
         Ok(())

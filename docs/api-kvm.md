@@ -33,6 +33,12 @@ as long as it is unique.
 - **Body**: `{path, imageName, fileName}` — registers a file that already
   sits on the NAS. Taken from the web UI bundle, not yet exercised.
 
+### DeleteImage
+- **Method**: GET
+- **Params**: `fileName=<file>&imageName=<display name>`
+
+`imageName`, not `name` — with the wrong key the call answers `9999`.
+
 ### RenameImage
 - **Method**: POST
 
