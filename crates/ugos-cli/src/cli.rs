@@ -246,7 +246,7 @@ pub struct VmSpecFlags {
     #[arg(long)]
     pub graphics: Option<String>,
 
-    /// Keyboard language [create default: en].
+    /// Keyboard language [create default: en-us].
     #[arg(long)]
     pub keyboard: Option<String>,
 
@@ -433,6 +433,14 @@ pub enum ImageAction {
     Usage {
         /// Image name.
         name: String,
+    },
+    /// Upload an ISO from a local file or an http(s) URL.
+    Upload {
+        /// Local path, or a URL starting with `http://` or `https://`.
+        source: String,
+        /// Display name for the image [default: the file name without its extension].
+        #[arg(long)]
+        name: Option<String>,
     },
 }
 

@@ -13,6 +13,32 @@ plain JSON bodies with `?token=` are accepted, which is what this client
 sends. A HAR capture of the web UI therefore shows opaque bodies; the UI
 bundle at `/kvm/assets/main-*.js` carries the field names in the clear.
 
+## Images (`kvm/image/`)
+
+### UploadUpk
+- **Method**: POST, `multipart/form-data`
+- **Fields**: `isoName` (display name), `fileName` (name on disk, must be
+  free — a taken name fails with `9999`), `size` (total bytes), `chunks`
+  (number of parts), `chunk` (0-based index), `file` (the part, sent as
+  `filename="blob"`, `application/octet-stream`)
+- **Chunk size**: 10 MiB, as used by the web UI
+- **Response**: `{result: "successful"}` per chunk
+
+Verified against a live NAS (2026-08-18) with a 25 MiB file in three parts.
+The web UI generates a random `fileName`; a readable one works just as well
+as long as it is unique.
+
+### UploadPath
+- **Method**: POST
+- **Body**: `{path, imageName, fileName}` — registers a file that already
+  sits on the NAS. Taken from the web UI bundle, not yet exercised.
+
+### RenameImage
+- **Method**: POST
+
+Exists, but every body tried answers `successful` and renames nothing, and
+the web UI never calls it. The field names are unknown; not wrapped.
+
 ## VM Manager (`kvm/manager/`)
 
 ### ShowLocalVirtualList

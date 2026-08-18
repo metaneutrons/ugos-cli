@@ -256,6 +256,36 @@ async fn image(
             client.image_delete(file_name, image_name).await?;
             output::print_success(w, &format!("Deleted image {image_name}"), fmt)?;
         }
+        ImageAction::Upload { source, name } => {
+            let iso_name = name.clone().unwrap_or_else(|| default_iso_name(source));
+            // Progress goes to stderr so that piping `-o json` stays clean.
+            let quiet = matches!(fmt, OutputFormat::Json);
+            let progress = move |done: usize, total: usize| {
+                if quiet {
+                    return;
+                }
+                let mut err = std::io::stderr();
+                let _ = if total == 0 {
+                    write!(err, "\rdownloading {} MiB", done / 1_048_576)
+                } else {
+                    write!(err, "\ruploading chunk {done}/{total}   ")
+                };
+                let _ = err.flush();
+            };
+
+            let file_name = if source.starts_with("http://") || source.starts_with("https://") {
+                client.image_upload_url(source, &iso_name, &progress).await
+            } else {
+                client
+                    .image_upload(std::path::Path::new(source), &iso_name, &progress)
+                    .await
+            }?;
+            if !quiet {
+                let mut err = std::io::stderr();
+                let _ = writeln!(err);
+            }
+            output::print_success(w, &format!("Uploaded {iso_name} ({file_name})"), fmt)?;
+        }
         ImageAction::Usage { name } => {
             let vms = client.image_check_usage(name).await?;
             if vms.is_empty() {
@@ -745,6 +775,15 @@ fn build_container_spec(
         project_name: String::new(),
         image_id: String::new(),
     })
+}
+
+/// Derive an image display name from a path or URL: file name without its
+/// extension.
+fn default_iso_name(source: &str) -> String {
+    let last = source.rsplit(['/', '\\']).next().unwrap_or(source);
+    last.rsplit_once('.')
+        .map_or(last, |(stem, _)| stem)
+        .to_owned()
 }
 
 #[cfg(test)]
