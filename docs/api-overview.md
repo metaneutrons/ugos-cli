@@ -10,22 +10,25 @@ Base URL: `https://<nas-ip>:9443/ugreen/v1/`
 |--------|--------|--------|-----|
 | **Auth** | core | Complete | [api-auth.md](api-auth.md) |
 | **KVM** | com.ugreen.kvm | Complete | [api-kvm.md](api-kvm.md) |
+| **Docker** | com.ugreen.docker | Complete | [api-docker.md](api-docker.md) |
+| **File Manager** | com.ugreen.filemgr | Complete | [api-files.md](api-files.md) |
+| **Download Center** | com.ugreen.downloadCenter | Complete | [api-downloadcenter.md](api-downloadcenter.md) |
+| **System / monitoring** | core | Complete | [api-system.md](api-system.md) |
+| **Request encryption** | — | Complete | [api-encryption.md](api-encryption.md) |
+| **Backup** | — | No API exists | [api-backup.md](api-backup.md) |
 
 ### Known but Undocumented (endpoints found in main JS bundle)
 
 | Module | Path Prefix | Notes |
 |--------|-------------|-------|
-| File Manager | `filemgr/` | Upload, download, thumbnails, path checks |
-| Docker | `docker/container/`, `docker/log/` | Container management, export, import, logs |
 | Photo | `photo/` | Upload, stream, AI auto-learn |
 | Video | `video/details/` | Metadata editing, actor info |
 | Music | `music/` | Upload, playlist sharing |
-| Backup | `backup/` | Backup jobs |
 | Network | `network/iface/`, `network/auth/` | NAS network config (not KVM networks) |
-| User | `user/` | User management, password, avatar, wallpaper |
+| User | `user/` | Listing implemented (`ugos user list`); password, avatar, wallpaper untouched |
+| Log | `log/` | Query implemented (`ugos log list`); `DeleteLogs` deliberately left out |
 | Firmware | `firmware/`, `upgrader/` | System updates, manual firmware upload |
 | Security | `security/ssl/` | SSL certificate import |
-| Download Center | `downloadCenter/` | Download management |
 | Sync | `sync/syncthing/`, `web/sync/` | Syncthing integration |
 | Hardware | `hardware/ups/` | UPS firmware |
 | Time | `time/config` | Time configuration |
@@ -40,6 +43,7 @@ Base URL: `https://<nas-ip>:9443/ugreen/v1/`
 | Stream | `stream/transcode/` | Media transcoding |
 | Connect | `connect/` | Remote access, wallpaper |
 | Wizard | `wizard/` | Initial setup |
+| Snapshot | `snapshot/` | Filesystem snapshots; endpoints sit in lazy chunks, not yet resolved |
 
 ### Non-KVM APIs Used by KVM App
 

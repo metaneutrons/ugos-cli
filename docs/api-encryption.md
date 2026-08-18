@@ -29,10 +29,32 @@ AES payload layout: `base64(iv[12] || ciphertext || tag[16])`.
 
 ## Which endpoints skip it
 
-The UI keeps a `WHITE_LIST_FORM_ENCRYPT`, among them `verify/login`,
-`verify/check`, `wizard/`, various export and download endpoints, and
-notably `downloadCenter/download/add` — but **not** its successor `addV2`,
-which is why that one rejects plain requests.
+The UI keeps a `WHITE_LIST_FORM_ENCRYPT` in its desktop bundle
+(`/desktop/assets/main-*.js`), 77 paths long. The entries this project
+touches are
+
+| Path | Used by |
+| --- | --- |
+| `ugreen/v1/verify/login` | `ugos login` |
+| `ugreen/v1/verify/check` | session check |
+| `ugreen/v1/filemgr/fileUpload` | `ugos fs put` |
+| `ugreen/v1/filemgr/downloadFile` | `ugos fs get` |
+| `ugreen/v1/downloadCenter/download/add` | `ugos download add` |
+| `ugreen/v1/log/query` | `ugos log list` |
+| `ugreen/v1/log/export` | not implemented |
+| `ugreen/v1/kvm/image/UploadUpk` | `ugos image upload` |
+| `ugreen/v1/kvm/logs/ExportLogs` | not implemented |
+
+The list explains behaviour that was found empirically first: every one of
+these answers a plain request, while `downloadCenter/download/addV2` — absent
+from the list — rejects one.
+
+Two caveats. The list names `filemgr/fileUpload`, not the `fileUploadV2` that
+`fs put` actually calls, yet `fileUploadV2` accepts plain multipart requests
+all the same. Multipart bodies are plausibly exempt as a class rather than by
+path, but that is inference from two observations, not something the bundle
+states. And the constant governs *form* encryption only; whether the same list
+also gates response encryption is untested.
 
 ## Two details that cost the most time
 
