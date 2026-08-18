@@ -58,6 +58,9 @@ ugos-cli image upload https://example.org/debian.iso --name debian-13
 # Host load and all VMs in one call
 ugos-cli overview
 
+# System log, filterable
+ugos-cli log --module login --size 10
+
 # Browse the NAS
 ugos-cli fs ls /volume1/download
 ugos-cli fs volumes
@@ -336,7 +339,9 @@ ugos-client = "0.1"
 | **PCI** | list passthrough devices |
 | **VNC** | list links, generate noVNC link |
 | **OVA** | export, parse |
-| **Log** | search audit log, list operators |
+| **Log** | system log across all modules, with filters |
+| **VM log** | KVM audit log, list operators |
+| **User** | list accounts, show own account |
 | **Host** | info (CPU cores, memory), overview (load plus every VM) |
 | **System** | hardware and firmware info, live CPU/memory/disk/network/fan readings, processes, services |
 | **Download** | queue a URL for the NAS to fetch, list, check, status, remove |

@@ -10,12 +10,13 @@ use ugos_client::api::docker::DockerApi;
 use ugos_client::api::download::DownloadApi;
 use ugos_client::api::files::FilesApi;
 use ugos_client::api::kvm::KvmApi;
+use ugos_client::api::syslog::{LogFilter, SysLogApi};
 use ugos_client::api::system::SystemApi;
 
 use crate::cli::{
-    DockerAction, DownloadAction, FsAction, ImageAction, LogAction, NetworkAction, OutputFormat,
-    OvaAction, PassthroughAction, Resource, SnapshotAction, StorageAction, SystemAction, UsbAction,
-    VmAction, VncAction,
+    DockerAction, DownloadAction, FsAction, ImageAction, LogAction, LogArgs, NetworkAction,
+    OutputFormat, OvaAction, PassthroughAction, Resource, SnapshotAction, StorageAction,
+    SystemAction, UsbAction, UserAction, VmAction, VncAction,
 };
 use crate::output;
 
@@ -39,7 +40,8 @@ pub async fn run(
         Resource::Vnc { action } => vnc(client, action, fmt, w).await,
         Resource::Ova { action } => ova(client, action, fmt, w).await,
         Resource::Docker { action } => docker(client, action, fmt, w).await,
-        Resource::Log { action } => log(client, action, fmt, w).await,
+        Resource::Log(args) => syslog(client, args, fmt, w).await,
+        Resource::User { action } => user(client, action, fmt, w).await,
         Resource::Info => info(client, fmt, w).await,
         Resource::Overview => overview(client, fmt, w).await,
         Resource::Passthrough { action } => passthrough(client, action, fmt, w).await,
@@ -234,6 +236,62 @@ async fn system(
     Ok(())
 }
 
+async fn syslog(
+    client: &UgosClient,
+    args: &LogArgs,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
+    let filter = LogFilter {
+        module: args.module.as_deref(),
+        level: args.level.as_deref(),
+        operator: args.operator.as_deref(),
+        keyword: args.keyword.as_deref(),
+        page: args.page,
+        size: args.size,
+    };
+    let page = client.syslog(&filter).await?;
+    match fmt {
+        OutputFormat::Table => {
+            let rows: Vec<output::SysLogRow> = page.entries().iter().map(Into::into).collect();
+            output::print_list(w, &rows, fmt)?;
+        }
+        OutputFormat::Json => output::print_json(w, &page)?,
+    }
+    Ok(())
+}
+
+async fn user(
+    client: &UgosClient,
+    action: &UserAction,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
+    match action {
+        UserAction::List => {
+            let users = client.users().await?;
+            match fmt {
+                OutputFormat::Table => {
+                    let rows: Vec<output::UserRow> = users.iter().map(Into::into).collect();
+                    output::print_list(w, &rows, fmt)?;
+                }
+                OutputFormat::Json => output::print_json(w, &users)?,
+            }
+        }
+        UserAction::Me => {
+            let me = client.current_user().await?;
+            match fmt {
+                OutputFormat::Table => {
+                    let rows = vec![output::UserRow::from(&me)];
+                    output::print_list(w, &rows, fmt)?;
+                }
+                OutputFormat::Json => output::print_json(w, &me)?,
+            }
+        }
+    }
+    Ok(())
+}
+
 async fn overview(client: &UgosClient, fmt: OutputFormat, w: &mut impl Write) -> Result<()> {
     let ov = client.overview().await?;
     match fmt {
@@ -331,6 +389,7 @@ async fn vm(
             }
         }
         VmAction::Snapshot { action } => snapshot(client, action, fmt, w).await?,
+        VmAction::Log { action } => log(client, action, fmt, w).await?,
     }
     Ok(())
 }

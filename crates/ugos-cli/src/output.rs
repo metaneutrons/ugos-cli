@@ -656,6 +656,61 @@ fn format_rate(bytes_per_second: f64) -> String {
     }
 }
 
+/// Table row for the system log.
+#[derive(Tabled, Serialize)]
+pub struct SysLogRow {
+    #[tabled(rename = "Time")]
+    pub time: String,
+    #[tabled(rename = "Level")]
+    pub level: String,
+    #[tabled(rename = "Module")]
+    pub module: String,
+    #[tabled(rename = "Operator")]
+    pub operator: String,
+    #[tabled(rename = "Message")]
+    pub content: String,
+}
+
+impl From<&ugos_client::types::syslog::LogEntry> for SysLogRow {
+    fn from(e: &ugos_client::types::syslog::LogEntry) -> Self {
+        Self {
+            time: format_unix(e.create_time),
+            level: e.level.clone(),
+            module: e.module.clone(),
+            operator: e.operator.clone(),
+            content: e.content.clone(),
+        }
+    }
+}
+
+/// Table row for user accounts.
+#[derive(Tabled, Serialize)]
+pub struct UserRow {
+    #[tabled(rename = "User")]
+    pub username: String,
+    #[tabled(rename = "Type")]
+    pub account_type: String,
+    #[tabled(rename = "Email")]
+    pub email: String,
+    #[tabled(rename = "Description")]
+    pub description: String,
+}
+
+impl From<&ugos_client::types::syslog::User> for UserRow {
+    fn from(u: &ugos_client::types::syslog::User) -> Self {
+        Self {
+            username: u.username.clone(),
+            account_type: if u.account_type == 0 {
+                "standard".into()
+            } else {
+                format!("type {}", u.account_type)
+            },
+            email: u.email.clone(),
+            description: u.description.clone(),
+        }
+    }
+}
+
 /// Table row for a directory listing.
 #[derive(Tabled, Serialize)]
 pub struct FileRow {

@@ -87,10 +87,12 @@ pub enum Resource {
         #[command(subcommand)]
         action: DockerAction,
     },
-    /// KVM audit logs.
-    Log {
+    /// System log across all modules.
+    Log(LogArgs),
+    /// User accounts.
+    User {
         #[command(subcommand)]
-        action: LogAction,
+        action: UserAction,
     },
     /// Show NAS host info.
     Info,
@@ -116,6 +118,43 @@ pub enum Resource {
         #[command(subcommand)]
         action: PassthroughAction,
     },
+}
+
+/// Flags for the system log.
+#[derive(Debug, Default, Args)]
+pub struct LogArgs {
+    /// Restrict to one module, e.g. `login`.
+    #[arg(long)]
+    pub module: Option<String>,
+
+    /// Restrict to one severity, e.g. `info`.
+    #[arg(long)]
+    pub level: Option<String>,
+
+    /// Restrict to one account.
+    #[arg(long)]
+    pub operator: Option<String>,
+
+    /// Free-text search.
+    #[arg(long)]
+    pub keyword: Option<String>,
+
+    /// Page number.
+    #[arg(long, default_value = "1")]
+    pub page: u32,
+
+    /// Entries per page.
+    #[arg(long, default_value = "20")]
+    pub size: u32,
+}
+
+/// User subcommands.
+#[derive(Debug, Subcommand)]
+pub enum UserAction {
+    /// List accounts.
+    List,
+    /// Show the account this session belongs to.
+    Me,
 }
 
 /// File manager subcommands.
@@ -266,6 +305,11 @@ pub enum VmAction {
     Snapshot {
         #[command(subcommand)]
         action: SnapshotAction,
+    },
+    /// KVM audit log.
+    Log {
+        #[command(subcommand)]
+        action: LogAction,
     },
 }
 

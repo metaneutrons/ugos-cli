@@ -4,4 +4,5 @@ pub mod docker;
 pub mod download;
 pub mod files;
 pub mod kvm;
+pub mod syslog;
 pub mod system;
