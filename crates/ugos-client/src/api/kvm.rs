@@ -41,6 +41,10 @@ pub trait KvmApi {
     fn host_info(&self) -> impl Future<Output = Result<HostInfo>> + Send;
     /// Get host load and every VM in one call.
     fn overview(&self) -> impl Future<Output = Result<Overview>> + Send;
+    /// Check whether a VM display name is already taken.
+    fn vm_name_taken(&self, display_name: &str) -> impl Future<Output = Result<bool>> + Send;
+    /// Check whether the host can back a given amount of guest memory.
+    fn check_memory(&self, bytes: i64) -> impl Future<Output = Result<MemoryStatus>> + Send;
 
     // ── Snapshot ────────────────────────────────────────────────────
 
@@ -77,6 +81,10 @@ pub trait KvmApi {
     fn network_update(&self, network: &NetworkDetail) -> impl Future<Output = Result<()>> + Send;
     /// Delete a KVM network.
     fn network_delete(&self, name: &str) -> impl Future<Output = Result<()>> + Send;
+    /// Check whether a network name is already taken.
+    fn network_name_taken(&self, name: &str) -> impl Future<Output = Result<bool>> + Send;
+    /// List the VMs attached to a network.
+    fn network_check_usage(&self, name: &str) -> impl Future<Output = Result<Vec<String>>> + Send;
 
     // ── Storage ─────────────────────────────────────────────────────
 
@@ -189,6 +197,70 @@ pub trait KvmApi {
 
     /// Parse an OVA file and return the VM configuration it contains.
     fn ova_parse(&self, ova_path: &str) -> impl Future<Output = Result<VmDetail>> + Send;
+}
+
+/// How a requested amount of guest memory relates to the host.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MemoryStatus {
+    /// The host can back it comfortably.
+    Fits,
+    /// Above what is currently free; UGOS warns but allows it.
+    Tight,
+    /// More than the host has at all.
+    TooMuch,
+}
+
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct MemoryCheck {
+    #[serde(default)]
+    memory_status: i64,
+}
+
+/// Turn a failed create into something a human can act on.
+///
+/// UGOS answers `3000, Fail to create virtual machine` whatever the cause, so
+/// the validators the web UI uses on its form are asked afterwards.
+async fn explain_create_failure(
+    client: &UgosClient,
+    spec: &VmDetail,
+    original: UgosError,
+) -> UgosError {
+    let name = &spec.virtual_machine_display_name;
+    if client.vm_name_taken(name).await.unwrap_or(false) {
+        return UgosError::OperationFailed(format!("a VM named '{name}' already exists"));
+    }
+    // memory is KiB in the spec, bytes in the check.
+    if matches!(
+        client.check_memory(spec.memory.value * 1024).await,
+        Ok(MemoryStatus::TooMuch)
+    ) {
+        return UgosError::OperationFailed(format!(
+            "{} MiB of memory is more than this NAS has",
+            spec.memory.value / 1024
+        ));
+    }
+    original
+}
+
+/// Explain a refused power-on where the code alone says nothing.
+async fn explain_start_failure(client: &UgosClient, vm: &str, original: UgosError) -> UgosError {
+    let Ok(detail) = client.vm_show(vm).await else {
+        return original;
+    };
+    match client.check_memory(detail.memory.value * 1024).await {
+        Ok(MemoryStatus::TooMuch) => UgosError::OperationFailed(format!(
+            "{} needs {} MiB, more than this NAS has",
+            vm,
+            detail.memory.value / 1024
+        )),
+        Ok(MemoryStatus::Tight) => UgosError::OperationFailed(format!(
+            "{original}. {} needs {} MiB, more than is free right now",
+            vm,
+            detail.memory.value / 1024
+        )),
+        _ => original,
+    }
 }
 
 /// Chunk size the web UI uses for image uploads.
@@ -307,7 +379,7 @@ impl KvmApi for UgosClient {
 
     async fn vm_start(&self, name: &str) -> Result<()> {
         let (uuid, display) = resolve_vm(self, name).await?;
-        let _: ResultWrapper<String> = self
+        let started: Result<ResultWrapper<String>> = self
             .get_with_params(
                 "kvm/manager/PowerOn",
                 &[
@@ -315,7 +387,10 @@ impl KvmApi for UgosClient {
                     ("virtualMachineDisplayName", display.as_str()),
                 ],
             )
-            .await?;
+            .await;
+        if let Err(e) = started {
+            return Err(explain_start_failure(self, name, e).await);
+        }
         Ok(())
     }
 
@@ -375,7 +450,11 @@ impl KvmApi for UgosClient {
     async fn vm_create(&self, spec: &VmDetail) -> Result<String> {
         let mut spec = spec.clone();
         resolve_storage_uuid(self, &mut spec).await?;
-        let _: ResultWrapper<String> = self.post("kvm/manager/CreateVirtualMachine", &spec).await?;
+        let created: Result<ResultWrapper<String>> =
+            self.post("kvm/manager/CreateVirtualMachine", &spec).await;
+        if let Err(e) = created {
+            return Err(explain_create_failure(self, &spec, e).await);
+        }
 
         // UGOS assigns the UUID itself and ignores whatever the body carried,
         // so the only way to learn it is to look the VM up again.
@@ -403,6 +482,27 @@ impl KvmApi for UgosClient {
 
     async fn overview(&self) -> Result<Overview> {
         self.get("kvm/manager/ShowOverview").await
+    }
+
+    async fn vm_name_taken(&self, display_name: &str) -> Result<bool> {
+        // `result: true` means the name is in use, not that it is free.
+        let body = serde_json::json!({"name": "", "virtualMachineDisplayName": display_name});
+        let resp: ResultWrapper<bool> = self.post("kvm/manager/CheckVirName", &body).await?;
+        Ok(resp.result)
+    }
+
+    async fn check_memory(&self, bytes: i64) -> Result<MemoryStatus> {
+        let resp: MemoryCheck = self
+            .get_with_params(
+                "kvm/manager/CheckResource",
+                &[("memory", &bytes.to_string())],
+            )
+            .await?;
+        Ok(match resp.memory_status {
+            0 => MemoryStatus::Fits,
+            1 => MemoryStatus::Tight,
+            _ => MemoryStatus::TooMuch,
+        })
     }
 
     // ── Snapshot ────────────────────────────────────────────────────
@@ -488,7 +588,21 @@ impl KvmApi for UgosClient {
     }
 
     async fn network_create(&self, network: &NetworkDetail) -> Result<()> {
-        let _: ResultWrapper<String> = self.post("kvm/network/CreateNetwork", network).await?;
+        let created: Result<ResultWrapper<String>> =
+            self.post("kvm/network/CreateNetwork", network).await;
+        if let Err(e) = created {
+            if self
+                .network_name_taken(&network.network_name)
+                .await
+                .unwrap_or(false)
+            {
+                return Err(UgosError::OperationFailed(format!(
+                    "a network named '{}' already exists",
+                    network.network_name
+                )));
+            }
+            return Err(e);
+        }
         Ok(())
     }
 
@@ -497,10 +611,34 @@ impl KvmApi for UgosClient {
         Ok(())
     }
 
-    async fn network_delete(&self, name: &str) -> Result<()> {
-        let _: ResultWrapper<String> = self
-            .get_with_params("kvm/network/DeleteNetwork", &[("name", name)])
+    async fn network_name_taken(&self, name: &str) -> Result<bool> {
+        let body = serde_json::json!({"name": name});
+        let resp: ResultWrapper<bool> = self.post("kvm/network/CheckName", &body).await?;
+        Ok(resp.result)
+    }
+
+    async fn network_check_usage(&self, name: &str) -> Result<Vec<String>> {
+        let resp: ResultWrapper<Vec<String>> = self
+            .get_with_params("kvm/network/CheckNetwork", &[("name", name)])
             .await?;
+        Ok(resp.result)
+    }
+
+    async fn network_delete(&self, name: &str) -> Result<()> {
+        let deleted: Result<ResultWrapper<String>> = self
+            .get_with_params("kvm/network/DeleteNetwork", &[("name", name)])
+            .await;
+        if let Err(e) = deleted {
+            if let Ok(vms) = self.network_check_usage(name).await {
+                if !vms.is_empty() {
+                    return Err(UgosError::OperationFailed(format!(
+                        "network '{name}' is still attached to: {}",
+                        vms.join(", ")
+                    )));
+                }
+            }
+            return Err(e);
+        }
         Ok(())
     }
 

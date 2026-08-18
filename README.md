@@ -271,6 +271,12 @@ this CLI does not — `ide` plus an `e1000e` NIC for Windows and `other`,
 guest without virtio drivers needs
 `--disk size=60g,bus=ide --nic name=vnet-bridge0,type=e1000e`.
 
+Where UGOS answers with a bare code, the client asks the validators the web UI
+uses and turns the answer into something readable: a taken VM or network name,
+a VM asking for more memory than the host has, or a network still attached to
+VMs. Note that `CreateVirtualMachine` does not check memory itself — such a VM
+is created and only fails to start.
+
 > **Still inferred.** USB passthrough and shared-directory bodies have never
 > been sent to a NAS, and a second NIC was accepted but not exercised on a
 > running guest. Use `--dry-run` to inspect a body before sending it.
