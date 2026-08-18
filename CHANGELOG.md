@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.10.0](https://github.com/metaneutrons/ugos-cli/compare/v0.9.0...v0.10.0) (2026-08-18)
+
+
+### Features
+
+* **snapshot:** manage filesystem snapshots of shares and homes ([b0d7f3e](https://github.com/metaneutrons/ugos-cli/commit/b0d7f3e4c52c893c22d95e2fca5c1b8c506a6587))
+
 ## [0.9.0](https://github.com/metaneutrons/ugos-cli/compare/v0.8.0...v0.9.0) (2026-08-18)
 
 
