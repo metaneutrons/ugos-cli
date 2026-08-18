@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.5.0](https://github.com/metaneutrons/ugos-cli/compare/v0.4.0...v0.5.0) (2026-08-18)
+
+
+### Features
+
+* **image:** ISO upload from file or URL, plus a delete fix ([e409d26](https://github.com/metaneutrons/ugos-cli/commit/e409d26add87dbadf5dd9fe8aa75c83b08281d73))
+* **image:** upload ISOs from a local file or a URL ([20e29de](https://github.com/metaneutrons/ugos-cli/commit/20e29de83dfb8d4b6cb1cba5811a9bebe675d16a))
+* **kvm:** add overview, per-VM storage usage and PCI passthrough listing ([4022816](https://github.com/metaneutrons/ugos-cli/commit/402281658aa7ad499c71580bccddb2f3f9f044c8))
+* **kvm:** explain failures using the web UI's validators ([12d0e7e](https://github.com/metaneutrons/ugos-cli/commit/12d0e7e0e8e1a3e860796effb69024fd50938923))
+
+
+### Bug Fixes
+
+* **auth:** report why a login was rejected ([0d90eed](https://github.com/metaneutrons/ugos-cli/commit/0d90eed29e3e689ba8f6c0490de2decd6fc36875)), closes [#3](https://github.com/metaneutrons/ugos-cli/issues/3)
+* **image:** send the right parameter name when deleting an image ([647b2bd](https://github.com/metaneutrons/ugos-cli/commit/647b2bdc2555b54942f9f9949e1f0d0fe3541482))
+* **snapshot:** use the parameters UGOS actually expects ([9e17b41](https://github.com/metaneutrons/ugos-cli/commit/9e17b414af9a6095cda5ccbb4e6cb60b63236fd2))
+
 ## [0.4.0](https://github.com/metaneutrons/ugos-cli/compare/v0.3.4...v0.4.0) (2026-08-17)
 
 
