@@ -88,7 +88,7 @@ pub trait KvmApi {
 
     // ── Storage ─────────────────────────────────────────────────────
 
-    /// List storage volumes available to KVM.
+    /// List storage volumes available to KVM, including how many VMs each holds.
     fn storage_list(&self) -> impl Future<Output = Result<Vec<StorageInfo>>> + Send;
     /// Check which VMs use a storage volume.
     fn storage_check_usage(
@@ -645,7 +645,10 @@ impl KvmApi for UgosClient {
     // ── Storage ─────────────────────────────────────────────────────
 
     async fn storage_list(&self) -> Result<Vec<StorageInfo>> {
-        let resp: ResultWrapper<Vec<StorageInfo>> = self.get("kvm/storage/ShowStorageList").await?;
+        // ShowLocalStorageList over ShowStorageList: same volumes and fields,
+        // plus virCount.
+        let resp: ResultWrapper<Vec<StorageInfo>> =
+            self.get("kvm/storage/ShowLocalStorageList").await?;
         Ok(resp.result)
     }
 

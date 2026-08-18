@@ -402,6 +402,12 @@ pub struct StorageInfo {
     pub path: String,
     /// Filesystem type (e.g. "btrfs").
     pub filesystem: String,
+    /// Number of VMs stored on this volume.
+    ///
+    /// Only `ShowLocalStorageList` reports this; `ShowStorageList` omits it,
+    /// so it defaults to 0 there.
+    #[serde(default, rename = "virCount")]
+    pub vir_count: i64,
 }
 
 // ── Image ───────────────────────────────────────────────────────────

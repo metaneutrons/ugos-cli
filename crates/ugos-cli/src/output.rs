@@ -215,6 +215,8 @@ pub struct StorageRow {
     pub total: String,
     #[tabled(rename = "Available")]
     pub available: String,
+    #[tabled(rename = "VMs")]
+    pub vms: String,
     #[tabled(rename = "Path")]
     pub path: String,
 }
@@ -227,6 +229,7 @@ impl From<&StorageInfo> for StorageRow {
             filesystem: s.filesystem.clone(),
             total: format_gib(s.total_capacity),
             available: format_gib(s.available_capacity),
+            vms: s.vir_count.to_string(),
             path: s.path.clone(),
         }
     }
