@@ -9,6 +9,7 @@ use serde::de::DeserializeOwned;
 use tokio::sync::RwLock;
 
 use crate::auth::{self, Credentials, Session};
+use crate::crypto::{RequestKey, md5_hex, query_string, rsa_seal, sha256_hex};
 use crate::error::{Result, UgosError};
 use crate::types::common::ApiResponse;
 
@@ -19,6 +20,8 @@ pub struct UgosClient {
     base_url: String,
     creds: Credentials,
     session: Arc<RwLock<Session>>,
+    /// Cached RSA key, fetched on first use by an encrypted request.
+    public_key: Arc<RwLock<Option<rsa::RsaPublicKey>>>,
 }
 
 impl UgosClient {
@@ -46,6 +49,7 @@ impl UgosClient {
             base_url,
             creds,
             session: Arc::new(RwLock::new(session)),
+            public_key: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -74,6 +78,7 @@ impl UgosClient {
             base_url,
             creds,
             session: Arc::new(RwLock::new(session)),
+            public_key: Arc::new(RwLock::new(None)),
         })
     }
 
@@ -212,6 +217,122 @@ impl UgosClient {
             .json()
             .await?;
         Self::decode(resp)
+    }
+
+    /// The RSA key used to wrap per-request AES keys.
+    ///
+    /// It comes from the login response, not from the `verify/check`
+    /// handshake — those are different keys. A session restored from an older
+    /// cache has none, in which case a fresh login provides it.
+    async fn public_key(&self) -> Result<rsa::RsaPublicKey> {
+        let cached = self.public_key.read().await.clone();
+        if let Some(key) = cached {
+            return Ok(key);
+        }
+
+        let mut pem = self.session.read().await.public_key.clone();
+        if pem.is_empty() {
+            let session = auth::login(&self.http, &self.base_url, &self.creds).await?;
+            pem = session.public_key.clone();
+            *self.session.write().await = session;
+        }
+        if pem.is_empty() {
+            return Err(UgosError::Encryption(
+                "NAS did not provide an encryption key at login".into(),
+            ));
+        }
+
+        let key = auth::parse_public_key(&pem)?;
+        *self.public_key.write().await = Some(key.clone());
+        Ok(key)
+    }
+
+    /// Perform an encrypted GET, for endpoints that reject plain requests.
+    ///
+    /// # Errors
+    ///
+    /// Returns the appropriate [`UgosError`] on API, crypto or network failure.
+    pub async fn get_encrypted<T: DeserializeOwned + Send>(
+        &self,
+        path: &str,
+        params: &[(&str, &str)],
+    ) -> Result<T> {
+        let public_key = self.public_key().await?;
+        let key = RequestKey::generate(&public_key)?;
+        let token = self.session.read().await.token.clone();
+
+        let resp: ApiResponse<serde_json::Value> = self
+            .http
+            .get(self.url_for(path))
+            // The token key stays in the encrypted query with an empty
+            // value; the value itself travels RSA-sealed in the header.
+            .query(&[(
+                "encrypt_query",
+                key.encrypt(&Self::with_empty_token(params))?,
+            )])
+            .header("X-Ugreen-Security-Code", &key.security_code)
+            .header("X-Ugreen-Security-Key", md5_hex(&token))
+            .header("X-Ugreen-Token", rsa_seal(&public_key, &token)?)
+            .send()
+            .await?
+            .json()
+            .await?;
+        Self::decode_encrypted(resp, &key)
+    }
+
+    /// Perform an encrypted POST, for endpoints that reject plain requests.
+    ///
+    /// # Errors
+    ///
+    /// Returns the appropriate [`UgosError`] on API, crypto or network failure.
+    pub async fn post_encrypted<T: DeserializeOwned + Send, B: serde::Serialize + Sync>(
+        &self,
+        path: &str,
+        body: &B,
+    ) -> Result<T> {
+        let public_key = self.public_key().await?;
+        let key = RequestKey::generate(&public_key)?;
+        let token = self.session.read().await.token.clone();
+        let json = serde_json::to_string(body)?;
+
+        let payload = serde_json::json!({
+            "encrypt_req_body": key.encrypt(&json)?,
+            "req_body_sha256": sha256_hex(&json),
+        });
+
+        let resp: ApiResponse<serde_json::Value> = self
+            .http
+            .post(self.url_for(path))
+            .query(&[("encrypt_query", key.encrypt(&Self::with_empty_token(&[]))?)])
+            .header("X-Ugreen-Security-Code", &key.security_code)
+            .header("X-Ugreen-Security-Key", md5_hex(&token))
+            .header("X-Ugreen-Token", rsa_seal(&public_key, &token)?)
+            .json(&payload)
+            .send()
+            .await?
+            .json()
+            .await?;
+        Self::decode_encrypted(resp, &key)
+    }
+
+    /// Render params with a trailing empty `token=`, matching the web UI.
+    fn with_empty_token(params: &[(&str, &str)]) -> String {
+        let mut all: Vec<(&str, &str)> = params.to_vec();
+        all.push(("token", ""));
+        query_string(&all)
+    }
+
+    /// Check the status code, then decrypt and deserialize the payload.
+    fn decode_encrypted<T: DeserializeOwned>(
+        resp: ApiResponse<serde_json::Value>,
+        key: &RequestKey,
+    ) -> Result<T> {
+        let data = resp.into_result()?;
+        if let Some(sealed) = data.get("encrypt_resp_body").and_then(|v| v.as_str()) {
+            let plain = key.decrypt(sealed)?;
+            return Ok(serde_json::from_str(&plain)?);
+        }
+        Ok(serde_json::from_value(data)?)
     }
 
     /// Check the status code first, then deserialize the payload.

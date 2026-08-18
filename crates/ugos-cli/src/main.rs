@@ -66,6 +66,7 @@ async fn main() -> Result<()> {
             port: cli.port,
             user: user.clone(),
             token: sess.token,
+            public_key: sess.public_key,
             created_at: session::unix_now(),
         };
         if let Err(e) = session::save(&cached) {
@@ -115,6 +116,7 @@ async fn build_client(
             tracing::debug!("using cached session");
             let session = Session {
                 token: cached.token,
+                public_key: cached.public_key,
             };
             return Ok(UgosClient::from_session(
                 host,
@@ -137,6 +139,7 @@ async fn build_client(
             port,
             user: creds.username.clone(),
             token: sess.token,
+            public_key: sess.public_key,
             created_at: session::unix_now(),
         };
         if let Err(e) = session::save(&cached) {

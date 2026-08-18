@@ -35,6 +35,11 @@ impl std::fmt::Debug for Credentials {
 pub struct Session {
     /// The session token appended as `?token=` to every request.
     pub token: String,
+    /// PEM public key the NAS returns at login, used to wrap the per-request
+    /// AES key for encrypted endpoints. Absent from cached sessions written
+    /// by older versions.
+    #[serde(default)]
+    pub public_key: String,
 }
 
 impl std::fmt::Debug for Session {
@@ -49,6 +54,9 @@ impl std::fmt::Debug for Session {
 #[derive(Debug, Deserialize)]
 struct LoginData {
     token: String,
+    /// Base64-encoded PEM, used for the request encryption scheme.
+    #[serde(default)]
+    public_key: String,
 }
 
 /// Fetch the RSA public key from the NAS.
@@ -79,12 +87,21 @@ pub async fn fetch_rsa_key(
     let pem_str = String::from_utf8(pem_bytes)
         .map_err(|e| UgosError::Encryption(format!("PEM not UTF-8: {e}")))?;
 
-    RsaPublicKey::from_pkcs1_pem(&pem_str)
-        .or_else(|_| RsaPublicKey::from_public_key_pem(&pem_str))
+    parse_public_key(&pem_str)
+}
+
+/// Parse a PEM public key, tolerating the mislabelled variant UGOS sends.
+///
+/// # Errors
+///
+/// Returns [`UgosError::Encryption`] when the PEM cannot be parsed.
+pub fn parse_public_key(pem: &str) -> Result<RsaPublicKey> {
+    RsaPublicKey::from_pkcs1_pem(pem)
+        .or_else(|_| RsaPublicKey::from_public_key_pem(pem))
         .or_else(|_| {
             // UGOS sometimes wraps SPKI DER in a "BEGIN RSA PUBLIC KEY" header.
             // Re-label and try as SPKI.
-            let relabeled = pem_str
+            let relabeled = pem
                 .replace("BEGIN RSA PUBLIC KEY", "BEGIN PUBLIC KEY")
                 .replace("END RSA PUBLIC KEY", "END PUBLIC KEY");
             RsaPublicKey::from_public_key_pem(&relabeled)
@@ -143,5 +160,18 @@ pub async fn login(
     let api: crate::types::common::ApiResponse<serde_json::Value> = resp.json().await?;
     let data: LoginData = serde_json::from_value(api.into_result()?)?;
 
-    Ok(Session { token: data.token })
+    // The key arrives base64-encoded; decode it here so callers see PEM.
+    let public_key = if data.public_key.is_empty() {
+        String::new()
+    } else {
+        B64.decode(&data.public_key)
+            .ok()
+            .and_then(|b| String::from_utf8(b).ok())
+            .unwrap_or_default()
+    };
+
+    Ok(Session {
+        token: data.token,
+        public_key,
+    })
 }

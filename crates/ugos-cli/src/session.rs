@@ -16,6 +16,9 @@ pub struct CachedSession {
     pub user: String,
     /// Session token.
     pub token: String,
+    /// PEM key for encrypted endpoints; empty in caches from older versions.
+    #[serde(default)]
+    pub public_key: String,
     /// When the session was created (Unix timestamp).
     #[serde(default)]
     pub created_at: i64,
