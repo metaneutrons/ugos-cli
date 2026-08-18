@@ -111,20 +111,18 @@ async fn build_client(
     no_cache: bool,
 ) -> Result<UgosClient> {
     // Try cached session first.
-    if !no_cache {
-        if let Some(cached) = session::load(host, port, &creds.username) {
-            tracing::debug!("using cached session");
-            let session = Session {
-                token: cached.token,
-                public_key: cached.public_key,
-            };
-            return Ok(UgosClient::from_session(
-                host,
-                port,
-                creds.clone(),
-                session,
-            )?);
-        }
+    if !no_cache && let Some(cached) = session::load(host, port, &creds.username) {
+        tracing::debug!("using cached session");
+        let session = Session {
+            token: cached.token,
+            public_key: cached.public_key,
+        };
+        return Ok(UgosClient::from_session(
+            host,
+            port,
+            creds.clone(),
+            session,
+        )?);
     }
 
     // Fresh login.

@@ -629,13 +629,13 @@ impl KvmApi for UgosClient {
             .get_with_params("kvm/network/DeleteNetwork", &[("name", name)])
             .await;
         if let Err(e) = deleted {
-            if let Ok(vms) = self.network_check_usage(name).await {
-                if !vms.is_empty() {
-                    return Err(UgosError::OperationFailed(format!(
-                        "network '{name}' is still attached to: {}",
-                        vms.join(", ")
-                    )));
-                }
+            if let Ok(vms) = self.network_check_usage(name).await
+                && !vms.is_empty()
+            {
+                return Err(UgosError::OperationFailed(format!(
+                    "network '{name}' is still attached to: {}",
+                    vms.join(", ")
+                )));
             }
             return Err(e);
         }

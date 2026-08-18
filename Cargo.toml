@@ -5,7 +5,7 @@ resolver = "3"
 [workspace.package]
 version = "0.7.0"
 edition = "2024"
-rust-version = "1.85"
+rust-version = "1.88"
 license = "GPL-3.0-or-later"
 authors = ["Fabian Schmieder <fabian@schmieder.eu>"]
 repository = "https://github.com/metaneutrons/ugos-cli"

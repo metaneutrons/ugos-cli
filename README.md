@@ -409,7 +409,7 @@ The client handles this automatically, including transparent re-authentication w
 
 ## Requirements
 
-- Rust 1.85+ (edition 2024)
+- Rust 1.88+ (edition 2024)
 - UGOS NAS with KVM app installed
 - Network access to the NAS (HTTPS port 9443)
 
