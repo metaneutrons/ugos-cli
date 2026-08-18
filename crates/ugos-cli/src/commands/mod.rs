@@ -4,19 +4,21 @@ pub mod vmspec;
 
 use std::io::Write;
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use ugos_client::UgosClient;
 use ugos_client::api::docker::DockerApi;
 use ugos_client::api::download::DownloadApi;
 use ugos_client::api::files::FilesApi;
 use ugos_client::api::kvm::KvmApi;
+use ugos_client::api::snapshot::SnapshotApi;
 use ugos_client::api::syslog::{LogFilter, SysLogApi};
 use ugos_client::api::system::SystemApi;
+use ugos_client::types::snapshot::FolderType;
 
 use crate::cli::{
-    DockerAction, DownloadAction, FsAction, ImageAction, LogAction, LogArgs, NetworkAction,
-    OutputFormat, OvaAction, PassthroughAction, Resource, SnapshotAction, StorageAction,
-    SystemAction, UsbAction, UserAction, VmAction, VncAction,
+    DockerAction, DownloadAction, FsAction, FsSnapshotAction, ImageAction, LogAction, LogArgs,
+    NetworkAction, OutputFormat, OvaAction, PassthroughAction, Resource, SnapshotAction,
+    StorageAction, SystemAction, UsbAction, UserAction, VmAction, VncAction,
 };
 use crate::output;
 
@@ -48,7 +50,81 @@ pub async fn run(
         Resource::System { action } => system(client, action, fmt, w).await,
         Resource::Download { action } => download(client, action, fmt, w).await,
         Resource::Fs { action } => fs(client, action, fmt, w).await,
+        Resource::Snapshot { action } => fs_snapshot(client, action, fmt, w).await,
     }
+}
+
+/// Filesystem snapshots of shares and home folders.
+async fn fs_snapshot(
+    client: &UgosClient,
+    action: &FsSnapshotAction,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
+    match action {
+        FsSnapshotAction::Folders => {
+            let mut all = Vec::new();
+            for kind in [FolderType::Home, FolderType::Share] {
+                all.extend(client.fs_snapshot_folders(kind).await?.folders);
+            }
+            match fmt {
+                OutputFormat::Table => {
+                    let rows: Vec<output::SnapshotFolderRow> = all.iter().map(Into::into).collect();
+                    output::print_list(w, &rows, fmt)?;
+                }
+                OutputFormat::Json => output::print_json(w, &all)?,
+            }
+        }
+        FsSnapshotAction::List { folder } => {
+            let (id, kind) = client.fs_snapshot_folder_by_name(folder).await?;
+            let list = client.fs_snapshot_list(id, kind).await?;
+            match fmt {
+                OutputFormat::Table => {
+                    let rows: Vec<output::FsSnapshotRow> =
+                        list.list.iter().map(Into::into).collect();
+                    output::print_list(w, &rows, fmt)?;
+                }
+                OutputFormat::Json => output::print_json(w, &list.list)?,
+            }
+        }
+        FsSnapshotAction::Create { folder, desc, lock } => {
+            let (id, kind) = client.fs_snapshot_folder_by_name(folder).await?;
+            client.fs_snapshot_create(id, kind, desc, *lock).await?;
+            writeln!(w, "Snapshot of '{folder}' created")?;
+        }
+        FsSnapshotAction::Edit {
+            folder,
+            id,
+            desc,
+            lock,
+        } => {
+            let (folder_id, kind) = client.fs_snapshot_folder_by_name(folder).await?;
+            client
+                .fs_snapshot_edit(folder_id, kind, *id, desc, *lock)
+                .await?;
+            writeln!(w, "Snapshot {id} updated")?;
+        }
+        FsSnapshotAction::Rm { folder, ids } => {
+            if ids.is_empty() {
+                bail!("no snapshot ids given");
+            }
+            let (folder_id, kind) = client.fs_snapshot_folder_by_name(folder).await?;
+            client.fs_snapshot_delete(folder_id, kind, ids).await?;
+            writeln!(w, "Deleted {} snapshot(s)", ids.len())?;
+        }
+        FsSnapshotAction::Clone {
+            folder,
+            id,
+            new_name,
+        } => {
+            let (folder_id, kind) = client.fs_snapshot_folder_by_name(folder).await?;
+            client
+                .fs_snapshot_clone(folder_id, kind, *id, new_name)
+                .await?;
+            writeln!(w, "Snapshot {id} cloned to '{new_name}'")?;
+        }
+    }
+    Ok(())
 }
 
 async fn fs(

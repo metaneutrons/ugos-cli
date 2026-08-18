@@ -117,6 +117,11 @@ pub enum Resource {
         #[command(subcommand)]
         action: FsAction,
     },
+    /// Filesystem snapshots of shares and home folders
+    Snapshot {
+        #[command(subcommand)]
+        action: FsSnapshotAction,
+    },
     /// Download Center: fetch files straight to the NAS.
     Download {
         #[command(subcommand)]
@@ -169,6 +174,65 @@ pub enum UserAction {
     List,
     /// Show the account this session belongs to.
     Me,
+}
+
+/// Filesystem snapshot actions.
+///
+/// These are btrfs snapshots of shares and home folders, unrelated to the
+/// KVM snapshots under `vm snapshot`.
+#[derive(Debug, Subcommand)]
+pub enum FsSnapshotAction {
+    /// List folders that can hold snapshots.
+    Folders,
+    /// List the snapshots of a folder.
+    List {
+        /// Folder name, as shown by `snapshot folders`.
+        folder: String,
+    },
+    /// Take a snapshot of a folder. UGOS names it after the current time.
+    Create {
+        /// Folder name to snapshot.
+        folder: String,
+        /// Description stored with the snapshot.
+        #[arg(long, default_value = "")]
+        desc: String,
+        /// Mark as locked. The web UI then refuses to delete it, but the
+        /// API does not enforce this — `snapshot rm` removes it anyway.
+        #[arg(long)]
+        lock: bool,
+    },
+    /// Change a snapshot's description or lock state.
+    Edit {
+        /// Folder the snapshot belongs to.
+        folder: String,
+        /// Snapshot id, as shown by `snapshot list`.
+        id: i64,
+        /// New description.
+        #[arg(long, default_value = "")]
+        desc: String,
+        /// Lock the snapshot against deletion.
+        #[arg(long)]
+        lock: bool,
+    },
+    /// Delete snapshots, locked ones included.
+    Rm {
+        /// Folder the snapshots belong to.
+        folder: String,
+        /// Snapshot ids to delete (repeatable).
+        ids: Vec<i64>,
+    },
+    /// Copy a snapshot into a new folder of its own.
+    ///
+    /// The non-destructive way to reach a snapshot's contents: it appears
+    /// beside the original instead of replacing it.
+    Clone {
+        /// Folder the snapshot belongs to.
+        folder: String,
+        /// Snapshot id to clone.
+        id: i64,
+        /// Name for the new folder.
+        new_name: String,
+    },
 }
 
 /// File manager subcommands.

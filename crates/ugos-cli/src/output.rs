@@ -770,6 +770,60 @@ impl From<&ugos_client::types::files::Volume> for VolumeRow {
     }
 }
 
+/// Table row for a folder that can hold filesystem snapshots.
+#[derive(Tabled, Serialize)]
+pub struct SnapshotFolderRow {
+    #[tabled(rename = "Folder")]
+    pub folder: String,
+    #[tabled(rename = "ID")]
+    pub id: i64,
+    #[tabled(rename = "Snapshots")]
+    pub snapshots: i64,
+    #[tabled(rename = "Latest")]
+    pub latest: String,
+    #[tabled(rename = "Writable")]
+    pub writable: String,
+}
+
+impl From<&ugos_client::types::snapshot::SnapshotFolder> for SnapshotFolderRow {
+    fn from(f: &ugos_client::types::snapshot::SnapshotFolder) -> Self {
+        Self {
+            folder: f.folder_name.clone(),
+            id: f.id,
+            snapshots: f.snapshot_number,
+            latest: format_unix(f.latest_snapshot_timestamp),
+            writable: if f.allow_operations { "yes" } else { "no" }.to_owned(),
+        }
+    }
+}
+
+/// Table row for a filesystem snapshot.
+#[derive(Tabled, Serialize)]
+pub struct FsSnapshotRow {
+    #[tabled(rename = "ID")]
+    pub id: i64,
+    #[tabled(rename = "Created")]
+    pub created: String,
+    #[tabled(rename = "Name")]
+    pub name: String,
+    #[tabled(rename = "Description")]
+    pub desc: String,
+    #[tabled(rename = "Locked")]
+    pub locked: String,
+}
+
+impl From<&ugos_client::types::snapshot::Snapshot> for FsSnapshotRow {
+    fn from(s: &ugos_client::types::snapshot::Snapshot) -> Self {
+        Self {
+            id: s.id,
+            created: format_unix(s.create_timestamp),
+            name: s.name.clone(),
+            desc: s.desc.clone(),
+            locked: if s.is_locked { "yes" } else { "no" }.to_owned(),
+        }
+    }
+}
+
 /// Format a unix timestamp as `YYYY-MM-DD HH:MM` in UTC.
 fn format_unix(ts: i64) -> String {
     if ts <= 0 {

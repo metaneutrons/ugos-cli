@@ -154,6 +154,77 @@ impl UgosClient {
         result
     }
 
+    /// Perform a PUT request with a JSON body.
+    ///
+    /// The snapshot app is the only part of UGOS with a REST-shaped API;
+    /// everything else posts to verb-named endpoints.
+    ///
+    /// # Errors
+    ///
+    /// Returns the appropriate [`UgosError`] on API or network failure.
+    pub async fn put<T: DeserializeOwned + Send, B: serde::Serialize + Sync>(
+        &self,
+        path: &str,
+        body: &B,
+    ) -> Result<T> {
+        let result = self
+            .do_request::<T, B>(reqwest::Method::PUT, path, body)
+            .await;
+
+        if matches!(&result, Err(UgosError::LoginExpired)) {
+            self.re_auth().await?;
+            return self.do_request(reqwest::Method::PUT, path, body).await;
+        }
+
+        result
+    }
+
+    /// Perform a DELETE request that carries a JSON body.
+    ///
+    /// Unusual, but the snapshot app deletes by posting a list of ids in the
+    /// body rather than naming one in the path.
+    ///
+    /// # Errors
+    ///
+    /// Returns the appropriate [`UgosError`] on API or network failure.
+    pub async fn delete_with_body<T: DeserializeOwned + Send, B: serde::Serialize + Sync>(
+        &self,
+        path: &str,
+        body: &B,
+    ) -> Result<T> {
+        let result = self
+            .do_request::<T, B>(reqwest::Method::DELETE, path, body)
+            .await;
+
+        if matches!(&result, Err(UgosError::LoginExpired)) {
+            self.re_auth().await?;
+            return self.do_request(reqwest::Method::DELETE, path, body).await;
+        }
+
+        result
+    }
+
+    /// Internal request with a JSON body for methods other than POST.
+    async fn do_request<T: DeserializeOwned + Send, B: serde::Serialize + Sync>(
+        &self,
+        method: reqwest::Method,
+        path: &str,
+        body: &B,
+    ) -> Result<T> {
+        let token = self.session.read().await.token.clone();
+        let url = Self::append_token(&self.url_for(path), &token);
+
+        let resp: ApiResponse<serde_json::Value> = self
+            .http
+            .request(method, &url)
+            .json(body)
+            .send()
+            .await?
+            .json()
+            .await?;
+        Self::decode(resp)
+    }
+
     /// Internal GET without retry.
     async fn do_get<T: DeserializeOwned + Send>(
         &self,

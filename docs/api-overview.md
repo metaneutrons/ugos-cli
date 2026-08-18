@@ -16,6 +16,7 @@ Base URL: `https://<nas-ip>:9443/ugreen/v1/`
 | **System / monitoring** | core | Complete | [api-system.md](api-system.md) |
 | **Request encryption** | — | Complete | [api-encryption.md](api-encryption.md) |
 | **Transport security** | — | Complete | [api-tls.md](api-tls.md) |
+| **Filesystem snapshots** | com.ugreen.snapshot | Complete | [api-snapshot.md](api-snapshot.md) |
 | **Backup** | — | No API exists | [api-backup.md](api-backup.md) |
 
 ### Known but Undocumented (endpoints found in main JS bundle)
@@ -44,7 +45,6 @@ Base URL: `https://<nas-ip>:9443/ugreen/v1/`
 | Stream | `stream/transcode/` | Media transcoding |
 | Connect | `connect/` | Remote access, wallpaper |
 | Wizard | `wizard/` | Initial setup |
-| Snapshot | `snapshot/` | Filesystem snapshots; endpoints sit in lazy chunks, not yet resolved |
 
 ### Non-KVM APIs Used by KVM App
 

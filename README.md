@@ -73,6 +73,12 @@ ugos-cli fs volumes
 ugos-cli fs put ./backup.tar.gz /volume1/backups
 ugos-cli fs get /volume1/backups/backup.tar.gz
 
+# Filesystem snapshots of shares and home folders (not VM snapshots)
+ugos-cli snapshot folders
+ugos-cli snapshot list backup
+ugos-cli snapshot create backup --desc "before the migration"
+ugos-cli snapshot clone backup 3 backup-recovered
+
 # Let the NAS fetch a file straight from the internet
 ugos-cli download add https://example.org/big.iso
 ugos-cli download list
@@ -373,6 +379,7 @@ notes are kept because the reasoning is easy to lose and expensive to redo.
 | [api-files.md](docs/api-files.md) | File manager, including upload and download |
 | [api-downloadcenter.md](docs/api-downloadcenter.md) | Queuing downloads for the NAS to fetch |
 | [api-system.md](docs/api-system.md) | Machine info, monitoring, processes, services |
+| [api-snapshot.md](docs/api-snapshot.md) | Filesystem snapshots of shares and homes |
 | [api-backup.md](docs/api-backup.md) | Why no backup commands exist |
 
 ## Implementation Status
@@ -397,6 +404,7 @@ notes are kept because the reasoning is easy to lose and expensive to redo.
 | **System** | hardware and firmware info, live CPU/memory/disk/network/fan readings, processes, services |
 | **Download** | queue a URL for the NAS to fetch, list, check, status, remove |
 | **Files** (`fs`) | list a directory, list volumes, upload, download, create, rename, delete |
+| **Filesystem snapshots** (`snapshot`) | list folders, list, create, edit, delete, clone |
 | **Docker container** (`docker`) | list, show, create, start, stop, restart, kill, remove, update, clone, batch-operate, logs |
 | **Docker image** | list, search, download, delete, export, load (URL/path) |
 | **Docker registry** | list/add/delete/switch mirror, HTTP proxy get/set |
@@ -432,7 +440,7 @@ anything critical.
 | Image rename | `RenameImage` answers `successful` and renames nothing; field names unknown |
 | OVA import (one step) | `ova parse` reads an OVA into a VM spec; creating the VM from it is still a manual second step |
 | Backup | There is no backup API. The only three `backup_restore` paths appear solely in the UI's encryption whitelist, nothing calls them, and the group has no status or listing endpoint — see [docs/api-backup.md](docs/api-backup.md) |
-| Snapshots (filesystem) | The `snapshot` app's endpoints sit in lazily loaded chunks and could not be resolved from its entry bundle |
+| Snapshot restore | `snapshot/snapshot/restore` rolls a folder back; destructive and untestable without risking real data. `snapshot clone` covers recovery without it — see [docs/api-snapshot.md](docs/api-snapshot.md) |
 | Log deletion | `DeleteLogs` is destructive and was not probed |
 | Non-KVM modules | Photo, video, music, etc. |
 
