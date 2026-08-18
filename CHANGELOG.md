@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.7.0](https://github.com/metaneutrons/ugos-cli/compare/v0.6.0...v0.7.0) (2026-08-18)
+
+
+### ⚠ BREAKING CHANGES
+
+* **log:** `ugos log` is now the system log. The KVM audit log it used to show is `ugos vm log`.
+
+### Features
+
+* **client:** encrypted requests now work ([dab3d9b](https://github.com/metaneutrons/ugos-cli/commit/dab3d9b422cda6a0c27804cc0621aceb19b5360e))
+* **client:** implement UGOS request encryption (not yet accepted) ([a1c6568](https://github.com/metaneutrons/ugos-cli/commit/a1c6568c33a5aa62cd03a9f7571b0d1fb21becdc))
+* **download:** queue downloads for the NAS to fetch ([1d70cd4](https://github.com/metaneutrons/ugos-cli/commit/1d70cd47af58b2c8430a69f6971597f508c85fd9))
+* **fs:** browse and manage files on the NAS ([e4be161](https://github.com/metaneutrons/ugos-cli/commit/e4be16193eb104b3120a21206cd72eab7461b5ba))
+* **fs:** upload and download files ([86151c8](https://github.com/metaneutrons/ugos-cli/commit/86151c8824653ae8b56af55b497b9bd71498082d))
+* **log:** add the system log and user accounts ([2274f77](https://github.com/metaneutrons/ugos-cli/commit/2274f7765cc58068833c02c2bbae0bd9fdfe43e0))
+* **system:** add machine info and live monitoring ([2d16e8e](https://github.com/metaneutrons/ugos-cli/commit/2d16e8ef15dffbf53c7904f3e5136daf3560d5fd))
+
 ## [0.6.0](https://github.com/metaneutrons/ugos-cli/compare/v0.5.0...v0.6.0) (2026-08-18)
 
 
