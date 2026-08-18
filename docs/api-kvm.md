@@ -247,30 +247,46 @@ The web UI form defaults, per OS type: Windows `ide` disk (60 GiB) plus an
 - **Method**: POST
 - **Body**: `{ovaPath: "<path>"}`
 
-## Snapshots (`kvm/manager/`)
+## Storage lists
 
-### ShowListSnapshot
-- **Method**: GET
-- **Params**: `name=<vm-uuid>`
-- **Response**: `{result: [Snapshot]}`
+`ShowStorageList` and `ShowLocalStorageList` return the same volumes with the
+same fields, except that the local variant adds `virCount`, the number of VMs
+on the volume — which is why the client reads that one. Compared on a NAS with
+a single volume, so whether they can ever differ in *which* volumes they list
+is untested. `ShowLocalStorageUsageList` adds `usedCapacity`, `usedPercent`
+and a `vmUsages` breakdown on top.
 
-### GenerateSnapshot
-- **Method**: GET
-- **Params**: `name=<snapshotName>&virName=<vm-uuid>&virtualMachineDisplayName=<displayName>`
-- **Timeout**: unlimited
+## Validators
 
-### DeleteSnapshot
-- **Method**: GET
-- **Params**: `name=<snapshotName>&virName=<vm-uuid>`
+The web UI uses these to colour its form fields. Verified 2026-08-18; two of
+them mean the opposite of what the name suggests.
 
-### RevertSnapshot
-- **Method**: GET
-- **Params**: `name=<snapshotName>`
-- **Timeout**: unlimited
-
-### RenameSnapshot
+### CheckVirName
 - **Method**: POST
-- **Body**: `{name: "<snapshotName>", displayName: "<newDisplayName>"}`
+- **Body**: `{name: "", virtualMachineDisplayName: "<name>"}`
+- **Response**: `{result: true}` when the name is **taken**, `false` when free
+
+### CheckResource
+- **Method**: GET
+- **Params**: `memory=<bytes>` — bytes, not KiB
+- **Response**: `{memoryStatus: 0 | 1 | 2}` — 0 fits, 1 exceeds what is free
+  right now, 2 exceeds the host's total
+
+`CreateVirtualMachine` does **not** check this: a VM asking for 200 GiB on a
+62 GiB host is created happily and only fails to start.
+
+### CheckName (network)
+- **Method**: POST
+- **Body**: `{name: "<network name>"}`
+- **Response**: `{result: true}` when taken
+
+### CheckNetwork
+- **Method**: GET
+- **Params**: `name=<network name>`
+- **Response**: `{result: ["<vm display name>", …]}`
+
+Despite the name this validates nothing; it lists the VMs attached to a
+network, which is what blocks a delete.
 
 ## Network (`kvm/network/`)
 

@@ -315,7 +315,7 @@ ugos-client = "0.1"
 | **VM** | list, show, start, stop, force-stop, reboot, force-reboot, delete, create, update |
 | **Snapshot** | list, create, delete, revert, describe |
 | **Network** | list, show, create, update, delete |
-| **Storage** | list, usage, add, delete, df (usage per VM) |
+| **Storage** | list (with VM count), usage, add, delete, df (usage per VM) |
 | **Image** | list, upload (file or URL), register, delete, usage |
 | **USB** | list |
 | **PCI** | list passthrough devices |
