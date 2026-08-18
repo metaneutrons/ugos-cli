@@ -62,7 +62,7 @@ pub async fn fetch_rsa_key(
     base_url: &str,
     username: &str,
 ) -> Result<RsaPublicKey> {
-    let url = format!("{base_url}/verify/check");
+    let url = format!("{base_url}/v1/verify/check");
     let body = serde_json::json!({"username": username});
 
     let resp = client.post(&url).json(&body).send().await?;
@@ -127,7 +127,7 @@ pub async fn login(
     let encrypted = encrypt_password(&pubkey, &creds.password)?;
 
     // Step 3: POST /verify/login
-    let url = format!("{base_url}/verify/login");
+    let url = format!("{base_url}/v1/verify/login");
     let body = serde_json::json!({
         "username": creds.username,
         "password": encrypted,

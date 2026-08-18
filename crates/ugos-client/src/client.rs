@@ -38,7 +38,7 @@ impl UgosClient {
             .build()
             .map_err(|e| UgosError::Encryption(format!("HTTP client build: {e}")))?;
 
-        let base_url = format!("https://{host}:{port}/ugreen/v1");
+        let base_url = format!("https://{host}:{port}/ugreen");
         let session = auth::login(&http, &base_url, &creds).await?;
 
         Ok(Self {
@@ -67,7 +67,7 @@ impl UgosClient {
             .build()
             .map_err(|e| UgosError::Encryption(format!("HTTP client build: {e}")))?;
 
-        let base_url = format!("https://{host}:{port}/ugreen/v1");
+        let base_url = format!("https://{host}:{port}/ugreen");
 
         Ok(Self {
             http,
@@ -80,6 +80,18 @@ impl UgosClient {
     /// The current session token.
     pub async fn session(&self) -> Session {
         self.session.read().await.clone()
+    }
+
+    /// Build a full URL for an API path.
+    ///
+    /// A path may name its API version (`v2/filemgr/...`); anything else gets
+    /// `v1/`, which is what the KVM and Docker apps use.
+    fn url_for(&self, path: &str) -> String {
+        if path.starts_with("v1/") || path.starts_with("v2/") {
+            format!("{}/{path}", self.base_url)
+        } else {
+            format!("{}/v1/{path}", self.base_url)
+        }
     }
 
     /// Append `?token=` (or `&token=`) to a URL.
@@ -148,7 +160,7 @@ impl UgosClient {
         params: &[(&str, &str)],
     ) -> Result<T> {
         let token = self.session.read().await.token.clone();
-        let url = Self::append_token(&format!("{}/{path}", self.base_url), &token);
+        let url = Self::append_token(&self.url_for(path), &token);
 
         let resp: ApiResponse<serde_json::Value> = self
             .http
@@ -168,7 +180,7 @@ impl UgosClient {
         body: &B,
     ) -> Result<T> {
         let token = self.session.read().await.token.clone();
-        let url = Self::append_token(&format!("{}/{path}", self.base_url), &token);
+        let url = Self::append_token(&self.url_for(path), &token);
 
         let resp: ApiResponse<serde_json::Value> =
             self.http.post(&url).json(body).send().await?.json().await?;
@@ -189,7 +201,7 @@ impl UgosClient {
         form: reqwest::multipart::Form,
     ) -> Result<T> {
         let token = self.session.read().await.token.clone();
-        let url = Self::append_token(&format!("{}/{path}", self.base_url), &token);
+        let url = Self::append_token(&self.url_for(path), &token);
 
         let resp: ApiResponse<serde_json::Value> = self
             .http
