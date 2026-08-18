@@ -155,25 +155,29 @@ async fn snapshot(
             let rows: Vec<output::SnapshotRow> = snaps.iter().map(Into::into).collect();
             output::print_list(w, &rows, fmt)?;
         }
-        SnapshotAction::Create { vm, name } => {
-            client.snapshot_create(vm, name).await?;
+        SnapshotAction::Create { vm } => {
+            let name = client.snapshot_create(vm).await?;
             output::print_success(w, &format!("Created snapshot {name}"), fmt)?;
         }
         SnapshotAction::Delete { vm, name } => {
             client.snapshot_delete(vm, name).await?;
             output::print_success(w, &format!("Deleted snapshot {name}"), fmt)?;
         }
-        SnapshotAction::Revert { vm, name } => {
-            client.snapshot_revert(vm, name).await?;
+        SnapshotAction::Revert {
+            vm,
+            name,
+            snapshot_first,
+        } => {
+            client.snapshot_revert(vm, name, *snapshot_first).await?;
             output::print_success(w, &format!("Reverted to snapshot {name}"), fmt)?;
         }
-        SnapshotAction::Rename {
+        SnapshotAction::Describe {
             vm,
-            old_name,
-            new_name,
+            name,
+            description,
         } => {
-            client.snapshot_rename(vm, old_name, new_name).await?;
-            output::print_success(w, &format!("Renamed snapshot {old_name} → {new_name}"), fmt)?;
+            client.snapshot_describe(vm, name, description).await?;
+            output::print_success(w, &format!("Described snapshot {name}"), fmt)?;
         }
     }
     Ok(())

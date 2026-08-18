@@ -48,6 +48,49 @@ test were already registered, and a taken `fileName` answers `9999`.
 Exists, but every body tried answers `successful` and renames nothing, and
 the web UI never calls it. The field names are unknown; not wrapped.
 
+## Snapshots (`kvm/manager/`)
+
+Verified against a live NAS (2026-08-18). Every one of these takes different
+parameters than the naming suggests.
+
+### GenerateSnapshot
+- **Method**: GET
+- **Params**: `name=<vm uuid>&virtualMachineDisplayName=<vm display name>`
+- **Response**: `{snapshotDisplayName: "2026-08-18 08:40:50"}`
+
+`name` is the **VM's** UUID, not a snapshot name. The caller does not name a
+snapshot at all — UGOS names it after the creation time and reports it back.
+Passing a snapshot name here fails with `3010`. Other codes seen in the web
+UI: `3027` (a snapshot is already being taken) and `3012` (limit reached).
+
+### ShowListSnapshot
+- **Method**: GET
+- **Params**: `name=<vm uuid>`
+- **Response**: `{result: [{name, displayName, createTime, description, id, virName, screenshot}]}`
+
+`createTime` is a **string** (`YYYY-MM-DD HH:MM:SS`), not a timestamp, and
+`name` is `<vm-uuid>_<unix-time>`.
+
+### DeleteSnapshot
+- **Method**: GET
+- **Params**: `name=<snapshot name>&virtualMachineDisplayName=<snapshot display name>`
+
+Both parameters describe the **snapshot**; despite its name the second one is
+not the VM.
+
+### RevertSnapshot
+- **Method**: GET
+- **Params**: `virtualMachineName=<vm uuid>&snapshotName=<snapshot name>&createSnapshot=<bool>`
+
+`createSnapshot` snapshots the current state before reverting.
+
+### EditSnapshot
+- **Method**: POST
+- **Body**: `{name: "<snapshot name>", description: "<text>"}`
+
+Sets the description. There is no rename: `RenameSnapshot` exists and answers
+`successful`, but the web UI uses `EditSnapshot` and only for the description.
+
 ## VM Manager (`kvm/manager/`)
 
 ### ShowLocalVirtualList

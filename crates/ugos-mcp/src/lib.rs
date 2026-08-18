@@ -142,13 +142,13 @@ struct SnapshotParam {
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
-struct SnapshotRenameParam {
+struct SnapshotDescribeParam {
     /// VM display name or UUID.
     vm: String,
-    /// Current snapshot name.
-    old_name: String,
-    /// New snapshot name.
-    new_name: String,
+    /// Snapshot name.
+    name: String,
+    /// Description text.
+    description: String,
     /// Target NAS name or host. Required when multiple targets are configured.
     #[serde(default)]
     target: String,
@@ -623,8 +623,8 @@ impl UgosMcp {
     #[tool(description = "Create a snapshot of a virtual machine")]
     async fn ugos_snapshot_create(&self, Parameters(p): Parameters<SnapshotParam>) -> String {
         match self.client(&p.target).await {
-            Ok(c) => match c.snapshot_create(&p.vm, &p.name).await {
-                Ok(()) => format!("Created snapshot {}", p.name),
+            Ok(c) => match c.snapshot_create(&p.vm).await {
+                Ok(name) => format!("Created snapshot {name}"),
                 Err(e) => format!("error: {e}"),
             },
             Err(e) => e,
@@ -645,7 +645,7 @@ impl UgosMcp {
     #[tool(description = "Revert a virtual machine to a snapshot")]
     async fn ugos_snapshot_revert(&self, Parameters(p): Parameters<SnapshotParam>) -> String {
         match self.client(&p.target).await {
-            Ok(c) => match c.snapshot_revert(&p.vm, &p.name).await {
+            Ok(c) => match c.snapshot_revert(&p.vm, &p.name, false).await {
                 Ok(()) => format!("Reverted to snapshot {}", p.name),
                 Err(e) => format!("error: {e}"),
             },
@@ -653,11 +653,14 @@ impl UgosMcp {
         }
     }
 
-    #[tool(description = "Rename a snapshot")]
-    async fn ugos_snapshot_rename(&self, Parameters(p): Parameters<SnapshotRenameParam>) -> String {
+    #[tool(description = "Set a snapshot's description")]
+    async fn ugos_snapshot_describe(
+        &self,
+        Parameters(p): Parameters<SnapshotDescribeParam>,
+    ) -> String {
         match self.client(&p.target).await {
-            Ok(c) => match c.snapshot_rename(&p.vm, &p.old_name, &p.new_name).await {
-                Ok(()) => format!("Renamed {} → {}", p.old_name, p.new_name),
+            Ok(c) => match c.snapshot_describe(&p.vm, &p.name, &p.description).await {
+                Ok(()) => format!("Described snapshot {}", p.name),
                 Err(e) => format!("error: {e}"),
             },
             Err(e) => e,

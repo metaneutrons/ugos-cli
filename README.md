@@ -42,7 +42,7 @@ ugos-cli vm stop --force CachyOS
 
 # Snapshots
 ugos-cli vm snapshot list CachyOS
-ugos-cli vm snapshot create CachyOS my-snapshot
+ugos-cli vm snapshot create CachyOS      # UGOS names it after the creation time
 
 # Create a VM
 ugos-cli vm create debian --cores 4 --memory 8g --disk 50g \
@@ -307,7 +307,7 @@ ugos-client = "0.1"
 | Resource | Operations |
 |----------|-----------|
 | **VM** | list, show, start, stop, force-stop, reboot, force-reboot, delete, create, update |
-| **Snapshot** | list, create, delete, revert, rename |
+| **Snapshot** | list, create, delete, revert, describe |
 | **Network** | list, show, create, update, delete |
 | **Storage** | list, usage, add, delete, df (usage per VM) |
 | **Image** | list, upload (file or URL), register, delete, usage |

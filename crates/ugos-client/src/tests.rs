@@ -160,15 +160,30 @@ fn deserialize_image_info() {
 
 #[test]
 fn deserialize_snapshot() {
+    // Shape captured from a live NAS: createTime is a string, and there is no
+    // isCurrent field.
     let json = r#"{
-        "name": "snap-1234",
-        "displayName": "Before Update",
-        "isCurrent": true,
-        "createTime": 1776033624
+        "createTime": "2026-08-18 08:40:50",
+        "description": "before the update",
+        "displayName": "2026-08-18 08:40:50",
+        "id": 1,
+        "name": "d8becfe2-9044-41d0-bc63-32bc65aa59d7_1787035250",
+        "screenshot": "",
+        "virName": "d8becfe2-9044-41d0-bc63-32bc65aa59d7"
     }"#;
     let s: Snapshot = serde_json::from_str(json).unwrap();
-    assert_eq!(s.display_name, "Before Update");
-    assert!(s.is_current);
+    assert_eq!(s.display_name, "2026-08-18 08:40:50");
+    assert_eq!(s.create_time, "2026-08-18 08:40:50");
+    assert_eq!(s.description, "before the update");
+    assert_eq!(s.id, 1);
+    assert_eq!(s.vir_name, "d8becfe2-9044-41d0-bc63-32bc65aa59d7");
+}
+
+#[test]
+fn deserialize_snapshot_tolerates_missing_fields() {
+    let s: Snapshot = serde_json::from_str(r#"{"name": "snap-1234"}"#).unwrap();
+    assert_eq!(s.name, "snap-1234");
+    assert!(s.create_time.is_empty());
 }
 
 #[test]

@@ -40,7 +40,7 @@ fn all_tools_registered() {
         "ugos_snapshot_create",
         "ugos_snapshot_delete",
         "ugos_snapshot_revert",
-        "ugos_snapshot_rename",
+        "ugos_snapshot_describe",
         // Network
         "ugos_network_list",
         "ugos_network_show",

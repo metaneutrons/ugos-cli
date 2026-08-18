@@ -112,22 +112,18 @@ pub fn vm_detail_rows(d: &VmDetail) -> Vec<VmDetailRow> {
 pub struct SnapshotRow {
     #[tabled(rename = "Name")]
     pub name: String,
-    #[tabled(rename = "Display Name")]
-    pub display_name: String,
-    #[tabled(rename = "Current")]
-    pub current: String,
+    #[tabled(rename = "Created")]
+    pub created: String,
+    #[tabled(rename = "Description")]
+    pub description: String,
 }
 
 impl From<&Snapshot> for SnapshotRow {
     fn from(s: &Snapshot) -> Self {
         Self {
             name: s.name.clone(),
-            display_name: s.display_name.clone(),
-            current: if s.is_current {
-                "✓".into()
-            } else {
-                String::new()
-            },
+            created: s.create_time.clone(),
+            description: s.description.clone(),
         }
     }
 }

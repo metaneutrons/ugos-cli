@@ -335,12 +335,10 @@ pub enum SnapshotAction {
         /// VM name or UUID.
         vm: String,
     },
-    /// Create a snapshot.
+    /// Create a snapshot. UGOS picks the name and reports it back.
     Create {
         /// VM name or UUID.
         vm: String,
-        /// Snapshot name.
-        name: String,
     },
     /// Delete a snapshot.
     Delete {
@@ -355,15 +353,18 @@ pub enum SnapshotAction {
         vm: String,
         /// Snapshot name.
         name: String,
+        /// Snapshot the current state before reverting.
+        #[arg(long)]
+        snapshot_first: bool,
     },
-    /// Rename a snapshot.
-    Rename {
+    /// Set a snapshot's description.
+    Describe {
         /// VM name or UUID.
         vm: String,
-        /// Current snapshot name.
-        old_name: String,
-        /// New snapshot name.
-        new_name: String,
+        /// Snapshot name.
+        name: String,
+        /// Description text.
+        description: String,
     },
 }
 

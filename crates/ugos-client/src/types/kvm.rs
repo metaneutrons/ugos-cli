@@ -278,18 +278,30 @@ pub struct VmUsage {
 
 // ── Snapshot ────────────────────────────────────────────────────────
 
-/// A VM snapshot.
+/// A VM snapshot as returned by `ShowListSnapshot`.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
-    /// Snapshot name (internal identifier).
+    /// Internal identifier, `<vm-uuid>_<unix-timestamp>`.
     pub name: String,
-    /// Display name.
+    /// Display name, which UGOS sets to the creation time.
+    #[serde(default)]
     pub display_name: String,
-    /// Creation timestamp.
-    pub create_time: i64,
-    /// Whether this is the current snapshot.
-    pub is_current: bool,
+    /// Creation time as `YYYY-MM-DD HH:MM:SS` — a string, not a timestamp.
+    #[serde(default)]
+    pub create_time: String,
+    /// Free-text description, set via `EditSnapshot`.
+    #[serde(default)]
+    pub description: String,
+    /// Numeric id within the VM.
+    #[serde(default)]
+    pub id: i64,
+    /// UUID of the VM the snapshot belongs to.
+    #[serde(default)]
+    pub vir_name: String,
+    /// Screenshot path, if UGOS captured one.
+    #[serde(default)]
+    pub screenshot: String,
 }
 
 // ── Network ─────────────────────────────────────────────────────────

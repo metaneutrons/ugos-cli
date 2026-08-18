@@ -46,18 +46,23 @@ pub trait KvmApi {
 
     /// List snapshots for a VM.
     fn snapshot_list(&self, vm: &str) -> impl Future<Output = Result<Vec<Snapshot>>> + Send;
-    /// Create a snapshot.
-    fn snapshot_create(&self, vm: &str, name: &str) -> impl Future<Output = Result<()>> + Send;
-    /// Delete a snapshot.
+    /// Create a snapshot. UGOS names it and returns that name.
+    fn snapshot_create(&self, vm: &str) -> impl Future<Output = Result<String>> + Send;
+    /// Delete a snapshot by its internal name.
     fn snapshot_delete(&self, vm: &str, name: &str) -> impl Future<Output = Result<()>> + Send;
-    /// Revert to a snapshot.
-    fn snapshot_revert(&self, vm: &str, name: &str) -> impl Future<Output = Result<()>> + Send;
-    /// Rename a snapshot.
-    fn snapshot_rename(
+    /// Revert to a snapshot, optionally taking one of the current state first.
+    fn snapshot_revert(
         &self,
         vm: &str,
-        old: &str,
-        new: &str,
+        name: &str,
+        snapshot_first: bool,
+    ) -> impl Future<Output = Result<()>> + Send;
+    /// Set a snapshot's description.
+    fn snapshot_describe(
+        &self,
+        vm: &str,
+        name: &str,
+        description: &str,
     ) -> impl Future<Output = Result<()>> + Send;
 
     // ── Network ─────────────────────────────────────────────────────
@@ -217,6 +222,32 @@ fn ensure_nonempty(size: u64) -> Result<()> {
         return Err(UgosError::Encryption("file is empty".to_owned()));
     }
     Ok(())
+}
+
+/// Response of `GenerateSnapshot`, which names the snapshot itself.
+#[derive(Debug, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SnapshotCreated {
+    #[serde(default)]
+    snapshot_display_name: String,
+}
+
+/// Look up a snapshot's display name, which the delete endpoint wants
+/// alongside the internal name.
+async fn snapshot_display_name(client: &UgosClient, vm: &str, name: &str) -> Result<String> {
+    let (uuid, _) = resolve_vm(client, vm).await?;
+    let snaps: ResultWrapper<Vec<Snapshot>> = client
+        .get_with_params("kvm/manager/ShowListSnapshot", &[("name", uuid.as_str())])
+        .await?;
+    snaps
+        .result
+        .iter()
+        .find(|s| s.name == name || s.display_name == name)
+        .map(|s| s.display_name.clone())
+        .ok_or_else(|| UgosError::NotFound {
+            kind: "snapshot",
+            name: name.to_owned(),
+        })
 }
 
 // ── Name resolution ─────────────────────────────────────────────────
@@ -384,14 +415,31 @@ impl KvmApi for UgosClient {
         Ok(resp.result)
     }
 
-    async fn snapshot_create(&self, vm: &str, name: &str) -> Result<()> {
+    async fn snapshot_create(&self, vm: &str) -> Result<String> {
+        // `name` is the VM's UUID here, not a snapshot name: UGOS picks the
+        // snapshot name itself and reports it back.
         let (uuid, display) = resolve_vm(self, vm).await?;
-        let _: ResultWrapper<String> = self
+        let resp: SnapshotCreated = self
             .get_with_params(
                 "kvm/manager/GenerateSnapshot",
                 &[
+                    ("name", uuid.as_str()),
+                    ("virtualMachineDisplayName", display.as_str()),
+                ],
+            )
+            .await?;
+        Ok(resp.snapshot_display_name)
+    }
+
+    async fn snapshot_delete(&self, vm: &str, name: &str) -> Result<()> {
+        // Both parameters describe the snapshot; the display name comes from
+        // the listing.
+        let display = snapshot_display_name(self, vm, name).await?;
+        let _: ResultWrapper<String> = self
+            .get_with_params(
+                "kvm/manager/DeleteSnapshot",
+                &[
                     ("name", name),
-                    ("virName", uuid.as_str()),
                     ("virtualMachineDisplayName", display.as_str()),
                 ],
             )
@@ -399,27 +447,28 @@ impl KvmApi for UgosClient {
         Ok(())
     }
 
-    async fn snapshot_delete(&self, vm: &str, name: &str) -> Result<()> {
+    async fn snapshot_revert(&self, vm: &str, name: &str, snapshot_first: bool) -> Result<()> {
         let (uuid, _) = resolve_vm(self, vm).await?;
         let _: ResultWrapper<String> = self
             .get_with_params(
-                "kvm/manager/DeleteSnapshot",
-                &[("name", name), ("virName", uuid.as_str())],
+                "kvm/manager/RevertSnapshot",
+                &[
+                    ("virtualMachineName", uuid.as_str()),
+                    ("snapshotName", name),
+                    (
+                        "createSnapshot",
+                        if snapshot_first { "true" } else { "false" },
+                    ),
+                ],
             )
             .await?;
         Ok(())
     }
 
-    async fn snapshot_revert(&self, _vm: &str, name: &str) -> Result<()> {
-        let _: ResultWrapper<String> = self
-            .get_with_params("kvm/manager/RevertSnapshot", &[("name", name)])
-            .await?;
-        Ok(())
-    }
-
-    async fn snapshot_rename(&self, _vm: &str, old: &str, new: &str) -> Result<()> {
-        let body = serde_json::json!({"name": old, "displayName": new});
-        let _: ResultWrapper<String> = self.post("kvm/manager/RenameSnapshot", &body).await?;
+    async fn snapshot_describe(&self, vm: &str, name: &str, description: &str) -> Result<()> {
+        let _ = snapshot_display_name(self, vm, name).await?;
+        let body = serde_json::json!({"name": name, "description": description});
+        let _: ResultWrapper<String> = self.post("kvm/manager/EditSnapshot", &body).await?;
         Ok(())
     }
 
