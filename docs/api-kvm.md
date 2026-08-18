@@ -31,7 +31,10 @@ as long as it is unique.
 ### UploadPath
 - **Method**: POST
 - **Body**: `{path, imageName, fileName}` — registers a file that already
-  sits on the NAS. Taken from the web UI bundle, not yet exercised.
+  sits on the NAS instead of uploading it.
+
+Taken from the web UI bundle and not verified: the only files reachable for a
+test were already registered, and a taken `fileName` answers `9999`.
 
 ### DeleteImage
 - **Method**: GET

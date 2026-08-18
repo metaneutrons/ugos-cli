@@ -94,6 +94,20 @@ pub enum Resource {
     },
     /// Show NAS host info.
     Info,
+    /// Show host load and every VM at once.
+    Overview,
+    /// PCI passthrough devices.
+    Passthrough {
+        #[command(subcommand)]
+        action: PassthroughAction,
+    },
+}
+
+/// PCI passthrough subcommands.
+#[derive(Debug, Subcommand)]
+pub enum PassthroughAction {
+    /// List PCI devices available for passthrough.
+    List,
 }
 
 /// VM subcommands.
@@ -415,6 +429,8 @@ pub enum StorageAction {
         /// Volume UUID.
         uuid: String,
     },
+    /// Show how much space KVM uses per volume and per VM.
+    Df,
 }
 
 /// Image subcommands.
@@ -433,6 +449,15 @@ pub enum ImageAction {
     Usage {
         /// Image name.
         name: String,
+    },
+    /// Register an image that already sits on the NAS, without uploading.
+    /// Body taken from the web UI; not verified against a live NAS.
+    Register {
+        /// Full path on the NAS, e.g. `/volume1/isos/debian.iso`.
+        path: String,
+        /// Display name for the image [default: the file name without its extension].
+        #[arg(long)]
+        name: Option<String>,
     },
     /// Upload an ISO from a local file or an http(s) URL.
     Upload {

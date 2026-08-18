@@ -55,6 +55,12 @@ ugos-cli vm create debian --cores 4 --memory 8g --disk 50g --dry-run
 ugos-cli image upload ~/Downloads/debian.iso
 ugos-cli image upload https://example.org/debian.iso --name debian-13
 
+# Host load and all VMs in one call
+ugos-cli overview
+
+# How much space KVM uses, per volume and per VM
+ugos-cli storage df
+
 # Other resources
 ugos-cli network list
 ugos-cli storage list
@@ -303,13 +309,14 @@ ugos-client = "0.1"
 | **VM** | list, show, start, stop, force-stop, reboot, force-reboot, delete, create, update |
 | **Snapshot** | list, create, delete, revert, rename |
 | **Network** | list, show, create, update, delete |
-| **Storage** | list, usage, add, delete |
-| **Image** | list, upload (file or URL), delete, usage |
+| **Storage** | list, usage, add, delete, df (usage per VM) |
+| **Image** | list, upload (file or URL), register, delete, usage |
 | **USB** | list |
+| **PCI** | list passthrough devices |
 | **VNC** | list links, generate noVNC link |
 | **OVA** | export, parse |
 | **Log** | search audit log, list operators |
-| **Host** | info (CPU cores, memory) |
+| **Host** | info (CPU cores, memory), overview (load plus every VM) |
 | **Docker container** | list, show, create, start, stop, restart, kill, remove, update, clone, batch-operate, logs |
 | **Docker image** | list, search, download, delete, export, load (URL/path) |
 | **Docker registry** | list/add/delete/switch mirror, HTTP proxy get/set |

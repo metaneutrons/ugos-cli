@@ -188,6 +188,94 @@ pub struct VmOtherConfig {
     pub share_directory: Vec<serde_json::Value>,
 }
 
+// ── Overview ────────────────────────────────────────────────────────
+
+/// Dashboard payload from `ShowOverview`: host load plus every VM in one call.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Overview {
+    /// Host-wide CPU and memory figures.
+    #[serde(default)]
+    pub host_stats: HostStats,
+    /// The same summaries `ShowLocalVirtualList` returns.
+    #[serde(default)]
+    pub vm_list: Vec<VmSummary>,
+}
+
+/// Host load figures from `ShowOverview`.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HostStats {
+    /// Host CPU utilisation in percent.
+    #[serde(default)]
+    pub cpu_util: f64,
+    /// Total host memory in bytes.
+    #[serde(default)]
+    pub host_total_mem: i64,
+    /// Memory used by everything except VMs, in bytes.
+    #[serde(default)]
+    pub other_used_mem: i64,
+    /// Total memory in use, in bytes.
+    #[serde(default)]
+    pub total_used_mem: i64,
+    /// Memory used by VMs, in bytes.
+    #[serde(default)]
+    pub vm_used_mem: i64,
+}
+
+// ── Storage usage ───────────────────────────────────────────────────
+
+/// Volume usage from `ShowLocalStorageUsageList`, broken down per VM.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StorageUsage {
+    /// Volume name (e.g. "volume1").
+    #[serde(default)]
+    pub name: String,
+    /// Display label (e.g. "Volume 1").
+    #[serde(default)]
+    pub label: String,
+    /// Filesystem type.
+    #[serde(default)]
+    pub filesystem: String,
+    /// Total capacity in bytes.
+    #[serde(default)]
+    pub total_capacity: i64,
+    /// Available capacity in bytes.
+    #[serde(default)]
+    pub available_capacity: i64,
+    /// Capacity used by KVM, in bytes.
+    #[serde(default)]
+    pub used_capacity: i64,
+    /// Share of the volume used by KVM, in percent.
+    #[serde(default)]
+    pub used_percent: f64,
+    /// Number of VMs on this volume.
+    #[serde(default)]
+    pub vir_count: i64,
+    /// Per-VM breakdown.
+    #[serde(default)]
+    pub vm_usages: Vec<VmUsage>,
+}
+
+/// One VM's share of a volume.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct VmUsage {
+    /// VM display name.
+    #[serde(default)]
+    pub vir_display_name: String,
+    /// VM UUID.
+    #[serde(default)]
+    pub vir_name: String,
+    /// Bytes used by this VM.
+    #[serde(default)]
+    pub used_capacity: i64,
+    /// Share of the volume, in percent.
+    #[serde(default)]
+    pub used_percent: f64,
+}
+
 // ── Snapshot ────────────────────────────────────────────────────────
 
 /// A VM snapshot.

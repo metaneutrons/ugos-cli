@@ -369,6 +369,71 @@ pub fn format_mib(kib: i64) -> String {
     format!("{} MiB", kib / 1024)
 }
 
+/// Rows for `overview`: host load first, then one line per VM.
+#[allow(clippy::cast_precision_loss)]
+pub fn overview_rows(ov: &ugos_client::types::kvm::Overview) -> Vec<VmDetailRow> {
+    let h = &ov.host_stats;
+    let mut rows = vec![
+        VmDetailRow {
+            field: "Host CPU".into(),
+            value: format!("{:.1}%", h.cpu_util),
+        },
+        VmDetailRow {
+            field: "Host memory".into(),
+            value: format!(
+                "{} of {} used",
+                format_gib(h.total_used_mem),
+                format_gib(h.host_total_mem)
+            ),
+        },
+        VmDetailRow {
+            field: "Memory by VMs".into(),
+            value: format_gib(h.vm_used_mem),
+        },
+        VmDetailRow {
+            field: "VMs".into(),
+            value: format!(
+                "{} total, {} running",
+                ov.vm_list.len(),
+                ov.vm_list.iter().filter(|v| v.status == "running").count()
+            ),
+        },
+    ];
+    rows.extend(ov.vm_list.iter().map(|vm| VmDetailRow {
+        field: format!("  {}", vm.vir_display_name),
+        value: format!(
+            "{}, {}% CPU, {}",
+            vm.status,
+            vm.guest_cpu_percent,
+            format_mib(vm.guest_used_memory)
+        ),
+    }));
+    rows
+}
+
+/// Rows for `storage df`: one line per volume, then its VMs.
+#[allow(clippy::cast_precision_loss)]
+pub fn storage_usage_rows(usage: &[ugos_client::types::kvm::StorageUsage]) -> Vec<VmDetailRow> {
+    let mut rows = Vec::new();
+    for vol in usage {
+        rows.push(VmDetailRow {
+            field: vol.name.clone(),
+            value: format!(
+                "{} used by KVM ({:.1}%), {} free of {}",
+                format_gib(vol.used_capacity),
+                vol.used_percent,
+                format_gib(vol.available_capacity),
+                format_gib(vol.total_capacity)
+            ),
+        });
+        rows.extend(vol.vm_usages.iter().map(|vm| VmDetailRow {
+            field: format!("  {}", vm.vir_display_name),
+            value: format!("{} ({:.2}%)", format_gib(vm.used_capacity), vm.used_percent),
+        }));
+    }
+    rows
+}
+
 /// Format bytes as human-readable GiB.
 #[allow(clippy::cast_precision_loss)]
 pub fn format_gib(bytes: i64) -> String {

@@ -7,8 +7,8 @@ use crate::client::UgosClient;
 use crate::error::{Result, UgosError};
 use crate::types::common::ResultWrapper;
 use crate::types::kvm::{
-    HostInfo, ImageInfo, LogPage, NetworkDetail, NetworkSummary, Snapshot, StorageInfo, UsbDevice,
-    VmDetail, VmSummary, VncLink,
+    HostInfo, ImageInfo, LogPage, NetworkDetail, NetworkSummary, Overview, Snapshot, StorageInfo,
+    StorageUsage, UsbDevice, VmDetail, VmSummary, VncLink,
 };
 
 /// KVM management operations on a UGOS NAS.
@@ -39,6 +39,8 @@ pub trait KvmApi {
     fn vm_update(&self, spec: &VmDetail) -> impl Future<Output = Result<()>> + Send;
     /// Get host hardware info (CPU cores, memory).
     fn host_info(&self) -> impl Future<Output = Result<HostInfo>> + Send;
+    /// Get host load and every VM in one call.
+    fn overview(&self) -> impl Future<Output = Result<Overview>> + Send;
 
     // ── Snapshot ────────────────────────────────────────────────────
 
@@ -85,6 +87,8 @@ pub trait KvmApi {
     fn storage_add(&self, name: &str, uuid: &str) -> impl Future<Output = Result<()>> + Send;
     /// Remove a storage volume from KVM.
     fn storage_delete(&self, name: &str, uuid: &str) -> impl Future<Output = Result<()>> + Send;
+    /// List volume usage, broken down per VM.
+    fn storage_usage_list(&self) -> impl Future<Output = Result<Vec<StorageUsage>>> + Send;
 
     // ── Image ───────────────────────────────────────────────────────
 
@@ -128,10 +132,20 @@ pub trait KvmApi {
         progress: &(dyn Fn(usize, usize) + Send + Sync),
     ) -> impl Future<Output = Result<String>> + Send;
 
-    // ── USB ─────────────────────────────────────────────────────────
+    /// Register an image that already sits on the NAS, without uploading it.
+    fn image_register(
+        &self,
+        path: &str,
+        image_name: &str,
+        file_name: &str,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    // ── USB / PCI ───────────────────────────────────────────────────
 
     /// List USB devices for a VM.
     fn usb_list(&self, vm: &str) -> impl Future<Output = Result<Vec<UsbDevice>>> + Send;
+    /// List PCI devices available for passthrough.
+    fn passthrough_devices(&self) -> impl Future<Output = Result<Vec<serde_json::Value>>> + Send;
 
     // ── VNC ─────────────────────────────────────────────────────────
 
@@ -356,6 +370,10 @@ impl KvmApi for UgosClient {
         self.get("kvm/manager/ShowNativeInfo").await
     }
 
+    async fn overview(&self) -> Result<Overview> {
+        self.get("kvm/manager/ShowOverview").await
+    }
+
     // ── Snapshot ────────────────────────────────────────────────────
 
     async fn snapshot_list(&self, vm: &str) -> Result<Vec<Snapshot>> {
@@ -468,6 +486,12 @@ impl KvmApi for UgosClient {
             )
             .await?;
         Ok(())
+    }
+
+    async fn storage_usage_list(&self) -> Result<Vec<StorageUsage>> {
+        let resp: ResultWrapper<Vec<StorageUsage>> =
+            self.get("kvm/storage/ShowLocalStorageUsageList").await?;
+        Ok(resp.result)
     }
 
     // ── Image ───────────────────────────────────────────────────────
@@ -602,7 +626,23 @@ impl KvmApi for UgosClient {
         result
     }
 
-    // ── USB ─────────────────────────────────────────────────────────
+    async fn image_register(&self, path: &str, image_name: &str, file_name: &str) -> Result<()> {
+        let body = serde_json::json!({
+            "path": path,
+            "imageName": image_name,
+            "fileName": file_name,
+        });
+        let _: ResultWrapper<String> = self.post("kvm/image/UploadPath", &body).await?;
+        Ok(())
+    }
+
+    // ── USB / PCI ───────────────────────────────────────────────────
+
+    async fn passthrough_devices(&self) -> Result<Vec<serde_json::Value>> {
+        let resp: ResultWrapper<Vec<serde_json::Value>> =
+            self.get("kvm/passthrough/devices").await?;
+        Ok(resp.result)
+    }
 
     async fn usb_list(&self, vm: &str) -> Result<Vec<UsbDevice>> {
         let (uuid, _) = resolve_vm(self, vm).await?;

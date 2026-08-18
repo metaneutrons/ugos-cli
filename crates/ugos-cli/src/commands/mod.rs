@@ -10,8 +10,8 @@ use ugos_client::api::docker::DockerApi;
 use ugos_client::api::kvm::KvmApi;
 
 use crate::cli::{
-    DockerAction, ImageAction, LogAction, NetworkAction, OutputFormat, OvaAction, Resource,
-    SnapshotAction, StorageAction, UsbAction, VmAction, VncAction,
+    DockerAction, ImageAction, LogAction, NetworkAction, OutputFormat, OvaAction,
+    PassthroughAction, Resource, SnapshotAction, StorageAction, UsbAction, VmAction, VncAction,
 };
 use crate::output;
 
@@ -37,7 +37,37 @@ pub async fn run(
         Resource::Docker { action } => docker(client, action, fmt, w).await,
         Resource::Log { action } => log(client, action, fmt, w).await,
         Resource::Info => info(client, fmt, w).await,
+        Resource::Overview => overview(client, fmt, w).await,
+        Resource::Passthrough { action } => passthrough(client, action, fmt, w).await,
     }
+}
+
+async fn overview(client: &UgosClient, fmt: OutputFormat, w: &mut impl Write) -> Result<()> {
+    let ov = client.overview().await?;
+    match fmt {
+        OutputFormat::Table => {
+            let rows = output::overview_rows(&ov);
+            output::print_list(w, &rows, fmt)?;
+        }
+        OutputFormat::Json => output::print_json(w, &ov)?,
+    }
+    Ok(())
+}
+
+async fn passthrough(
+    client: &UgosClient,
+    action: &PassthroughAction,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
+    match action {
+        PassthroughAction::List => {
+            let devices = client.passthrough_devices().await?;
+            output::print_json(w, &devices)?;
+            let _ = fmt;
+        }
+    }
+    Ok(())
 }
 
 async fn vm(
@@ -229,6 +259,16 @@ async fn storage(
             client.storage_add(name, uuid).await?;
             output::print_success(w, &format!("Added storage {name}"), fmt)?;
         }
+        StorageAction::Df => {
+            let usage = client.storage_usage_list().await?;
+            match fmt {
+                OutputFormat::Table => {
+                    let rows = output::storage_usage_rows(&usage);
+                    output::print_list(w, &rows, fmt)?;
+                }
+                OutputFormat::Json => output::print_json(w, &usage)?,
+            }
+        }
         StorageAction::Delete { name, uuid } => {
             client.storage_delete(name, uuid).await?;
             output::print_success(w, &format!("Deleted storage {name}"), fmt)?;
@@ -255,6 +295,12 @@ async fn image(
         } => {
             client.image_delete(file_name, image_name).await?;
             output::print_success(w, &format!("Deleted image {image_name}"), fmt)?;
+        }
+        ImageAction::Register { path, name } => {
+            let image_name = name.clone().unwrap_or_else(|| default_iso_name(path));
+            let file_name = path.rsplit('/').next().unwrap_or(path).to_owned();
+            client.image_register(path, &image_name, &file_name).await?;
+            output::print_success(w, &format!("Registered {image_name}"), fmt)?;
         }
         ImageAction::Upload { source, name } => {
             let iso_name = name.clone().unwrap_or_else(|| default_iso_name(source));
