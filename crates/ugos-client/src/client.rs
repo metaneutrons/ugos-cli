@@ -219,6 +219,65 @@ impl UgosClient {
         Self::decode(resp)
     }
 
+    /// GET raw bytes, for file downloads that answer with the file itself.
+    ///
+    /// # Errors
+    ///
+    /// Returns the appropriate [`UgosError`] on network failure or a non-2xx
+    /// status.
+    pub async fn get_bytes(
+        &self,
+        path: &str,
+        params: &[(&str, &str)],
+    ) -> Result<reqwest::Response> {
+        let token = self.session.read().await.token.clone();
+        let url = Self::append_token(&self.url_for(path), &token);
+        Ok(self
+            .http
+            .get(&url)
+            .query(params)
+            .send()
+            .await?
+            .error_for_status()?)
+    }
+
+    /// POST a raw body, which is how the file manager takes file contents.
+    ///
+    /// The transfer metadata rides in a `ug-param` header rather than in the
+    /// body, and the token is sealed the way encrypted endpoints expect it.
+    ///
+    /// # Errors
+    ///
+    /// Returns the appropriate [`UgosError`] on API, crypto or network failure.
+    pub async fn post_bytes<T: DeserializeOwned + Send>(
+        &self,
+        path: &str,
+        body: Vec<u8>,
+        file_name: &str,
+        ug_param: &serde_json::Value,
+    ) -> Result<T> {
+        let public_key = self.public_key().await?;
+        let token = self.session.read().await.token.clone();
+
+        let resp: ApiResponse<serde_json::Value> = self
+            .http
+            .post(self.url_for(path))
+            .header(
+                "Content-Disposition",
+                format!("attachment; filename=\"{file_name}\""),
+            )
+            .header("Content-Type", "application/octet-stream")
+            .header("ug-param", ug_param.to_string())
+            .header("X-Ugreen-Security-Key", md5_hex(&token))
+            .header("X-Ugreen-Token", rsa_seal(&public_key, &token)?)
+            .body(body)
+            .send()
+            .await?
+            .json()
+            .await?;
+        Self::decode(resp)
+    }
+
     /// The RSA key used to wrap per-request AES keys.
     ///
     /// It comes from the login response, not from the `verify/check`

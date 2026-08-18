@@ -54,16 +54,40 @@ does not exist still reports success.
 - **Method**: GET, plain
 - **Response**: `{result: [{name, path, fs_type, all, used, free}]}`
 
-## Upload, not yet wrapped
+## Transfer
 
-Two steps, both v1 and plain:
+### filemgr/downloadFile
+- **Method**: GET, plain, v1
+- **Params**: `paths=<absolute path>`
+- **Response**: the file itself
 
-1. `filemgr/fileUpload`, multipart, announces the transfer: `uuid`, `dir`,
-   `action_type`, `size`, `begin_size`, `current_size`, `change_time`,
-   `filename`, `resume`, `first_request`.
-2. `filemgr/fileUploadV2`, the raw bytes as the body, with
-   `Content-Disposition: attachment; filename="..."` and
-   `Content-Type: application/octet-stream`. The response names the path the
-   file landed at.
+There is also a v2 route via `getDownloadToken` plus `v2/filemgr/downloadFile`,
+which the web UI uses; the v1 one needs no token dance and is what this client
+calls.
 
-`getUpdateTmpInfo` sits between them and appears to serve resumption.
+### Upload: two steps
+
+**1. `filemgr/fileUpload`** — multipart, announces the transfer:
+`uuid`, `dir`, `action_type` (0), `size`, `begin_size` (0), `current_size`
+(0), `change_time` (mtime), `filename`, `resume` ("true"), `first_request`
+("true").
+
+**2. `filemgr/fileUploadV2`** — the raw bytes as the body, with:
+
+- `Content-Disposition: attachment; filename="..."`
+- `Content-Type: application/octet-stream`
+- `X-Ugreen-Token` (RSA-sealed) and `X-Ugreen-Security-Key` (MD5), as for any
+  encrypted endpoint — the body itself stays unencrypted
+- **`ug-param`**, a JSON header repeating the metadata:
+  `{uuid, file_name, action_type, size, current_size, resume, dir,
+  change_time, is_live_photo, first_request, begin_size}`
+
+The `uuid` must match step one. Inside `ug-param`, **`dir` is URL-encoded**,
+unlike in step one. Without this header the call fails with a bare
+`parameter error`.
+
+The response names the path the file landed at. `getUpdateTmpInfo` sits
+between the two steps in the web UI and appears to serve resumption; it is
+not needed for a fresh upload.
+
+Verified with an 8 MiB round trip: uploaded, downloaded again, byte-identical.

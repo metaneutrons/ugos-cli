@@ -61,6 +61,8 @@ ugos-cli overview
 # Browse the NAS
 ugos-cli fs ls /volume1/download
 ugos-cli fs volumes
+ugos-cli fs put ./backup.tar.gz /volume1/backups
+ugos-cli fs get /volume1/backups/backup.tar.gz
 
 # Let the NAS fetch a file straight from the internet
 ugos-cli download add https://example.org/big.iso
@@ -338,7 +340,7 @@ ugos-client = "0.1"
 | **Host** | info (CPU cores, memory), overview (load plus every VM) |
 | **System** | hardware and firmware info, live CPU/memory/disk/network/fan readings, processes, services |
 | **Download** | queue a URL for the NAS to fetch, list, check, status, remove |
-| **Files** | list a directory, list volumes, create, rename, delete |
+| **Files** | list a directory, list volumes, upload, download, create, rename, delete |
 | **Docker container** | list, show, create, start, stop, restart, kill, remove, update, clone, batch-operate, logs |
 | **Docker image** | list, search, download, delete, export, load (URL/path) |
 | **Docker registry** | list/add/delete/switch mirror, HTTP proxy get/set |

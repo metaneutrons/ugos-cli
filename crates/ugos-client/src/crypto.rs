@@ -170,6 +170,12 @@ pub fn query_string(params: &[(&str, &str)]) -> String {
 }
 
 /// Percent-encode everything outside the unreserved set.
+#[must_use]
+pub fn urlencode_component(value: &str) -> String {
+    urlencode(value)
+}
+
+/// Percent-encode everything outside the unreserved set.
 fn urlencode(value: &str) -> String {
     const HEX: &[u8; 16] = b"0123456789ABCDEF";
     let mut out = String::with_capacity(value.len());

@@ -93,6 +93,32 @@ async fn fs(
                 fmt,
             )?;
         }
+        FsAction::Get { remote, local } => {
+            let dest = local
+                .clone()
+                .unwrap_or_else(|| remote.rsplit('/').next().unwrap_or("download").to_owned());
+            let quiet = matches!(fmt, OutputFormat::Json);
+            let progress = move |written: u64| {
+                if !quiet {
+                    let mut err = std::io::stderr();
+                    let _ = write!(err, "\rreceived {} MiB", written / 1_048_576);
+                    let _ = err.flush();
+                }
+            };
+            let bytes = client
+                .fs_download(remote, std::path::Path::new(&dest), &progress)
+                .await?;
+            if !quiet {
+                let _ = writeln!(std::io::stderr());
+            }
+            output::print_success(w, &format!("Wrote {dest} ({bytes} bytes)"), fmt)?;
+        }
+        FsAction::Put { local, remote_dir } => {
+            let placed = client
+                .fs_upload(std::path::Path::new(local), remote_dir)
+                .await?;
+            output::print_success(w, &format!("Uploaded to {placed}"), fmt)?;
+        }
         FsAction::Mv { path, new_name } => {
             client.fs_rename(path, new_name).await?;
             output::print_success(w, &format!("Renamed to {new_name}"), fmt)?;

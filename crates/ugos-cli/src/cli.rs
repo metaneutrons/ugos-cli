@@ -141,6 +141,20 @@ pub enum FsAction {
         #[arg(long)]
         forever: bool,
     },
+    /// Download a file from the NAS.
+    Get {
+        /// Absolute path on the NAS.
+        remote: String,
+        /// Local destination [default: the file name in the current directory].
+        local: Option<String>,
+    },
+    /// Upload a local file to a directory on the NAS.
+    Put {
+        /// Local file to upload.
+        local: String,
+        /// Absolute target directory on the NAS.
+        remote_dir: String,
+    },
     /// Rename a file or directory.
     Mv {
         /// Absolute path of the entry.
