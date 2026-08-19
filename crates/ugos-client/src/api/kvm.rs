@@ -785,12 +785,8 @@ impl KvmApi for UgosClient {
     ) -> Result<String> {
         use std::io::Write;
 
-        let file_name = url
-            .rsplit('/')
-            .next()
-            .filter(|n| !n.is_empty())
-            .map_or_else(|| format!("{iso_name}.iso"), ToOwned::to_owned);
-        let temp = std::env::temp_dir().join(&file_name);
+        let file_name = safe_download_name(url, iso_name);
+        let (scratch, temp) = create_scratch_file(&file_name)?;
 
         // A separate client: the authenticated one carries NAS cookies and
         // trusts invalid certificates, neither of which belongs on a download
@@ -813,6 +809,7 @@ impl KvmApi for UgosClient {
 
         let result = self.image_upload(&temp, iso_name, progress).await;
         let _ = std::fs::remove_file(&temp);
+        let _ = std::fs::remove_dir(&scratch);
         result
     }
 
@@ -909,5 +906,182 @@ impl KvmApi for UgosClient {
     async fn ova_parse(&self, ova_path: &str) -> Result<VmDetail> {
         let body = serde_json::json!({"ovaPath": ova_path});
         self.post("kvm/manager/ParseOvaFile", &body).await
+    }
+}
+
+/// Derive a safe local file name for a download.
+///
+/// The name comes from a URL, so it must not be trusted as a path: a
+/// segment of `..`, an absolute path, or an embedded separator would place
+/// the download somewhere unintended. Anything that is not a plain file name
+/// falls back to the caller's chosen ISO name.
+fn safe_download_name(url: &str, iso_name: &str) -> String {
+    let fallback = || format!("{iso_name}.iso");
+    let candidate = url
+        .rsplit('/')
+        .next()
+        .map(|n| n.split(['?', '#']).next().unwrap_or(n))
+        .unwrap_or_default();
+
+    let rejected = candidate.is_empty()
+        || candidate == "."
+        || candidate == ".."
+        || candidate.contains('/')
+        || candidate.contains('\\')
+        || candidate.contains('\0');
+
+    if rejected {
+        return fallback();
+    }
+    // A leading dot would create a hidden file; harmless, but not what the
+    // caller asked for either.
+    if candidate.starts_with('.') {
+        return fallback();
+    }
+    candidate.to_owned()
+}
+
+/// Create a private directory under the temp dir and a fresh file inside it.
+///
+/// A download must not land on a predictable path in a world-writable
+/// directory: on a shared machine another user can place a symlink there in
+/// advance and have the write follow it. The directory name therefore
+/// includes the process id and a monotonic component, it is created with
+/// `create_dir` so an existing one is an error rather than reuse, and the
+/// file itself is opened with `create_new` so an existing entry — symlink
+/// included — fails instead of being written through.
+///
+/// Returns the directory and the file path; the caller removes both.
+fn create_scratch_file(file_name: &str) -> Result<(std::path::PathBuf, std::path::PathBuf)> {
+    let unique = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_nanos());
+    let dir = std::env::temp_dir().join(format!("ugos-cli-{}-{unique}", std::process::id()));
+
+    std::fs::create_dir(&dir)
+        .map_err(|e| UgosError::Encryption(format!("creating '{}': {e}", dir.display())))?;
+
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
+    }
+
+    let path = dir.join(file_name);
+    // Prove the path is fresh before anything is written to it. The handle
+    // is dropped straight away; the caller opens the file for the download.
+    let probe = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+        .map_err(|e| UgosError::Encryption(format!("creating '{}': {e}", path.display())))?;
+    drop(probe);
+
+    Ok((dir, path))
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod scratch_tests {
+    use super::create_scratch_file;
+
+    #[test]
+    fn creates_the_file_and_hands_back_both_paths() {
+        let (dir, file) = create_scratch_file("debian.iso").unwrap();
+        assert!(dir.is_dir(), "directory missing");
+        assert!(file.is_file(), "file missing");
+        assert_eq!(
+            file.file_name().and_then(|n| n.to_str()),
+            Some("debian.iso")
+        );
+        assert_eq!(file.parent(), Some(dir.as_path()));
+        let _ = std::fs::remove_file(&file);
+        let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn two_calls_never_share_a_directory() {
+        let (d1, f1) = create_scratch_file("same.iso").unwrap();
+        let (d2, f2) = create_scratch_file("same.iso").unwrap();
+        assert_ne!(d1, d2, "scratch directories collided");
+        assert_ne!(f1, f2);
+        for (d, f) in [(d1, f1), (d2, f2)] {
+            let _ = std::fs::remove_file(&f);
+            let _ = std::fs::remove_dir(&d);
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn the_directory_is_private_to_the_user() {
+        use std::os::unix::fs::PermissionsExt;
+        let (dir, file) = create_scratch_file("x.iso").unwrap();
+        let mode = std::fs::metadata(&dir).unwrap().permissions().mode() & 0o777;
+        assert_eq!(mode, 0o700, "group or other can reach the download");
+        let _ = std::fs::remove_file(&file);
+        let _ = std::fs::remove_dir(&dir);
+    }
+
+    #[test]
+    fn refuses_a_path_that_already_exists() {
+        // Stands in for the symlink an attacker would plant: create_new must
+        // fail rather than write through anything already at the path.
+        let (dir, file) = create_scratch_file("taken.iso").unwrap();
+        let second = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&file);
+        assert!(second.is_err(), "an existing path was reopened");
+        let _ = std::fs::remove_file(&file);
+        let _ = std::fs::remove_dir(&dir);
+    }
+}
+
+#[cfg(test)]
+mod download_name_tests {
+    use super::safe_download_name;
+
+    #[test]
+    fn takes_the_last_path_segment() {
+        assert_eq!(
+            safe_download_name("https://example.org/iso/debian.iso", "fallback"),
+            "debian.iso"
+        );
+    }
+
+    #[test]
+    fn strips_a_query_string() {
+        assert_eq!(
+            safe_download_name("https://example.org/debian.iso?token=x", "fallback"),
+            "debian.iso"
+        );
+    }
+
+    #[test]
+    fn rejects_traversal_segments() {
+        assert_eq!(safe_download_name("https://example.org/..", "fb"), "fb.iso");
+        assert_eq!(safe_download_name("https://example.org/.", "fb"), "fb.iso");
+    }
+
+    #[test]
+    fn rejects_an_empty_segment() {
+        assert_eq!(safe_download_name("https://example.org/", "fb"), "fb.iso");
+    }
+
+    #[test]
+    fn rejects_hidden_names() {
+        assert_eq!(
+            safe_download_name("https://example.org/.bashrc", "fb"),
+            "fb.iso"
+        );
+    }
+
+    #[test]
+    fn rejects_embedded_separators() {
+        // Percent-decoding is not applied, but a raw separator must not pass.
+        assert_eq!(
+            safe_download_name("https://example.org/a\\b.iso", "fb"),
+            "fb.iso"
+        );
     }
 }

@@ -152,6 +152,21 @@ pub fn sha256_hex(input: &str) -> String {
 }
 
 /// Hex-encoded MD5, which UGOS wants in `X-Ugreen-Security-Key`.
+///
+/// # Why MD5
+///
+/// MD5 is broken for every purpose that needs collision resistance, and
+/// static analysis flags this function accordingly. It is used here because
+/// the protocol leaves no choice: UGOS derives `X-Ugreen-Security-Key` as
+/// the MD5 of the session token and rejects the request otherwise. Sending
+/// anything else fails with `1010, Token cannot be empty!`.
+///
+/// The value is not a security control on this side. It is a fixed
+/// transformation of a token the server already knows, sent over TLS
+/// alongside the same token in two other forms; nothing here relies on the
+/// hash being hard to invert or collide. Replacing it would simply break
+/// the connection.
+// nosemgrep: rust.lang.security.insecure-hashes.insecure-hashes
 #[must_use]
 pub fn md5_hex(input: &str) -> String {
     let mut hasher = Md5::new();
