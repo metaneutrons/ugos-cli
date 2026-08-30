@@ -13,21 +13,53 @@ use ugos_client::types::kvm::{
 
 use crate::cli::OutputFormat;
 
+/// Implement [`Tabled`] for a row type without the derive macro.
+///
+/// `tabled`'s derive lives in `tabled_derive`, which depends on the
+/// unmaintained `proc-macro-error2`. That crate re-exports `proc_macro` in a
+/// way Rust is phasing out (E0365), so the derive was dropped in favour of
+/// this. Rendering is untouched — the same crate still draws the table, and
+/// this produces the headers and cells the derive produced.
+///
+/// Header and field stay on one line, which the two separate lists a manual
+/// impl would need cannot guarantee.
+macro_rules! table_row {
+    ($ty:ident { $($field:ident => $header:literal),+ $(,)? }) => {
+        impl Tabled for $ty {
+            const LENGTH: usize = <[()]>::len(&[$(table_row!(@unit $field)),+]);
+
+            fn fields(&self) -> Vec<std::borrow::Cow<'_, str>> {
+                vec![$(std::borrow::Cow::Owned(self.$field.to_string())),+]
+            }
+
+            fn headers() -> Vec<std::borrow::Cow<'static, str>> {
+                vec![$(std::borrow::Cow::Borrowed($header)),+]
+            }
+        }
+    };
+    (@unit $field:ident) => { () };
+}
+
 // ── Display row types ───────────────────────────────────────────────
 
 /// Table row for VM list.
-#[derive(Tabled, Serialize)]
+#[derive(Serialize)]
 pub struct VmRow {
-    #[tabled(rename = "Name")]
     pub name: String,
-    #[tabled(rename = "Status")]
     pub status: String,
-    #[tabled(rename = "CPU%")]
     pub cpu: String,
-    #[tabled(rename = "Memory")]
     pub memory: String,
-    #[tabled(rename = "OS")]
     pub os: String,
+}
+
+table_row! {
+  VmRow {
+    name => "Name",
+    status => "Status",
+    cpu => "CPU%",
+    memory => "Memory",
+    os => "OS",
+  }
 }
 
 impl From<&VmSummary> for VmRow {
@@ -43,12 +75,17 @@ impl From<&VmSummary> for VmRow {
 }
 
 /// Table row for VM detail.
-#[derive(Tabled, Serialize)]
+#[derive(Serialize)]
 pub struct VmDetailRow {
-    #[tabled(rename = "Field")]
     pub field: String,
-    #[tabled(rename = "Value")]
     pub value: String,
+}
+
+table_row! {
+  VmDetailRow {
+    field => "Field",
+    value => "Value",
+  }
 }
 
 /// Convert a `VmDetail` into key-value rows.
@@ -108,14 +145,19 @@ pub fn vm_detail_rows(d: &VmDetail) -> Vec<VmDetailRow> {
 }
 
 /// Table row for snapshots.
-#[derive(Tabled, Serialize)]
+#[derive(Serialize)]
 pub struct SnapshotRow {
-    #[tabled(rename = "Name")]
     pub name: String,
-    #[tabled(rename = "Created")]
     pub created: String,
-    #[tabled(rename = "Description")]
     pub description: String,
+}
+
+table_row! {
+  SnapshotRow {
+    name => "Name",
+    created => "Created",
+    description => "Description",
+  }
 }
 
 impl From<&Snapshot> for SnapshotRow {
@@ -129,18 +171,23 @@ impl From<&Snapshot> for SnapshotRow {
 }
 
 /// Table row for networks.
-#[derive(Tabled, Serialize)]
+#[derive(Serialize)]
 pub struct NetworkRow {
-    #[tabled(rename = "Name")]
     pub name: String,
-    #[tabled(rename = "Label")]
     pub label: String,
-    #[tabled(rename = "Type")]
     pub net_type: String,
-    #[tabled(rename = "Interface")]
     pub interface: String,
-    #[tabled(rename = "VMs")]
     pub vms: String,
+}
+
+table_row! {
+  NetworkRow {
+    name => "Name",
+    label => "Label",
+    net_type => "Type",
+    interface => "Interface",
+    vms => "VMs",
+  }
 }
 
 impl From<&NetworkSummary> for NetworkRow {
@@ -156,12 +203,17 @@ impl From<&NetworkSummary> for NetworkRow {
 }
 
 /// Table row for network detail.
-#[derive(Tabled, Serialize)]
+#[derive(Serialize)]
 pub struct NetDetailRow {
-    #[tabled(rename = "Field")]
     pub field: String,
-    #[tabled(rename = "Value")]
     pub value: String,
+}
+
+table_row! {
+  NetDetailRow {
+    field => "Field",
+    value => "Value",
+  }
 }
 
 /// Convert a `NetworkDetail` into key-value rows.
@@ -203,22 +255,27 @@ pub fn net_detail_rows(d: &NetworkDetail) -> Vec<NetDetailRow> {
 }
 
 /// Table row for storage.
-#[derive(Tabled, Serialize)]
+#[derive(Serialize)]
 pub struct StorageRow {
-    #[tabled(rename = "Name")]
     pub name: String,
-    #[tabled(rename = "Label")]
     pub label: String,
-    #[tabled(rename = "Filesystem")]
     pub filesystem: String,
-    #[tabled(rename = "Total")]
     pub total: String,
-    #[tabled(rename = "Available")]
     pub available: String,
-    #[tabled(rename = "VMs")]
     pub vms: String,
-    #[tabled(rename = "Path")]
     pub path: String,
+}
+
+table_row! {
+  StorageRow {
+    name => "Name",
+    label => "Label",
+    filesystem => "Filesystem",
+    total => "Total",
+    available => "Available",
+    vms => "VMs",
+    path => "Path",
+  }
 }
 
 impl From<&StorageInfo> for StorageRow {
@@ -236,18 +293,23 @@ impl From<&StorageInfo> for StorageRow {
 }
 
 /// Table row for images.
-#[derive(Tabled, Serialize)]
+#[derive(Serialize)]
 pub struct ImageRow {
-    #[tabled(rename = "Name")]
     pub name: String,
-    #[tabled(rename = "File")]
     pub file: String,
-    #[tabled(rename = "Type")]
     pub image_type: String,
-    #[tabled(rename = "Size")]
     pub size: String,
-    #[tabled(rename = "State")]
     pub state: String,
+}
+
+table_row! {
+  ImageRow {
+    name => "Name",
+    file => "File",
+    image_type => "Type",
+    size => "Size",
+    state => "State",
+  }
 }
 
 impl From<&ImageInfo> for ImageRow {
@@ -263,12 +325,17 @@ impl From<&ImageInfo> for ImageRow {
 }
 
 /// Table row for host info.
-#[derive(Tabled, Serialize)]
+#[derive(Serialize)]
 pub struct HostInfoRow {
-    #[tabled(rename = "Field")]
     pub field: String,
-    #[tabled(rename = "Value")]
     pub value: String,
+}
+
+table_row! {
+  HostInfoRow {
+    field => "Field",
+    value => "Value",
+  }
 }
 
 /// Convert `HostInfo` into key-value rows.
@@ -288,18 +355,23 @@ pub fn host_info_rows(h: &HostInfo) -> Vec<HostInfoRow> {
 // ── USB ─────────────────────────────────────────────────────────────
 
 /// Table row for USB devices.
-#[derive(Tabled, Serialize)]
+#[derive(Serialize)]
 pub struct UsbRow {
-    #[tabled(rename = "Vendor")]
     pub vendor: String,
-    #[tabled(rename = "Product")]
     pub product: String,
-    #[tabled(rename = "Vendor ID")]
     pub vendor_id: String,
-    #[tabled(rename = "Product ID")]
     pub product_id: String,
-    #[tabled(rename = "Used By")]
     pub used_by: String,
+}
+
+table_row! {
+  UsbRow {
+    vendor => "Vendor",
+    product => "Product",
+    vendor_id => "Vendor ID",
+    product_id => "Product ID",
+    used_by => "Used By",
+  }
 }
 
 impl From<&UsbDevice> for UsbRow {
@@ -321,12 +393,17 @@ impl From<&UsbDevice> for UsbRow {
 // ── VNC ─────────────────────────────────────────────────────────────
 
 /// Table row for VNC links.
-#[derive(Tabled, Serialize)]
+#[derive(Serialize)]
 pub struct VncRow {
-    #[tabled(rename = "Link")]
     pub link: String,
-    #[tabled(rename = "Type")]
     pub link_type: String,
+}
+
+table_row! {
+  VncRow {
+    link => "Link",
+    link_type => "Type",
+  }
 }
 
 impl From<&VncLink> for VncRow {
@@ -341,14 +418,19 @@ impl From<&VncLink> for VncRow {
 // ── Logs ────────────────────────────────────────────────────────────
 
 /// Table row for log entries.
-#[derive(Tabled, Serialize)]
+#[derive(Serialize)]
 pub struct LogRow {
-    #[tabled(rename = "Time")]
     pub time: String,
-    #[tabled(rename = "Operator")]
     pub operator: String,
-    #[tabled(rename = "Content")]
     pub content: String,
+}
+
+table_row! {
+  LogRow {
+    time => "Time",
+    operator => "Operator",
+    content => "Content",
+  }
 }
 
 impl From<&LogEntry> for LogRow {
@@ -563,18 +645,23 @@ pub fn system_stat_rows(s: &ugos_client::types::system::SystemStats) -> Vec<VmDe
 }
 
 /// Table row for processes and services.
-#[derive(Tabled, Serialize)]
+#[derive(Serialize)]
 pub struct ProcessRow {
-    #[tabled(rename = "ID")]
     pub pid: String,
-    #[tabled(rename = "Name")]
     pub name: String,
-    #[tabled(rename = "Status")]
     pub status: String,
-    #[tabled(rename = "CPU%")]
     pub cpu: String,
-    #[tabled(rename = "Memory")]
     pub memory: String,
+}
+
+table_row! {
+  ProcessRow {
+    pid => "ID",
+    name => "Name",
+    status => "Status",
+    cpu => "CPU%",
+    memory => "Memory",
+  }
 }
 
 /// Rows for `system processes`, heaviest first.
@@ -657,18 +744,23 @@ fn format_rate(bytes_per_second: f64) -> String {
 }
 
 /// Table row for the system log.
-#[derive(Tabled, Serialize)]
+#[derive(Serialize)]
 pub struct SysLogRow {
-    #[tabled(rename = "Time")]
     pub time: String,
-    #[tabled(rename = "Level")]
     pub level: String,
-    #[tabled(rename = "Module")]
     pub module: String,
-    #[tabled(rename = "Operator")]
     pub operator: String,
-    #[tabled(rename = "Message")]
     pub content: String,
+}
+
+table_row! {
+  SysLogRow {
+    time => "Time",
+    level => "Level",
+    module => "Module",
+    operator => "Operator",
+    content => "Message",
+  }
 }
 
 impl From<&ugos_client::types::syslog::LogEntry> for SysLogRow {
@@ -684,16 +776,21 @@ impl From<&ugos_client::types::syslog::LogEntry> for SysLogRow {
 }
 
 /// Table row for user accounts.
-#[derive(Tabled, Serialize)]
+#[derive(Serialize)]
 pub struct UserRow {
-    #[tabled(rename = "User")]
     pub username: String,
-    #[tabled(rename = "Type")]
     pub account_type: String,
-    #[tabled(rename = "Email")]
     pub email: String,
-    #[tabled(rename = "Description")]
     pub description: String,
+}
+
+table_row! {
+  UserRow {
+    username => "User",
+    account_type => "Type",
+    email => "Email",
+    description => "Description",
+  }
 }
 
 impl From<&ugos_client::types::syslog::User> for UserRow {
@@ -712,16 +809,21 @@ impl From<&ugos_client::types::syslog::User> for UserRow {
 }
 
 /// Table row for a directory listing.
-#[derive(Tabled, Serialize)]
+#[derive(Serialize)]
 pub struct FileRow {
-    #[tabled(rename = "Name")]
     pub name: String,
-    #[tabled(rename = "Type")]
     pub kind: String,
-    #[tabled(rename = "Size")]
     pub size: String,
-    #[tabled(rename = "Modified")]
     pub modified: String,
+}
+
+table_row! {
+  FileRow {
+    name => "Name",
+    kind => "Type",
+    size => "Size",
+    modified => "Modified",
+  }
 }
 
 impl From<&ugos_client::types::files::FileEntry> for FileRow {
@@ -744,18 +846,23 @@ impl From<&ugos_client::types::files::FileEntry> for FileRow {
 }
 
 /// Table row for volumes as the file manager reports them.
-#[derive(Tabled, Serialize)]
+#[derive(Serialize)]
 pub struct VolumeRow {
-    #[tabled(rename = "Name")]
     pub name: String,
-    #[tabled(rename = "Path")]
     pub path: String,
-    #[tabled(rename = "Filesystem")]
     pub fs_type: String,
-    #[tabled(rename = "Used")]
     pub used: String,
-    #[tabled(rename = "Free")]
     pub free: String,
+}
+
+table_row! {
+  VolumeRow {
+    name => "Name",
+    path => "Path",
+    fs_type => "Filesystem",
+    used => "Used",
+    free => "Free",
+  }
 }
 
 impl From<&ugos_client::types::files::Volume> for VolumeRow {
@@ -771,18 +878,23 @@ impl From<&ugos_client::types::files::Volume> for VolumeRow {
 }
 
 /// Table row for a folder that can hold filesystem snapshots.
-#[derive(Tabled, Serialize)]
+#[derive(Serialize)]
 pub struct SnapshotFolderRow {
-    #[tabled(rename = "Folder")]
     pub folder: String,
-    #[tabled(rename = "ID")]
     pub id: i64,
-    #[tabled(rename = "Snapshots")]
     pub snapshots: i64,
-    #[tabled(rename = "Latest")]
     pub latest: String,
-    #[tabled(rename = "Writable")]
     pub writable: String,
+}
+
+table_row! {
+  SnapshotFolderRow {
+    folder => "Folder",
+    id => "ID",
+    snapshots => "Snapshots",
+    latest => "Latest",
+    writable => "Writable",
+  }
 }
 
 impl From<&ugos_client::types::snapshot::SnapshotFolder> for SnapshotFolderRow {
@@ -798,18 +910,23 @@ impl From<&ugos_client::types::snapshot::SnapshotFolder> for SnapshotFolderRow {
 }
 
 /// Table row for a filesystem snapshot.
-#[derive(Tabled, Serialize)]
+#[derive(Serialize)]
 pub struct FsSnapshotRow {
-    #[tabled(rename = "ID")]
     pub id: i64,
-    #[tabled(rename = "Created")]
     pub created: String,
-    #[tabled(rename = "Name")]
     pub name: String,
-    #[tabled(rename = "Description")]
     pub desc: String,
-    #[tabled(rename = "Locked")]
     pub locked: String,
+}
+
+table_row! {
+  FsSnapshotRow {
+    id => "ID",
+    created => "Created",
+    name => "Name",
+    desc => "Description",
+    locked => "Locked",
+  }
 }
 
 impl From<&ugos_client::types::snapshot::Snapshot> for FsSnapshotRow {
@@ -848,18 +965,23 @@ fn format_unix(ts: i64) -> String {
 }
 
 /// Table row for download tasks.
-#[derive(Tabled, Serialize)]
+#[derive(Serialize)]
 pub struct DownloadRow {
-    #[tabled(rename = "File")]
     pub file: String,
-    #[tabled(rename = "Size")]
     pub size: String,
-    #[tabled(rename = "Progress")]
     pub progress: String,
-    #[tabled(rename = "Speed")]
     pub speed: String,
-    #[tabled(rename = "Target")]
     pub target: String,
+}
+
+table_row! {
+  DownloadRow {
+    file => "File",
+    size => "Size",
+    progress => "Progress",
+    speed => "Speed",
+    target => "Target",
+  }
 }
 
 impl From<&ugos_client::types::download::DownloadTask> for DownloadRow {
@@ -1007,20 +1129,25 @@ pub fn print_json(w: &mut impl Write, value: &impl Serialize) -> Result<()> {
 // ── Docker ──────────────────────────────────────────────────────────
 
 /// Table row for Docker containers.
-#[derive(Tabled, Serialize)]
+#[derive(Serialize)]
 pub struct ContainerRow {
-    #[tabled(rename = "ID")]
     pub id: String,
-    #[tabled(rename = "Name")]
     pub name: String,
-    #[tabled(rename = "Image")]
     pub image: String,
-    #[tabled(rename = "Status")]
     pub status: String,
-    #[tabled(rename = "CPU%")]
     pub cpu: String,
-    #[tabled(rename = "Memory")]
     pub memory: String,
+}
+
+table_row! {
+  ContainerRow {
+    id => "ID",
+    name => "Name",
+    image => "Image",
+    status => "Status",
+    cpu => "CPU%",
+    memory => "Memory",
+  }
 }
 
 impl From<&Container> for ContainerRow {
@@ -1037,16 +1164,21 @@ impl From<&Container> for ContainerRow {
 }
 
 /// Table row for Docker images.
-#[derive(Tabled, Serialize)]
+#[derive(Serialize)]
 pub struct DockerImageRow {
-    #[tabled(rename = "ID")]
     pub id: String,
-    #[tabled(rename = "Repository")]
     pub repository: String,
-    #[tabled(rename = "Tag")]
     pub tag: String,
-    #[tabled(rename = "Size")]
     pub size: String,
+}
+
+table_row! {
+  DockerImageRow {
+    id => "ID",
+    repository => "Repository",
+    tag => "Tag",
+    size => "Size",
+  }
 }
 
 impl From<&DockerImage> for DockerImageRow {
@@ -1061,16 +1193,21 @@ impl From<&DockerImage> for DockerImageRow {
 }
 
 /// Table row for registry mirrors.
-#[derive(Tabled, Serialize)]
+#[derive(Serialize)]
 pub struct MirrorRow {
-    #[tabled(rename = "ID")]
     pub id: String,
-    #[tabled(rename = "Name")]
     pub name: String,
-    #[tabled(rename = "Address")]
     pub address: String,
-    #[tabled(rename = "Active")]
     pub active: String,
+}
+
+table_row! {
+  MirrorRow {
+    id => "ID",
+    name => "Name",
+    address => "Address",
+    active => "Active",
+  }
 }
 
 impl From<&Mirror> for MirrorRow {
@@ -1085,16 +1222,21 @@ impl From<&Mirror> for MirrorRow {
 }
 
 /// Table row for compose projects.
-#[derive(Tabled, Serialize)]
+#[derive(Serialize)]
 pub struct ComposeProjectRow {
-    #[tabled(rename = "Name")]
     pub name: String,
-    #[tabled(rename = "Path")]
     pub path: String,
-    #[tabled(rename = "Containers")]
     pub containers: String,
-    #[tabled(rename = "Status")]
     pub status: String,
+}
+
+table_row! {
+  ComposeProjectRow {
+    name => "Name",
+    path => "Path",
+    containers => "Containers",
+    status => "Status",
+  }
 }
 
 impl From<&ComposeProject> for ComposeProjectRow {
@@ -1105,5 +1247,89 @@ impl From<&ComposeProject> for ComposeProjectRow {
             containers: format!("{}/{}", p.run_container_sum, p.container_sum),
             status: if p.status == 1 { "up" } else { "down" }.into(),
         }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod table_rendering_tests {
+    use super::{FsSnapshotRow, VmRow, print_list};
+    use crate::cli::OutputFormat;
+
+    /// Renders a table with fixed values.
+    ///
+    /// The `Tabled` implementations come from the `table_row!` macro rather
+    /// than a derive, so this pins the result the derive used to produce:
+    /// column order, the renamed headers, and the borders tabled draws.
+    #[test]
+    fn a_row_renders_exactly_as_before() {
+        let rows = vec![VmRow {
+            name: "alpha".to_owned(),
+            status: "running".to_owned(),
+            cpu: "5%".to_owned(),
+            memory: "512 MiB".to_owned(),
+            os: "linux".to_owned(),
+        }];
+        let mut out = Vec::new();
+        print_list(&mut out, &rows, OutputFormat::Table).unwrap();
+        assert_eq!(
+            String::from_utf8(out).unwrap(),
+            "+-------+---------+------+---------+-------+\n\
+             | Name  | Status  | CPU% | Memory  | OS    |\n\
+             +-------+---------+------+---------+-------+\n\
+             | alpha | running | 5%   | 512 MiB | linux |\n\
+             +-------+---------+------+---------+-------+\n"
+        );
+    }
+
+    #[test]
+    fn columns_widen_to_the_longest_value() {
+        // What made the live comparison differ: a longer cell widens its
+        // column. Pinned here so it is understood as data, not formatting.
+        let rows = vec![
+            VmRow {
+                name: "a".to_owned(),
+                status: "up".to_owned(),
+                cpu: "1%".to_owned(),
+                memory: "7894 MiB".to_owned(),
+                os: "linux".to_owned(),
+            },
+            VmRow {
+                name: "b".to_owned(),
+                status: "up".to_owned(),
+                cpu: "2%".to_owned(),
+                memory: "15853 MiB".to_owned(),
+                os: "linux".to_owned(),
+            },
+        ];
+        let mut out = Vec::new();
+        print_list(&mut out, &rows, OutputFormat::Table).unwrap();
+        let rendered = String::from_utf8(out).unwrap();
+        assert!(rendered.contains("| 7894 MiB  |"), "{rendered}");
+        assert!(rendered.contains("| 15853 MiB |"), "{rendered}");
+    }
+
+    #[test]
+    fn numeric_fields_render_without_quotes() {
+        // i64 columns go through Display, as the derive did.
+        let rows = vec![FsSnapshotRow {
+            id: 42,
+            created: "2026-03-01 08:40".to_owned(),
+            name: "snap".to_owned(),
+            desc: String::new(),
+            locked: "no".to_owned(),
+        }];
+        let mut out = Vec::new();
+        print_list(&mut out, &rows, OutputFormat::Table).unwrap();
+        let rendered = String::from_utf8(out).unwrap();
+        assert!(rendered.contains("| 42 "), "{rendered}");
+        assert!(rendered.contains("| ID "), "{rendered}");
+    }
+
+    #[test]
+    fn an_empty_list_says_so() {
+        let mut out = Vec::new();
+        print_list(&mut out, &[] as &[VmRow], OutputFormat::Table).unwrap();
+        assert_eq!(String::from_utf8(out).unwrap(), "No results.\n");
     }
 }

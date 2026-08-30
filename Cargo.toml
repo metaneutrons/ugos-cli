@@ -45,7 +45,7 @@ aes-gcm = "0.10"
 hex = "0.4"
 rsa = "0.9"
 base64 = "0.22"
-tabled = "0.17"
+tabled = { version = "0.17", default-features = false, features = ["std"] }
 thiserror = "2"
 dirs = "6"
 der = "0.7"
