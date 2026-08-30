@@ -1,7 +1,7 @@
 # ugos-cli
 
 [![CI](https://github.com/metaneutrons/ugos-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/metaneutrons/ugos-cli/actions/workflows/ci.yml)
-[![MSRV](https://img.shields.io/badge/MSRV-1.88-orange.svg)](https://releases.rs/docs/1.88.0/)
+[![MSRV](https://img.shields.io/badge/MSRV-1.98-orange.svg)](https://releases.rs/docs/1.98.0/)
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
 
 CLI, MCP server, and Rust client library for managing **UGREEN NAS** (UGOS) devices.
@@ -509,7 +509,7 @@ until every field but the name was made optional.
 
 ## Requirements
 
-- Rust 1.88+ (edition 2024)
+- Rust 1.98+ (edition 2024)
 - Network access to the NAS over HTTPS (port 9443)
 - The KVM app for `vm`, `network`, `storage`, `image`, `usb`, `vnc` and `ova`;
   the Docker app for `docker`. The remaining groups need neither.
