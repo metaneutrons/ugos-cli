@@ -372,7 +372,7 @@ cargo install --git https://github.com/metaneutrons/ugos-cli ugos-cli
 cargo install --git https://github.com/metaneutrons/ugos-cli ugos-mcp
 ```
 
-### Library
+### As a library
 
 The crates are not published on crates.io. Depend on the repository directly:
 

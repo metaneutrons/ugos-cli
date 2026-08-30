@@ -42,6 +42,34 @@ test were already registered, and a taken `fileName` answers `9999`.
 
 `imageName`, not `name` — with the wrong key the call answers `9999`.
 
+### ShowImageList
+- **Method**: GET
+- **Response**: `{result: [ImageInfo]}`
+
+```json
+// ImageInfo
+{
+  "id": 1,
+  "fileName": "EndavourOS.iso",
+  "imageName": "EndavourOS",
+  "fileSize": 3498065920,
+  "progress": 0,
+  "state": "completed",
+  "imageType": "iso",
+  "path": "/volume1/@appstore/com.ugreen.kvm/iso/EndavourOS.iso",
+  "virtualDiskSize": 0
+}
+```
+
+### CheckImageName
+- **Method**: GET
+- **Params**: `name=<name>`
+
+### CheckImageUsage
+- **Method**: GET
+- **Params**: `name=<name>`
+- **Response**: `{result: []}` (VMs using this image)
+
 ### RenameImage
 - **Method**: POST
 
@@ -173,14 +201,6 @@ unused) and `images[].name`; neither is required in a write body.
 - **Method**: GET
 - **Params**: none
 - **Response**: `{data: {cores: 12, memory: 67155701760}}`
-
-### CheckResource
-- **Method**: GET
-- **Params**: `memory=<bytes>`
-
-### CheckVirName
-- **Method**: POST
-- **Body**: `{name: "<uuid>", virtualMachineDisplayName: "<displayName>"}`
 
 ### CreateVirtualMachine
 - **Method**: POST
@@ -338,10 +358,6 @@ network, which is what blocks a delete.
 }
 ```
 
-### CheckNetwork
-- **Method**: GET
-- **Params**: `name=<networkName>`
-
 ### CheckName
 - **Method**: POST
 - **Body**: `{networkName: "<name>"}`
@@ -400,48 +416,6 @@ network, which is what blocks a delete.
 ### DeleteStorage
 - **Method**: GET
 - **Params**: `name=<name>&uuid=<uuid>`
-
-## Image (`kvm/image/`)
-
-### ShowImageList
-- **Method**: GET
-- **Response**: `{result: [ImageInfo]}`
-
-```json
-// ImageInfo
-{
-  "id": 1,
-  "fileName": "EndavourOS.iso",
-  "imageName": "EndavourOS",
-  "fileSize": 3498065920,
-  "progress": 0,
-  "state": "completed",
-  "imageType": "iso",
-  "path": "/volume1/@appstore/com.ugreen.kvm/iso/EndavourOS.iso",
-  "virtualDiskSize": 0
-}
-```
-
-### CheckImageName
-- **Method**: GET
-- **Params**: `name=<name>`
-
-### CheckImageUsage
-- **Method**: GET
-- **Params**: `name=<name>`
-- **Response**: `{result: []}` (VMs using this image)
-
-### DeleteImage
-- **Method**: GET
-- **Params**: `fileName=<fileName>&name=<imageName>`
-
-### UploadPath
-- **Method**: POST
-- **Body**: FormData
-
-### UploadUpk
-- **Method**: POST
-- **Body**: FormData (Content-Type: application/x-www-form-urlencoded)
 
 ## USB (`kvm/usb/`)
 
