@@ -1338,6 +1338,12 @@ impl UgosMcp {
     }
 }
 
+// The rmcp macro expands to an async trait method that never awaits, which
+// clippy flags from 1.98 onwards. The code is generated, so the lint cannot
+// be satisfied here; unknown_lints keeps older toolchains from tripping over
+// the name.
+#[allow(unknown_lints)]
+#[allow(clippy::unused_async_trait_impl)]
 #[tool_handler]
 impl ServerHandler for UgosMcp {
     fn get_info(&self) -> ServerInfo {
