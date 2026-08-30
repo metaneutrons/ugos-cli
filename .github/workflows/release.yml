@@ -10,6 +10,16 @@ on:
     secrets:
       HOMEBREW_UPDATE_TOKEN:
         required: true
+      AUR_SSH_PRIVATE_KEY:
+        required: false
+      APT_GPG_PRIVATE_KEY:
+        required: false
+      APT_GPG_PASSPHRASE:
+        required: false
+      R2_ACCESS_KEY_ID:
+        required: false
+      R2_SECRET_ACCESS_KEY:
+        required: false
   workflow_dispatch:
     inputs:
       tag:
@@ -17,13 +27,127 @@ on:
         required: true
         type: string
 
+# Jobs that need more opt in explicitly.
+permissions:
+  contents: read
+
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  preflight:
+    name: Validate release identity and credentials
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      version: ${{ steps.identity.outputs.version }}
+      source_date_epoch: ${{ steps.identity.outputs.source_date_epoch }}
+      publish_apt: ${{ steps.channels.outputs.apt }}
+      publish_aur: ${{ steps.channels.outputs.aur }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag }}
+          fetch-depth: 0
+      - name: Derive an immutable version and build timestamp
+        id: identity
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::UG7001 tag must be a canonical vX.Y.Z release tag: $RELEASE_TAG"
+            exit 1
+          fi
+          manifest=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
+          if [[ "$manifest" != "$version" ]]; then
+            echo "::error::UG7002 tag $RELEASE_TAG does not match Cargo.toml version $manifest"
+            exit 1
+          fi
+          # Deterministic builds need a fixed clock; the tagged commit is it.
+          epoch=$(git log -1 --pretty=%ct)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "source_date_epoch=$epoch" >> "$GITHUB_OUTPUT"
+      - name: Verify the Homebrew tap credential before any public change
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_UPDATE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::error::UG7010 HOMEBREW_UPDATE_TOKEN is missing"
+            exit 1
+          fi
+          permission=$(gh api repos/metaneutrons/homebrew-tap --jq '.permissions.push')
+          if [[ "$permission" != true ]]; then
+            echo "::error::UG7011 the tap credential cannot write metaneutrons/homebrew-tap"
+            exit 1
+          fi
+      - name: Decide which package channels are configured
+        id: channels
+        env:
+          APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+          APT_GPG_PASSPHRASE: ${{ secrets.APT_GPG_PASSPHRASE }}
+          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+          APT_GPG_FINGERPRINT: ${{ vars.APT_GPG_FINGERPRINT }}
+          APT_PUBLIC_BASE_URL: ${{ vars.APT_PUBLIC_BASE_URL }}
+          R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
+          AUR_SSH_KNOWN_HOSTS: ${{ vars.AUR_SSH_KNOWN_HOSTS }}
+        run: |
+          set -euo pipefail
+          # A channel runs only when fully configured. Missing configuration
+          # skips it; partial configuration is an error, because it usually
+          # means a secret was renamed and would fail halfway through.
+          apt_names=(APT_GPG_PRIVATE_KEY APT_GPG_PASSPHRASE R2_ACCESS_KEY_ID
+                     R2_SECRET_ACCESS_KEY APT_GPG_FINGERPRINT APT_PUBLIC_BASE_URL
+                     R2_ACCOUNT_ID R2_BUCKET_NAME)
+          aur_names=(AUR_SSH_PRIVATE_KEY AUR_SSH_KNOWN_HOSTS)
+
+          decide() {
+            local channel=$1; shift
+            local present=0 missing=0 name
+            for name in "$@"; do
+              if [[ -n "${!name:-}" ]]; then present=$((present + 1)); else missing=$((missing + 1)); fi
+            done
+            if (( present == 0 )); then
+              echo "::notice::$channel is not configured and will be skipped"
+              printf 'false'
+            elif (( missing > 0 )); then
+              echo "::error::UG7020 $channel is only partly configured; $missing value(s) missing"
+              exit 1
+            else
+              printf 'true'
+            fi
+          }
+
+          echo "apt=$(decide APT "${apt_names[@]}")" >> "$GITHUB_OUTPUT"
+          echo "aur=$(decide AUR "${aur_names[@]}")" >> "$GITHUB_OUTPUT"
+      - name: Validate APT configuration values
+        if: steps.channels.outputs.apt == 'true'
+        env:
+          APT_GPG_FINGERPRINT: ${{ vars.APT_GPG_FINGERPRINT }}
+          APT_PUBLIC_BASE_URL: ${{ vars.APT_PUBLIC_BASE_URL }}
+          R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID }}
+          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
+        run: |
+          set -euo pipefail
+          [[ "$APT_GPG_FINGERPRINT" =~ ^[0-9A-Fa-f]{40}$ ]] || {
+            echo "::error::UG7021 APT_GPG_FINGERPRINT must be a full 40-hex fingerprint"; exit 1; }
+          [[ "$APT_PUBLIC_BASE_URL" =~ ^https://[^[:space:]?#]+[^/]$ ]] || {
+            echo "::error::UG7022 APT_PUBLIC_BASE_URL must be an HTTPS URL without a trailing slash"; exit 1; }
+          [[ "$R2_ACCOUNT_ID" =~ ^[0-9a-f]{32}$ ]] || {
+            echo "::error::UG7023 R2_ACCOUNT_ID must be a 32-hex Cloudflare account ID"; exit 1; }
+          [[ "$R2_BUCKET_NAME" =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ ]] || {
+            echo "::error::UG7024 R2_BUCKET_NAME is malformed"; exit 1; }
+
   build:
     name: Build (${{ matrix.target }})
+    needs: [preflight]
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     strategy:
       matrix:
         include:
@@ -53,11 +177,14 @@ jobs:
       - name: Package (Unix)
         if: runner.os != 'Windows'
         run: |
+          set -euo pipefail
           cd target/${{ matrix.target }}/release
           tar czf ../../../ugos-cli-${{ matrix.target }}.tar.gz ugos-cli ugos-mcp
       - name: Package (Windows)
         if: runner.os == 'Windows'
+        shell: bash
         run: |
+          set -euo pipefail
           cd target/${{ matrix.target }}/release
           7z a ../../../ugos-cli-${{ matrix.target }}.zip ugos-cli.exe ugos-mcp.exe
       - name: Upload artifacts
@@ -68,10 +195,67 @@ jobs:
             ugos-cli-${{ matrix.target }}.tar.gz
             ugos-cli-${{ matrix.target }}.zip
 
+  package-deb:
+    name: Debian package (${{ matrix.arch }})
+    needs: [preflight, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      matrix:
+        include:
+          - arch: amd64
+            target: x86_64-unknown-linux-gnu
+          - arch: arm64
+            target: aarch64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: ugos-cli-${{ matrix.target }}
+          path: ./archives
+      - name: Build the package from the released archive
+        env:
+          VERSION: ${{ needs.preflight.outputs.version }}
+          SOURCE_DATE_EPOCH: ${{ needs.preflight.outputs.source_date_epoch }}
+        run: |
+          set -euo pipefail
+          scripts/release/build-deb.sh \
+            --archive "./archives/ugos-cli-${{ matrix.target }}.tar.gz" \
+            --arch "${{ matrix.arch }}" \
+            --version "$VERSION" \
+            --output-dir ./debs \
+            --source-date-epoch "$SOURCE_DATE_EPOCH"
+      - name: Verify the package installs and runs
+        env:
+          VERSION: ${{ needs.preflight.outputs.version }}
+        run: |
+          set -euo pipefail
+          deb="./debs/ugos-cli_${VERSION}_${{ matrix.arch }}.deb"
+          dpkg-deb --contents "$deb"
+          # Only the native architecture can actually be installed here.
+          if [[ "${{ matrix.arch }}" == amd64 ]]; then
+            sudo dpkg -i "$deb"
+            installed=$(ugos-cli --version)
+            [[ "$installed" == "ugos ${VERSION}" ]] || {
+              echo "::error::UG7310 installed binary reports '$installed'"; exit 1; }
+            # ugos-mcp speaks MCP on stdio and has no --version to ask, so
+            # only its presence and mode are checked here.
+            [[ -x /usr/bin/ugos-mcp ]] || {
+              echo "::error::UG7311 ugos-mcp is missing or not executable"; exit 1; }
+            sudo dpkg -r ugos-cli
+          fi
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ugos-cli-deb-${{ matrix.arch }}
+          path: ./debs/*.deb
+
   upload-release-artifacts:
     name: Upload Release Artifacts
+    needs: [build, package-deb]
     runs-on: ubuntu-latest
-    needs: [build]
+    timeout-minutes: 15
     permissions:
       contents: write
     steps:
@@ -80,38 +264,156 @@ jobs:
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ inputs.tag }}
-          files: ugos-cli-*/*
+          files: |
+            ugos-cli-*/*.tar.gz
+            ugos-cli-*/*.zip
+            ugos-cli-deb-*/*.deb
+
+  publish-apt:
+    name: Publish signed APT repository
+    needs: [preflight, package-deb, upload-release-artifacts]
+    if: needs.preflight.outputs.publish_apt == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      VERSION: ${{ needs.preflight.outputs.version }}
+      SOURCE_DATE_EPOCH: ${{ needs.preflight.outputs.source_date_epoch }}
+      APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+      APT_GPG_PASSPHRASE: ${{ secrets.APT_GPG_PASSPHRASE }}
+      APT_GPG_FINGERPRINT: ${{ vars.APT_GPG_FINGERPRINT }}
+      APT_PUBLIC_BASE_URL: ${{ vars.APT_PUBLIC_BASE_URL }}
+      R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID }}
+      R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
+      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+      AWS_REGION: auto
+      AWS_DEFAULT_REGION: auto
+      AWS_EC2_METADATA_DISABLED: 'true'
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.tag }}
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: ugos-cli-deb-*
+          merge-multiple: true
+          path: ./candidate
+      - name: Install APT tooling
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends apt-utils dpkg-dev gnupg
+      - name: Build deterministic signed repository metadata
+        run: |
+          set -euo pipefail
+          printf '%s\n' "$APT_GPG_PRIVATE_KEY" > "$RUNNER_TEMP/apt-private.asc"
+          printf '%s' "$APT_GPG_PASSPHRASE" > "$RUNNER_TEMP/apt-passphrase"
+          chmod 0600 "$RUNNER_TEMP/apt-private.asc" "$RUNNER_TEMP/apt-passphrase"
+          scripts/release/build-apt-repository.sh \
+            --candidate-dir ./candidate \
+            --output-dir "$RUNNER_TEMP/apt-repository" \
+            --version "$VERSION" \
+            --source-date-epoch "$SOURCE_DATE_EPOCH" \
+            --private-key "$RUNNER_TEMP/apt-private.asc" \
+            --passphrase-file "$RUNNER_TEMP/apt-passphrase" \
+            --fingerprint "$APT_GPG_FINGERPRINT"
+          find "$RUNNER_TEMP/apt-repository" -type f -print | sort
+      - name: Publish packages first, metadata last
+        run: |
+          set -euo pipefail
+          # Order matters: an index that names a package apt cannot fetch
+          # breaks every client until the upload finishes.
+          repository="$RUNNER_TEMP/apt-repository"
+          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
+          destination="s3://${R2_BUCKET_NAME}"
+          aws s3 cp "$repository/pool" "$destination/pool" \
+            --endpoint-url "$endpoint" --recursive \
+            --cache-control 'public,max-age=31536000,immutable' \
+            --content-type 'application/vnd.debian.binary-package'
+          aws s3 cp "$repository/ugos-cli-archive-keyring.asc" \
+            "$destination/ugos-cli-archive-keyring.asc" \
+            --endpoint-url "$endpoint" --cache-control 'public,max-age=3600' \
+            --content-type 'application/pgp-keys'
+          for arch in amd64 arm64; do
+            prefix="dists/stable/main/binary-${arch}"
+            aws s3 cp "$repository/${prefix}/Packages" "$destination/${prefix}/Packages" \
+              --endpoint-url "$endpoint" --cache-control 'no-cache' \
+              --content-type 'text/plain; charset=utf-8'
+            aws s3 cp "$repository/${prefix}/Packages.gz" "$destination/${prefix}/Packages.gz" \
+              --endpoint-url "$endpoint" --cache-control 'no-cache' \
+              --content-type 'application/gzip'
+          done
+          for name in Release Release.gpg InRelease; do
+            case "$name" in
+              Release.gpg) type='application/pgp-signature' ;;
+              *) type='text/plain; charset=utf-8' ;;
+            esac
+            aws s3 cp "$repository/dists/stable/$name" "$destination/dists/stable/$name" \
+              --endpoint-url "$endpoint" --cache-control 'no-cache' --content-type "$type"
+          done
+      - name: Verify the published repository from the public URL
+        run: |
+          set -euo pipefail
+          check="$RUNNER_TEMP/apt-public"
+          install -d "$check"
+          curl --fail --silent --show-error --location \
+            "$APT_PUBLIC_BASE_URL/ugos-cli-archive-keyring.asc" --output "$check/key.asc"
+          gpg --batch --dearmor < "$check/key.asc" > "$check/key.gpg"
+          curl --fail --silent --show-error --location \
+            "$APT_PUBLIC_BASE_URL/dists/stable/InRelease" --output "$check/InRelease"
+          gpgv --keyring "$check/key.gpg" "$check/InRelease"
+          for arch in amd64 arm64; do
+            curl --fail --silent --show-error --location \
+              "$APT_PUBLIC_BASE_URL/dists/stable/main/binary-${arch}/Packages.gz" \
+              | gzip -dc > "$check/Packages-${arch}"
+            filename=$(awk '/^Filename: / { print $2; exit }' "$check/Packages-${arch}")
+            if [[ -z "$filename" ]]; then
+              echo "::error::UG7420 published index for $arch is empty"
+              exit 1
+            fi
+            curl --fail --silent --show-error --location \
+              "$APT_PUBLIC_BASE_URL/$filename" --output "$check/${arch}.deb"
+            cmp "$check/${arch}.deb" "./candidate/ugos-cli_${VERSION}_${arch}.deb"
+          done
 
   update-homebrew:
     name: Update Homebrew Tap
+    needs: [preflight, build, upload-release-artifacts]
     runs-on: ubuntu-latest
-    needs: [build, upload-release-artifacts]
+    timeout-minutes: 15
     steps:
       - uses: actions/download-artifact@v8
         with:
           path: ./artifacts
-      - name: Calculate checksums and update tap
+      - name: Update the tap formula
         env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_UPDATE_TOKEN }}
           TAP_TOKEN: ${{ secrets.HOMEBREW_UPDATE_TOKEN }}
-          RELEASE_TAG: ${{ inputs.tag }}
+          VERSION: ${{ needs.preflight.outputs.version }}
         run: |
-          VERSION="${RELEASE_TAG#v}"
+          set -euo pipefail
 
-          MAC_X64_SHA=$(sha256sum ./artifacts/ugos-cli-x86_64-apple-darwin/ugos-cli-x86_64-apple-darwin.tar.gz | cut -d' ' -f1)
-          MAC_ARM64_SHA=$(sha256sum ./artifacts/ugos-cli-aarch64-apple-darwin/ugos-cli-aarch64-apple-darwin.tar.gz | cut -d' ' -f1)
-          LINUX_X64_SHA=$(sha256sum ./artifacts/ugos-cli-x86_64-unknown-linux-gnu/ugos-cli-x86_64-unknown-linux-gnu.tar.gz | cut -d' ' -f1)
-          LINUX_ARM64_SHA=$(sha256sum ./artifacts/ugos-cli-aarch64-unknown-linux-gnu/ugos-cli-aarch64-unknown-linux-gnu.tar.gz | cut -d' ' -f1)
+          checksum() {
+            local target=$1
+            local path="./artifacts/ugos-cli-${target}/ugos-cli-${target}.tar.gz"
+            if [[ ! -f "$path" ]]; then
+              echo "::error::UG7500 release archive is missing: $path" >&2
+              exit 1
+            fi
+            sha256sum "$path" | cut -d' ' -f1
+          }
 
-          git clone "https://x-access-token:${TAP_TOKEN}@github.com/metaneutrons/homebrew-tap.git"
-          cd homebrew-tap
-          mkdir -p Formula
+          MAC_X64_SHA=$(checksum x86_64-apple-darwin)
+          MAC_ARM64_SHA=$(checksum aarch64-apple-darwin)
+          LINUX_X64_SHA=$(checksum x86_64-unknown-linux-gnu)
+          LINUX_ARM64_SHA=$(checksum aarch64-unknown-linux-gnu)
 
-          cat > Formula/ugos-cli.rb <<RUBY
+          cat > formula.rb <<RUBY
           class UgosCli < Formula
             desc "CLI and MCP server for UGREEN NAS (UGOS) management"
             homepage "https://github.com/metaneutrons/ugos-cli"
             version "${VERSION}"
-            license "GPL-3.0"
+            license "GPL-3.0-or-later"
 
             on_macos do
               if Hardware::CPU.intel?
@@ -143,24 +445,127 @@ jobs:
             end
           end
           RUBY
+          sed -i 's/^          //' formula.rb
 
-          # Remove heredoc indentation
-          sed -i 's/^          //' Formula/ugos-cli.rb
+          ruby -c formula.rb
+          if [[ $(grep -Fc "/releases/download/v${VERSION}/" formula.rb) != 4 ]]; then
+            echo "::error::UG7501 formula does not reference four exact release URLs"
+            exit 1
+          fi
 
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/metaneutrons/homebrew-tap.git" tap
+          install -d tap/Formula
+          if [[ -f tap/Formula/ugos-cli.rb ]] && cmp -s formula.rb tap/Formula/ugos-cli.rb; then
+            echo "::notice::the tap already carries this formula"
+            exit 0
+          fi
+          install -m 0644 formula.rb tap/Formula/ugos-cli.rb
+          cd tap
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/ugos-cli.rb
           git commit -m "Update ugos-cli to ${VERSION}"
           git push
+      - name: Verify the formula now on the tap
+        env:
+          GH_TOKEN: ${{ secrets.HOMEBREW_UPDATE_TOKEN }}
+          VERSION: ${{ needs.preflight.outputs.version }}
+        run: |
+          set -euo pipefail
+          published=$(gh api \
+            "repos/metaneutrons/homebrew-tap/contents/Formula/ugos-cli.rb?ref=main" \
+            --jq .content | base64 --decode)
+          if ! grep -Fq "version \"${VERSION}\"" <<< "$published"; then
+            echo "::error::UG7502 the tap does not serve version ${VERSION}"
+            exit 1
+          fi
 
-  # crates-io:
-  #   name: Publish to crates.io
-  #   runs-on: ubuntu-latest
-  #   needs: [build]
-  #   steps:
-  #     - uses: actions/checkout@v6
-  #     - uses: dtolnay/rust-toolchain@stable
-  #     - name: Publish ugos-client
-  #       env:
-  #         CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
-  #       run: cargo publish -p ugos-client || true
+  publish-aur:
+    name: Publish AUR package
+    needs: [preflight, build, upload-release-artifacts]
+    if: needs.preflight.outputs.publish_aur == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      VERSION: ${{ needs.preflight.outputs.version }}
+      AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+      AUR_SSH_KNOWN_HOSTS: ${{ vars.AUR_SSH_KNOWN_HOSTS }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: ./artifacts
+      - name: Write the PKGBUILD
+        run: |
+          set -euo pipefail
+          x86=$(sha256sum ./artifacts/ugos-cli-x86_64-unknown-linux-gnu/ugos-cli-x86_64-unknown-linux-gnu.tar.gz | cut -d' ' -f1)
+          arm=$(sha256sum ./artifacts/ugos-cli-aarch64-unknown-linux-gnu/ugos-cli-aarch64-unknown-linux-gnu.tar.gz | cut -d' ' -f1)
+          base="https://github.com/metaneutrons/ugos-cli/releases/download/v${VERSION}"
+          cat > PKGBUILD <<PKG
+          # Maintainer: Fabian Schmieder <fabian@schmieder.eu>
+          pkgname=ugos-cli-bin
+          pkgver=${VERSION}
+          pkgrel=1
+          pkgdesc="CLI and MCP server for UGREEN NAS (UGOS) management"
+          arch=('x86_64' 'aarch64')
+          url="https://github.com/metaneutrons/ugos-cli"
+          license=('GPL-3.0-or-later')
+          provides=('ugos-cli')
+          conflicts=('ugos-cli')
+          source_x86_64=("\${pkgname}-\${pkgver}-x86_64.tar.gz::${base}/ugos-cli-x86_64-unknown-linux-gnu.tar.gz")
+          source_aarch64=("\${pkgname}-\${pkgver}-aarch64.tar.gz::${base}/ugos-cli-aarch64-unknown-linux-gnu.tar.gz")
+          sha256sums_x86_64=('${x86}')
+          sha256sums_aarch64=('${arm}')
+
+          package() {
+            install -Dm755 "\${srcdir}/ugos-cli" "\${pkgdir}/usr/bin/ugos-cli"
+            install -Dm755 "\${srcdir}/ugos-mcp" "\${pkgdir}/usr/bin/ugos-mcp"
+          }
+          PKG
+          sed -i 's/^          //' PKGBUILD
+          cat PKGBUILD
+      - name: Build the package and verify it against the release archive
+        run: |
+          set -euo pipefail
+          docker run --rm --user root \
+            --volume "$PWD:/pkg" --workdir /pkg \
+            archlinux:base-devel@sha256:a26046b7363dad8e2614858f4313949ae9b05c9c5f31de343a54864b9e20806f \
+            bash -euo pipefail -c '
+              useradd -m builder
+              chown -R builder:builder /pkg
+              su builder -c "makepkg --printsrcinfo > .SRCINFO"
+              su builder -c "makepkg --cleanbuild --noconfirm --nocheck"
+            '
+          package=$(find . -maxdepth 1 -name '*.pkg.tar.zst' -print -quit)
+          if [[ -z "$package" ]]; then
+            echo "::error::UG7600 makepkg produced no package"
+            exit 1
+          fi
+          mkdir -p /tmp/from-package /tmp/from-archive
+          tar -xf "$package" -C /tmp/from-package
+          tar -xzf ./artifacts/ugos-cli-x86_64-unknown-linux-gnu/ugos-cli-x86_64-unknown-linux-gnu.tar.gz \
+            -C /tmp/from-archive
+          for binary in ugos-cli ugos-mcp; do
+            cmp "/tmp/from-archive/$binary" "/tmp/from-package/usr/bin/$binary"
+          done
+      - name: Push to the AUR
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$RUNNER_TEMP/ssh"
+          install -m 0600 /dev/null "$RUNNER_TEMP/ssh/aur"
+          printf '%s\n' "$AUR_SSH_PRIVATE_KEY" > "$RUNNER_TEMP/ssh/aur"
+          printf '%s\n' "$AUR_SSH_KNOWN_HOSTS" > "$RUNNER_TEMP/ssh/known_hosts"
+          export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/ssh/aur -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile=$RUNNER_TEMP/ssh/known_hosts"
+          git -c init.defaultBranch=master clone \
+            ssh://aur@aur.archlinux.org/ugos-cli-bin.git "$RUNNER_TEMP/aur"
+          install -m 0644 PKGBUILD "$RUNNER_TEMP/aur/PKGBUILD"
+          install -m 0644 .SRCINFO "$RUNNER_TEMP/aur/.SRCINFO"
+          cd "$RUNNER_TEMP/aur"
+          if [[ -z $(git status --short) ]]; then
+            echo "::notice::the AUR already carries this version"
+            exit 0
+          fi
+          git config user.name 'ugos-cli release automation'
+          git config user.email 'fabian@schmieder.eu'
+          git add PKGBUILD .SRCINFO
+          git commit -m "ugos-cli-bin ${VERSION}-1"
+          git push origin HEAD:master

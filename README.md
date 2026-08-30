@@ -337,6 +337,25 @@ is created and only fails to start.
 
 ## Installation
 
+### Package managers
+
+```bash
+# Homebrew (macOS, Linux)
+brew install metaneutrons/tap/ugos-cli
+
+# Debian, Ubuntu
+curl -fsSL https://deb.metaneutrons.cc/ugos-cli-archive-keyring.asc \
+  | sudo gpg --dearmor -o /usr/share/keyrings/ugos-cli.gpg
+echo "deb [signed-by=/usr/share/keyrings/ugos-cli.gpg] https://deb.metaneutrons.cc stable main" \
+  | sudo tee /etc/apt/sources.list.d/ugos-cli.list
+sudo apt update && sudo apt install ugos-cli
+
+# Arch Linux
+yay -S ugos-cli-bin
+```
+
+See [docs/packaging.md](docs/packaging.md) for how these are built and verified.
+
 ### From GitHub Releases
 
 Download pre-built binaries from the [releases page](https://github.com/metaneutrons/ugos-cli/releases).
@@ -380,6 +399,7 @@ notes are kept because the reasoning is easy to lose and expensive to redo.
 | [api-downloadcenter.md](docs/api-downloadcenter.md) | Queuing downloads for the NAS to fetch |
 | [api-system.md](docs/api-system.md) | Machine info, monitoring, processes, services |
 | [api-snapshot.md](docs/api-snapshot.md) | Filesystem snapshots of shares and homes |
+| [packaging.md](docs/packaging.md) | Release channels, signing and reproducibility |
 | [api-backup.md](docs/api-backup.md) | Why no backup commands exist |
 
 ## Implementation Status

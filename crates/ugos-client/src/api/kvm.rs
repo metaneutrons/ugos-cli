@@ -953,13 +953,45 @@ fn safe_download_name(url: &str, iso_name: &str) -> String {
 ///
 /// Returns the directory and the file path; the caller removes both.
 fn create_scratch_file(file_name: &str) -> Result<(std::path::PathBuf, std::path::PathBuf)> {
-    let unique = std::time::SystemTime::now()
+    use std::sync::atomic::{AtomicU64, Ordering};
+    // The clock alone is not enough: two calls can land in the same tick, and
+    // create_dir then fails on the second. A counter makes the name unique
+    // within the process, and the retry covers the rest.
+    static SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+    let stamp = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_nanos());
-    let dir = std::env::temp_dir().join(format!("ugos-cli-{}-{unique}", std::process::id()));
 
-    std::fs::create_dir(&dir)
-        .map_err(|e| UgosError::Encryption(format!("creating '{}': {e}", dir.display())))?;
+    let mut last = None;
+    let mut dir = std::path::PathBuf::new();
+    for _ in 0..16 {
+        let seq = SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        let candidate =
+            std::env::temp_dir().join(format!("ugos-cli-{}-{stamp}-{seq}", std::process::id()));
+        match std::fs::create_dir(&candidate) {
+            Ok(()) => {
+                dir = candidate;
+                last = None;
+                break;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {
+                last = Some(e);
+            }
+            Err(e) => {
+                return Err(UgosError::Encryption(format!(
+                    "creating '{}': {e}",
+                    candidate.display()
+                )));
+            }
+        }
+    }
+    if let Some(e) = last {
+        return Err(UgosError::Encryption(format!(
+            "no free scratch directory under '{}': {e}",
+            std::env::temp_dir().display()
+        )));
+    }
 
     #[cfg(unix)]
     {
