@@ -38,6 +38,7 @@ jobs:
   preflight:
     name: Validate release identity and credentials
     runs-on: ubuntu-latest
+    environment: release
     timeout-minutes: 10
     outputs:
       version: ${{ steps.identity.outputs.version }}
@@ -254,6 +255,7 @@ jobs:
     name: Upload Release Artifacts
     needs: [build, package-deb]
     runs-on: ubuntu-latest
+    environment: release
     timeout-minutes: 15
     permissions:
       contents: write
@@ -273,6 +275,7 @@ jobs:
     needs: [preflight, package-deb, upload-release-artifacts]
     if: needs.preflight.outputs.publish_apt == 'true'
     runs-on: ubuntu-latest
+    environment: release
     timeout-minutes: 30
     env:
       VERSION: ${{ needs.preflight.outputs.version }}
@@ -379,6 +382,7 @@ jobs:
     name: Update Homebrew Tap
     needs: [preflight, build, upload-release-artifacts]
     runs-on: ubuntu-latest
+    environment: release
     timeout-minutes: 15
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -484,6 +488,7 @@ jobs:
     needs: [preflight, build, upload-release-artifacts]
     if: needs.preflight.outputs.publish_aur == 'true'
     runs-on: ubuntu-latest
+    environment: release
     timeout-minutes: 20
     env:
       VERSION: ${{ needs.preflight.outputs.version }}
