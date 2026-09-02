@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.11.0](https://github.com/metaneutrons/ugos-cli/compare/v0.10.1...v0.11.0) (2026-09-02)
+
+
+### Features
+
+* **release:** add signed APT and AUR channels, harden the workflow ([213a350](https://github.com/metaneutrons/ugos-cli/commit/213a3500943cb894db6e6fd10d434c03389f9698))
+
+
+### Bug Fixes
+
+* **ci:** drop an unsupported cooldown key from the actions entry ([#21](https://github.com/metaneutrons/ugos-cli/issues/21)) ([69496a5](https://github.com/metaneutrons/ugos-cli/commit/69496a50deefd11e21576746c9dec7f2e27073fa))
+* **ci:** tolerate the clippy lint added in 1.98 ([8623191](https://github.com/metaneutrons/ugos-cli/commit/8623191e65f1d6f1117829253436b50024263c37))
+* **deps:** drop the tabled derive to shed proc-macro-error2 ([96ef3c7](https://github.com/metaneutrons/ugos-cli/commit/96ef3c76b35091c5a48994726d65751aa98065f9))
+
 ## [0.10.1](https://github.com/metaneutrons/ugos-cli/compare/v0.10.0...v0.10.1) (2026-08-19)
 
 
