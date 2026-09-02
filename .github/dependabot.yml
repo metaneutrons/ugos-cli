@@ -13,47 +13,48 @@
 # traegt eine passende IANA-Zeitzone projektspezifisch ein.
 
 version: 2
+
 updates:
-- package-ecosystem: cargo
-  directory: /
-  schedule:
-    interval: weekly
-    day: monday
-    time: 05:00
-  open-pull-requests-limit: 5
-  cooldown:
-    default-days: 3
-    semver-major-days: 7
-  groups:
-    rust-minor-patch:
-      patterns:
-      - '*'
-      update-types:
-      - minor
-      - patch
-- package-ecosystem: rust-toolchain
-  directory: /
-  schedule:
-    interval: weekly
-    day: monday
-    time: 05:05
-  open-pull-requests-limit: 1
-  cooldown:
-    default-days: 14
-- package-ecosystem: github-actions
-  directory: /
-  schedule:
-    interval: weekly
-    day: monday
-    time: 05:15
-  open-pull-requests-limit: 5
-  cooldown:
-    default-days: 3
-    semver-major-days: 7
-  groups:
-    github-actions-minor-patch:
-      patterns:
-      - '*'
-      update-types:
-      - minor
-      - patch
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '05:00'
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
+    groups:
+      rust-minor-patch:
+        patterns: ['*']
+        update-types: [minor, patch]
+
+  # Eigener Eintrag, weil die Toolchain den gesamten Build betrifft und sich
+  # nie einen Pull Request teilen soll. `rust-toolchain` fehlt in der
+  # Ökosystem-Tabelle der GitHub-Doku, steht aber im veröffentlichten Schema
+  # json.schemastore.org/dependabot-2.0.json.
+  - package-ecosystem: rust-toolchain
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '05:05'
+    open-pull-requests-limit: 1
+    cooldown:
+      default-days: 14
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '05:15'
+    open-pull-requests-limit: 5
+    cooldown:
+      default-days: 3
+      semver-major-days: 7
+    groups:
+      github-actions-minor-patch:
+        patterns: ['*']
+        update-types: [minor, patch]
