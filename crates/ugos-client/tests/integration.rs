@@ -5,6 +5,9 @@
 //! Requires env vars: `UGOS_HOST`, `UGOS_USER`, `UGOS_PASSWORD`
 
 #![cfg(feature = "integration")]
+// Diese Tests laufen nur gegen echte Hardware. Ein fehlender Zugang soll den
+// Test abbrechen; die No-Panic-Regel gilt Bibliothekscode, nicht hier.
+#![allow(clippy::expect_used)]
 
 use ugos_client::api::docker::DockerApi;
 use ugos_client::api::kvm::KvmApi;
@@ -27,7 +30,7 @@ async fn connect() -> UgosClient {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "needs a live NAS: set UGOS_HOST, UGOS_USER and UGOS_PASSWORD"]
 async fn auth_and_session() {
     let client = connect().await;
     let session = client.session().await;
@@ -35,7 +38,7 @@ async fn auth_and_session() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "needs a live NAS: set UGOS_HOST, UGOS_USER and UGOS_PASSWORD"]
 async fn vm_list() {
     let client = connect().await;
     let vms = client.vm_list().await.expect("vm_list failed");
@@ -53,7 +56,7 @@ async fn vm_list() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "needs a live NAS: set UGOS_HOST, UGOS_USER and UGOS_PASSWORD"]
 async fn vm_show() {
     let client = connect().await;
     let vms = client.vm_list().await.expect("vm_list failed");
@@ -68,7 +71,7 @@ async fn vm_show() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "needs a live NAS: set UGOS_HOST, UGOS_USER and UGOS_PASSWORD"]
 async fn host_info() {
     let client = connect().await;
     let info = client.host_info().await.expect("host_info failed");
@@ -77,7 +80,7 @@ async fn host_info() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "needs a live NAS: set UGOS_HOST, UGOS_USER and UGOS_PASSWORD"]
 async fn network_list() {
     let client = connect().await;
     let nets = client.network_list().await.expect("network_list failed");
@@ -86,7 +89,7 @@ async fn network_list() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "needs a live NAS: set UGOS_HOST, UGOS_USER and UGOS_PASSWORD"]
 async fn storage_list() {
     let client = connect().await;
     let vols = client.storage_list().await.expect("storage_list failed");
@@ -95,7 +98,7 @@ async fn storage_list() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "needs a live NAS: set UGOS_HOST, UGOS_USER and UGOS_PASSWORD"]
 async fn image_list() {
     let client = connect().await;
     let imgs = client.image_list().await.expect("image_list failed");
@@ -104,7 +107,7 @@ async fn image_list() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "needs a live NAS: set UGOS_HOST, UGOS_USER and UGOS_PASSWORD"]
 async fn docker_engine_status() {
     let client = connect().await;
     let status = client
@@ -118,7 +121,7 @@ async fn docker_engine_status() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "needs a live NAS: set UGOS_HOST, UGOS_USER and UGOS_PASSWORD"]
 async fn docker_ps() {
     let client = connect().await;
     let page = client
@@ -130,7 +133,7 @@ async fn docker_ps() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "needs a live NAS: set UGOS_HOST, UGOS_USER and UGOS_PASSWORD"]
 async fn docker_images() {
     let client = connect().await;
     let page = client
@@ -141,7 +144,7 @@ async fn docker_images() {
 }
 
 #[tokio::test]
-#[ignore]
+#[ignore = "needs a live NAS: set UGOS_HOST, UGOS_USER and UGOS_PASSWORD"]
 async fn docker_mirrors() {
     let client = connect().await;
     let mirrors = client.mirror_list().await.expect("mirror_list failed");

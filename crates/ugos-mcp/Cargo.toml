@@ -6,6 +6,10 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+keywords = ["ugreen", "nas", "ugos", "mcp", "kvm"]
+categories = ["command-line-utilities", "api-bindings"]
+readme = "../../README.md"
 
 [[bin]]
 name = "ugos-mcp"
@@ -23,4 +27,4 @@ serde_json.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
-ugos-client = { path = "../ugos-client" }
+ugos-client = { path = "../ugos-client", version = "0.10.1" }

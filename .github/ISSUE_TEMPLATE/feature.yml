@@ -1,0 +1,25 @@
+name: Feature request
+description: Support for an endpoint or a command that does not exist yet
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What you want to do
+      description: The task, not the implementation.
+    validations: {required: true}
+  - type: input
+    id: endpoint
+    attributes:
+      label: Known UGOS endpoint, if any
+      description: |
+        Endpoints are undocumented and were reverse-engineered from the web UI.
+        A HAR capture of the UGOS interface doing the thing is the single most
+        useful attachment — see docs/api-overview.md.
+  - type: checkboxes
+    id: risk
+    attributes:
+      label: Nature of the operation
+      options:
+        - label: This reads data only
+        - label: This writes or deletes data on the NAS
