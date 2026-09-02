@@ -157,6 +157,9 @@ jobs:
       # History gehört hierher, sonst ist die Begründung in commits.md hohl.
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
+          # Seit dem Breaking Change der Action Pflicht, sonst bricht sie bei
+          # jedem Pull Request ab. Der automatisch erzeugte Token genuegt.
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Falls fuer den Organisationseinsatz erforderlich: eng begrenztes
           # CI-Werkzeugsecret, niemals aus einer Publish-Environment.
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
