@@ -1,0 +1,36 @@
+name: Bug report
+description: Something behaves differently than documented
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not report security issues here. Use [private
+        reporting](https://github.com/metaneutrons/ugos-cli/security/advisories/new).
+  - type: input
+    id: version
+    attributes:
+      label: ugos-cli version
+      description: Output of `ugos-cli --version`
+      placeholder: ugos 0.10.1
+    validations: {required: true}
+  - type: input
+    id: ugos
+    attributes:
+      label: UGOS version
+      description: Output of `ugos-cli system info`, field "System version"
+      placeholder: 1.18.1.0098
+    validations: {required: true}
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: |
+        Include the command and its output. Redact anything that looks like a
+        token before pasting — error text used to contain one.
+    validations: {required: true}
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected instead
+    validations: {required: true}

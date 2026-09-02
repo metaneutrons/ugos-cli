@@ -1,0 +1,43 @@
+# cargo-deny. Prüft Advisories, Lizenzen, Duplikate und Registries.
+# Jeder Eintrag unter `ignore` braucht Begründung, betroffenes Crate und
+# die Bedingung, unter der er wieder entfernt wird.
+
+[graph]
+all-features = true
+
+[advisories]
+version = 2
+yanked = "deny"
+ignore = [
+    { id = "RUSTSEC-2023-0071", reason = "Marvin-Attack; kein Patch verfuegbar; ueber rsa gezogen; betrifft die Entschluesselung mit privatem Schluessel, dieser Client verschluesselt nur mit dem oeffentlichen NAS-Schluessel; entfernen sobald rsa eine gefixte Version veroeffentlicht" },
+]
+
+[licenses]
+version = 2
+# Anwendungen unter GPL-3.0 ergänzen die Liste um "GPL-3.0".
+allow = [
+    "GPL-3.0-or-later",  # dieses Projekt selbst
+    "MPL-2.0",           # option-ext, ueber dirs; MPL 2.0 ist GPL-3.0-vertraeglich
+    # webpki-roots. Inhaltlich permissiv, aber es gibt keine FSF-Aussage zur
+    # GPL-Vertraeglichkeit. Der Inhalt ist eine Zertifikatsliste, kein Code.
+    "CDLA-Permissive-2.0",
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-3.0",
+    "Zlib",
+]
+confidence-threshold = 0.93
+
+[bans]
+multiple-versions = "warn"
+wildcards = "deny"
+highlight = "all"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]

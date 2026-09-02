@@ -1,0 +1,59 @@
+# Vorlage. Nach .github/dependabot.yml, Ökosysteme streichen, die es im
+# Projekt nicht gibt.
+#
+# Die Gruppierung ist bewusst nach Aktualisierungsart getrennt. Eine Gruppe
+# `patterns: ['*']` über alle Arten bündelt Breaking Changes mit harmlosen
+# Anhebungen, und eine kaputte Abhängigkeit blockiert dann den ganzen Stapel.
+# Minor und Patch bleiben gebündelt, weil eine Einzelprüfung dort nichts
+# bringt. Major bleibt ungruppiert, damit jeder Fall allein ankommt.
+#
+# `cooldown` hält eine Version, die kurz nach Veröffentlichung zurückgezogen
+# wird, aus jedem Pull Request heraus.
+# Zeiten sind ohne `timezone` in UTC. Wer lokale Ausfuehrungszeiten braucht,
+# traegt eine passende IANA-Zeitzone projektspezifisch ein.
+
+version: 2
+updates:
+- package-ecosystem: cargo
+  directory: /
+  schedule:
+    interval: weekly
+    day: monday
+    time: 05:00
+  open-pull-requests-limit: 5
+  cooldown:
+    default-days: 3
+    semver-major-days: 7
+  groups:
+    rust-minor-patch:
+      patterns:
+      - '*'
+      update-types:
+      - minor
+      - patch
+- package-ecosystem: rust-toolchain
+  directory: /
+  schedule:
+    interval: weekly
+    day: monday
+    time: 05:05
+  open-pull-requests-limit: 1
+  cooldown:
+    default-days: 14
+- package-ecosystem: github-actions
+  directory: /
+  schedule:
+    interval: weekly
+    day: monday
+    time: 05:15
+  open-pull-requests-limit: 5
+  cooldown:
+    default-days: 3
+    semver-major-days: 7
+  groups:
+    github-actions-minor-patch:
+      patterns:
+      - '*'
+      update-types:
+      - minor
+      - patch
