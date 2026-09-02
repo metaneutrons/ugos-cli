@@ -52,8 +52,9 @@ updates:
       time: '05:15'
     open-pull-requests-limit: 5
     cooldown:
+      # semver-major-days gilt fuer dieses Oekosystem nicht: Dependabot
+      # lehnt die gesamte Datei ab, wenn es hier steht.
       default-days: 3
-      semver-major-days: 7
     groups:
       github-actions-minor-patch:
         patterns: ['*']
