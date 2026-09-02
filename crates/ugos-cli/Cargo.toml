@@ -6,6 +6,10 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
+repository.workspace = true
+keywords = ["ugreen", "nas", "ugos", "cli", "kvm"]
+categories = ["command-line-utilities"]
+readme = "../../README.md"
 
 [lints]
 workspace = true

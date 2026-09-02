@@ -9,7 +9,6 @@ target/
 *.log
 .env
 *.pem
-Cargo.lock
 
 # Editor/agent workspace settings — may hold credentials
 .kiro/
