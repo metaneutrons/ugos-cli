@@ -15,7 +15,7 @@ on:
     # Token brauchen, holen ihn ueber ihr Environment; preflight prueft ihn
     # dort, bevor irgendetwas Oeffentliches geschieht.
     secrets:
-      HOMEBREW_UPDATE_TOKEN:
+      HOMEBREW_TAP_TOKEN:
         required: false
       AUR_SSH_PRIVATE_KEY:
         required: false
@@ -79,11 +79,11 @@ jobs:
           echo "source_date_epoch=$epoch" >> "$GITHUB_OUTPUT"
       - name: Verify the Homebrew tap credential before any public change
         env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_UPDATE_TOKEN }}
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
         run: |
           set -euo pipefail
           if [[ -z "${GH_TOKEN:-}" ]]; then
-            echo "::error::UG7010 HOMEBREW_UPDATE_TOKEN is missing"
+            echo "::error::UG7010 HOMEBREW_TAP_TOKEN is missing"
             exit 1
           fi
           permission=$(gh api repos/metaneutrons/homebrew-tap --jq '.permissions.push')
@@ -285,7 +285,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
       - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ inputs.tag }}
           # Bleibt ein Entwurf: release-please legt das Release als Draft an,
@@ -449,8 +449,8 @@ jobs:
           path: ./artifacts
       - name: Update the tap formula
         env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_UPDATE_TOKEN }}
-          TAP_TOKEN: ${{ secrets.HOMEBREW_UPDATE_TOKEN }}
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           VERSION: ${{ needs.preflight.outputs.version }}
         run: |
           set -euo pipefail
@@ -587,7 +587,7 @@ jobs:
           gh pr merge "$pr" --repo "$TAP_REPO" --squash --delete-branch
       - name: Verify the formula now on the tap
         env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_UPDATE_TOKEN }}
+          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           VERSION: ${{ needs.preflight.outputs.version }}
         run: |
           set -euo pipefail

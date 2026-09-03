@@ -68,7 +68,7 @@ the release still succeeds without them.
 
 | Name | Channel | Notes |
 |------|---------|-------|
-| `HOMEBREW_UPDATE_TOKEN` | Homebrew | needs push rights on `metaneutrons/homebrew-tap` |
+| `HOMEBREW_TAP_TOKEN` | Homebrew | needs push rights on `metaneutrons/homebrew-tap` |
 | `APT_GPG_PRIVATE_KEY` | APT | ASCII-armoured private key, `gpg --armor --export-secret-keys` |
 | `APT_GPG_PASSPHRASE` | APT | passphrase for that key |
 | `R2_ACCESS_KEY_ID` | APT | R2 token scoped to the bucket |
