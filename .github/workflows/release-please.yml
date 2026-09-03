@@ -29,6 +29,33 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
+      # release-please schreibt die Version nach Cargo.toml, fasst Cargo.lock
+      # aber nicht an. Auf main laege das Lockfile dann eine Version zurueck und
+      # jedes --locked in der CI scheitert. Der Push geht ausschliesslich auf den
+      # PR-Branch, nie auf main, also entsteht keine Schleife. Mit dem App-Token
+      # werden die Required Checks auf dem neuen Kopf der PR neu bewertet.
+      - name: Cargo.lock in die Release-PR synchronisieren
+        if: ${{ steps.release.outputs.pr }}
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          PR_JSON: ${{ steps.release.outputs.pr }}
+        run: |
+          set -euo pipefail
+          branch=$(printf '%s' "$PR_JSON" | jq -r .headBranchName)
+          git clone --branch "$branch" --depth 1 \
+            "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" rp-lock
+          cd rp-lock
+          rustup show
+          cargo update --workspace -q
+          if git diff --quiet -- Cargo.lock; then
+            echo "Cargo.lock entspricht bereits der Release-Version."
+          else
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git commit -m "chore: sync Cargo.lock to the release version" -- Cargo.lock
+            git push origin "HEAD:$branch"
+          fi
+
   publish-release:
     name: Publish release artifacts and package channels
     needs: release-please
