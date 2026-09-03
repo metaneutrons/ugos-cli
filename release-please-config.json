@@ -1,4 +1,5 @@
 {
+  "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
   "packages": {
     ".": {
       "release-type": "simple",
@@ -9,8 +10,22 @@
           "type": "toml",
           "path": "Cargo.toml",
           "jsonpath": "$.workspace.package.version"
+        },
+        {
+          "type": "toml",
+          "path": "crates/ugos-cli/Cargo.toml",
+          "jsonpath": "$.dependencies.ugos-client.version"
+        },
+        {
+          "type": "toml",
+          "path": "crates/ugos-mcp/Cargo.toml",
+          "jsonpath": "$.dependencies.ugos-client.version"
         }
-      ]
+      ],
+      "package-name": "ugos-cli",
+      "changelog-path": "CHANGELOG.md",
+      "draft": true,
+      "force-tag-creation": true
     }
   }
 }
