@@ -265,6 +265,9 @@ jobs:
         uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           tag_name: ${{ inputs.tag }}
+          # Bleibt ein Entwurf: release-please legt das Release als Draft an,
+          # und sichtbar wird es erst, wenn jeder Paketkanal durch ist.
+          draft: true
           files: |
             ugos-cli-*/*.tar.gz
             ugos-cli-*/*.zip
@@ -573,3 +576,34 @@ jobs:
           git add PKGBUILD .SRCINFO
           git commit -m "ugos-cli-bin ${VERSION}-1"
           git push origin HEAD:master
+
+  publish-release:
+    name: Publish the release
+    needs: [preflight, upload-release-artifacts, publish-apt, update-homebrew, publish-aur]
+    # Ein uebersprungener Kanal darf nicht blockieren, ein gescheiterter schon.
+    if: >-
+      always() &&
+      needs.upload-release-artifacts.result == 'success' &&
+      needs.update-homebrew.result == 'success' &&
+      needs.publish-apt.result != 'failure' &&
+      needs.publish-aur.result != 'failure'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - name: Entwurf sichtbar machen
+        run: |
+          set -euo pipefail
+          state=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
+          if [ "$state" != true ]; then
+            echo "::notice::Release $TAG ist bereits veroeffentlicht"
+            exit 0
+          fi
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          # Zuruecklesen statt dem Rueckgabewert vertrauen.
+          after=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
+          [ "$after" = false ] || { echo "::error::Release $TAG ist weiterhin ein Entwurf"; exit 1; }
