@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.11.1](https://github.com/metaneutrons/ugos-cli/compare/v0.11.0...v0.11.1) (2026-09-03)
+
+
+### Bug Fixes
+
+* **release:** add the cross targets to the pinned toolchain ([#38](https://github.com/metaneutrons/ugos-cli/issues/38)) ([82d6aad](https://github.com/metaneutrons/ugos-cli/commit/82d6aad39691d4a53de7c7534101c1299355279a))
+* **release:** keep the channel decision off stdout ([#36](https://github.com/metaneutrons/ugos-cli/issues/36)) ([5a82709](https://github.com/metaneutrons/ugos-cli/commit/5a827097b7af4f0158d4efbe210df34066a44dea))
+* **release:** publish before the package channels run ([#39](https://github.com/metaneutrons/ugos-cli/issues/39)) ([e71a42f](https://github.com/metaneutrons/ugos-cli/commit/e71a42f18a4be09812c4883d6f2712d5c75e16a5))
+
 ## [0.11.0](https://github.com/metaneutrons/ugos-cli/compare/v0.10.1...v0.11.0) (2026-09-03)
 
 
