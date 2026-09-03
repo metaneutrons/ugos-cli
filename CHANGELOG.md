@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.2](https://github.com/metaneutrons/ugos-cli/compare/v0.11.1...v0.11.2) (2026-09-03)
+
+
+### Bug Fixes
+
+* **release:** stop requiring a secret the caller cannot pass ([#40](https://github.com/metaneutrons/ugos-cli/issues/40)) ([ade5940](https://github.com/metaneutrons/ugos-cli/commit/ade59404e548f655700bd0fea512cc186b84c574))
+
 ## [0.11.1](https://github.com/metaneutrons/ugos-cli/compare/v0.11.0...v0.11.1) (2026-09-03)
 
 
