@@ -282,16 +282,45 @@ jobs:
         with:
           tag_name: ${{ inputs.tag }}
           # Bleibt ein Entwurf: release-please legt das Release als Draft an,
-          # und sichtbar wird es erst, wenn jeder Paketkanal durch ist.
+          # und sichtbar wird es erst, wenn jedes Artefakt daran haengt.
           draft: true
           files: |
             ugos-cli-*/*.tar.gz
             ugos-cli-*/*.zip
             ugos-cli-deb-*/*.deb
 
+  # Steht bewusst vor den Paketkanaelen. Homebrew und AUR laden in ihrem
+  # eigenen Test von der Release-URL, und die Assets eines Entwurfs sind
+  # unauthentifiziert nicht erreichbar: ein Kanal als Vorbedingung der
+  # Veroeffentlichung waere zirkulaer. Der Entwurf schuetzt weiterhin davor,
+  # dass ein Release sichtbar wird, bevor seine Artefakte daran haengen.
+  publish-release:
+    name: Publish the release
+    needs: [preflight, upload-release-artifacts]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - name: Entwurf sichtbar machen
+        run: |
+          set -euo pipefail
+          state=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
+          if [ "$state" != true ]; then
+            echo "::notice::Release $TAG ist bereits veroeffentlicht"
+            exit 0
+          fi
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+          # Zuruecklesen statt dem Rueckgabewert vertrauen.
+          after=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
+          [ "$after" = false ] || { echo "::error::Release $TAG ist weiterhin ein Entwurf"; exit 1; }
+
   publish-apt:
     name: Publish signed APT repository
-    needs: [preflight, package-deb, upload-release-artifacts]
+    needs: [preflight, package-deb, publish-release]
     if: needs.preflight.outputs.publish_apt == 'true'
     runs-on: ubuntu-latest
     environment: release
@@ -399,10 +428,14 @@ jobs:
 
   update-homebrew:
     name: Update Homebrew Tap
-    needs: [preflight, build, upload-release-artifacts]
+    needs: [preflight, build, publish-release]
     runs-on: ubuntu-latest
     environment: release
-    timeout-minutes: 15
+    # Die Qualifikation im Tap fuehrt brew install und brew test auf zwei
+    # macOS-Runnern aus. Das dauert, und der Job wartet darauf.
+    timeout-minutes: 60
+    env:
+      TAP_REPO: metaneutrons/homebrew-tap
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -430,11 +463,14 @@ jobs:
           LINUX_X64_SHA=$(checksum x86_64-unknown-linux-gnu)
           LINUX_ARM64_SHA=$(checksum aarch64-unknown-linux-gnu)
 
+          # Ohne version-Zeile: brew audit --strict verwirft sie als redundant,
+          # weil Homebrew die Version aus der URL liest. Genau deshalb wurde
+          # sie im Tap mit "fix(ugos-cli): satisfy current Homebrew audit"
+          # (44866ec) entfernt, und die Formel darf sie nicht zurueckbringen.
           cat > formula.rb <<RUBY
           class UgosCli < Formula
             desc "CLI and MCP server for UGREEN NAS (UGOS) management"
             homepage "https://github.com/metaneutrons/ugos-cli"
-            version "${VERSION}"
             license "GPL-3.0-or-later"
 
             on_macos do
@@ -467,7 +503,6 @@ jobs:
             end
           end
           RUBY
-          sed -i 's/^          //' formula.rb
 
           ruby -c formula.rb
           if [[ $(grep -Fc "/releases/download/v${VERSION}/" formula.rb) != 4 ]]; then
@@ -475,19 +510,74 @@ jobs:
             exit 1
           fi
 
-          git clone "https://x-access-token:${TAP_TOKEN}@github.com/metaneutrons/homebrew-tap.git" tap
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/${TAP_REPO}.git" tap
           install -d tap/Formula
-          if [[ -f tap/Formula/ugos-cli.rb ]] && cmp -s formula.rb tap/Formula/ugos-cli.rb; then
+          install -m 0644 formula.rb tap/Formula/ugos-cli.rb
+          cd tap
+          # Die Qualifikation im Tap prueft auch, dass README.md aus den
+          # Formeln erzeugt wurde. Ohne diesen Lauf scheitert der Pull Request
+          # an dieser Pruefung statt an der Formel.
+          scripts/generate-readme.sh README.md
+          if [[ -z $(git status --porcelain) ]]; then
             echo "::notice::the tap already carries this formula"
             exit 0
           fi
-          install -m 0644 formula.rb tap/Formula/ugos-cli.rb
-          cd tap
+
+          # main des Taps ist geschuetzt: Pull Request und der Check
+          # "Formula qualification" sind Pflicht, ein Direkt-Push wird
+          # abgewiesen. Reviews verlangt der Tap keine.
+          branch="ugos-cli-${VERSION}"
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/ugos-cli.rb
+          git checkout -b "$branch"
+          git add Formula/ugos-cli.rb README.md
           git commit -m "Update ugos-cli to ${VERSION}"
-          git push
+          git push --force-with-lease origin "$branch"
+
+          pr=$(gh pr list --repo "$TAP_REPO" --head "$branch" --state open \
+                 --json number --jq '.[0].number // empty')
+          if [[ -z "$pr" ]]; then
+            url=$(gh pr create --repo "$TAP_REPO" --base main --head "$branch" \
+                    --title "Update ugos-cli to ${VERSION}" \
+                    --body "Formel-Bump aus dem Release-Lauf von ugos-cli v${VERSION}.")
+            pr=${url##*/}
+          fi
+          if [[ ! "$pr" =~ ^[0-9]+$ ]]; then
+            echo "::error::UG7502 no pull request number for $branch"
+            exit 1
+          fi
+          echo "::notice::tap pull request #$pr"
+
+          # Der Gate-Job laeuft mit "if: always()" nach den Lanes, taucht als
+          # Check-Run also erst spaet auf. Ein fehlender Eintrag ist deshalb
+          # kein Fehler, sondern heisst warten.
+          #
+          # Gefragt wird die Rollup-Sicht der Pull Request, nicht
+          # commits/<sha>/check-runs: bei pull_request-Ereignissen haengen die
+          # Check-Runs am Merge-Commit, nicht am Kopf des Zweiges. Die Rollup
+          # antwortet in Grossbuchstaben, die REST-Sicht in Kleinbuchstaben,
+          # deshalb wird beides kleingeschrieben verglichen.
+          deadline=$(( SECONDS + 2400 ))
+          while :; do
+            info=$(gh pr view "$pr" --repo "$TAP_REPO" --json statusCheckRollup \
+              --jq '[.statusCheckRollup[] | select(.name == "Formula qualification")] | last
+                    | if . == null then "absent none"
+                      else "\((.status // "absent") | ascii_downcase) \((.conclusion // "none") | ascii_downcase)" end')
+            if [[ "${info%% *}" == completed ]]; then
+              if [[ "${info##* }" == success ]]; then
+                break
+              fi
+              echo "::error::UG7503 Formula qualification ended with ${info##* }"
+              exit 1
+            fi
+            if (( SECONDS > deadline )); then
+              echo "::error::UG7504 Formula qualification did not finish in time"
+              exit 1
+            fi
+            sleep 20
+          done
+
+          gh pr merge "$pr" --repo "$TAP_REPO" --squash --delete-branch
       - name: Verify the formula now on the tap
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_UPDATE_TOKEN }}
@@ -495,16 +585,18 @@ jobs:
         run: |
           set -euo pipefail
           published=$(gh api \
-            "repos/metaneutrons/homebrew-tap/contents/Formula/ugos-cli.rb?ref=main" \
+            "repos/${TAP_REPO}/contents/Formula/ugos-cli.rb?ref=main" \
             --jq .content | base64 --decode)
-          if ! grep -Fq "version \"${VERSION}\"" <<< "$published"; then
-            echo "::error::UG7502 the tap does not serve version ${VERSION}"
+          # Die Formel fuehrt keine version-Zeile, die Version steht in den
+          # vier Release-URLs. Dort wird sie geprueft, nicht anderswo.
+          if [[ $(grep -Fc "/releases/download/v${VERSION}/" <<< "$published") != 4 ]]; then
+            echo "::error::UG7505 the tap does not serve version ${VERSION}"
             exit 1
           fi
 
   publish-aur:
     name: Publish AUR package
-    needs: [preflight, build, upload-release-artifacts]
+    needs: [preflight, build, publish-release]
     if: needs.preflight.outputs.publish_aur == 'true'
     runs-on: ubuntu-latest
     environment: release
@@ -592,34 +684,3 @@ jobs:
           git add PKGBUILD .SRCINFO
           git commit -m "ugos-cli-bin ${VERSION}-1"
           git push origin HEAD:master
-
-  publish-release:
-    name: Publish the release
-    needs: [preflight, upload-release-artifacts, publish-apt, update-homebrew, publish-aur]
-    # Ein uebersprungener Kanal darf nicht blockieren, ein gescheiterter schon.
-    if: >-
-      always() &&
-      needs.upload-release-artifacts.result == 'success' &&
-      needs.update-homebrew.result == 'success' &&
-      needs.publish-apt.result != 'failure' &&
-      needs.publish-aur.result != 'failure'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: write
-    env:
-      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      TAG: ${{ inputs.tag }}
-    steps:
-      - name: Entwurf sichtbar machen
-        run: |
-          set -euo pipefail
-          state=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
-          if [ "$state" != true ]; then
-            echo "::notice::Release $TAG ist bereits veroeffentlicht"
-            exit 0
-          fi
-          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
-          # Zuruecklesen statt dem Rueckgabewert vertrauen.
-          after=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
-          [ "$after" = false ] || { echo "::error::Release $TAG ist weiterhin ein Entwurf"; exit 1; }
