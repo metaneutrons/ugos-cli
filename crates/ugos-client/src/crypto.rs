@@ -244,6 +244,15 @@ mod tests {
     }
 
     #[test]
+    fn md5_matches_reference_vectors() {
+        // RFC 1321, Anhang A.5. Der Wert geht als X-Ugreen-Security-Key
+        // ueber die Leitung, ein Wechsel der Hash-Bibliothek darf ihn also
+        // nicht veraendern.
+        assert_eq!(md5_hex(""), "d41d8cd98f00b204e9800998ecf8427e");
+        assert_eq!(md5_hex("abc"), "900150983cd24fb0d6963f7d28e17f72");
+    }
+
+    #[test]
     fn query_string_encodes_paths() {
         assert_eq!(
             query_string(&[("path", "/volume1/a b"), ("page", "1")]),
