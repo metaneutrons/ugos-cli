@@ -7,9 +7,16 @@ on:
         description: Existing release tag to build and publish.
         required: true
         type: string
+    # Alle als optional deklariert, auch der Homebrew-Token. Die Werte liegen
+    # im Environment "release", nicht als Repository-Secrets, und `secrets:
+    # inherit` reicht nur Repository- und Organisations-Secrets weiter. Ein
+    # `required: true` laesst deshalb jeden Job scheitern, der kein
+    # `environment: release` fuehrt, noch bevor er etwas tut. Die Jobs, die den
+    # Token brauchen, holen ihn ueber ihr Environment; preflight prueft ihn
+    # dort, bevor irgendetwas Oeffentliches geschieht.
     secrets:
       HOMEBREW_UPDATE_TOKEN:
-        required: true
+        required: false
       AUR_SSH_PRIVATE_KEY:
         required: false
       APT_GPG_PRIVATE_KEY:
