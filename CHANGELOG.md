@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.11.0](https://github.com/metaneutrons/ugos-cli/compare/v0.10.1...v0.11.0) (2026-09-03)
+
+
+### Features
+
+* **release:** add signed APT and AUR channels, harden the workflow ([213a350](https://github.com/metaneutrons/ugos-cli/commit/213a3500943cb894db6e6fd10d434c03389f9698))
+
+
+### Bug Fixes
+
+* **ci:** drop an unsupported cooldown key from the actions entry ([#21](https://github.com/metaneutrons/ugos-cli/issues/21)) ([69496a5](https://github.com/metaneutrons/ugos-cli/commit/69496a50deefd11e21576746c9dec7f2e27073fa))
+* **ci:** tolerate the clippy lint added in 1.98 ([8623191](https://github.com/metaneutrons/ugos-cli/commit/8623191e65f1d6f1117829253436b50024263c37))
+* **deps:** drop the tabled derive to shed proc-macro-error2 ([96ef3c7](https://github.com/metaneutrons/ugos-cli/commit/96ef3c76b35091c5a48994726d65751aa98065f9))
+* **deps:** move the hash crates to the RustCrypto 0.11 line ([#35](https://github.com/metaneutrons/ugos-cli/issues/35)) ([3853426](https://github.com/metaneutrons/ugos-cli/commit/3853426904dfbbe2616015f85fbc821e7fcaa812))
+* **release:** bump internal dependencies and sync the lockfile ([#32](https://github.com/metaneutrons/ugos-cli/issues/32)) ([4d09949](https://github.com/metaneutrons/ugos-cli/commit/4d09949b4dc234b6d51b8584fc4b16cd7f4bb0a4))
+* **release:** publish the draft once every channel has succeeded ([#34](https://github.com/metaneutrons/ugos-cli/issues/34)) ([c559e65](https://github.com/metaneutrons/ugos-cli/commit/c559e653199b709eede14c8d301bac9acf376434))
+
 ## [0.10.1](https://github.com/metaneutrons/ugos-cli/compare/v0.10.0...v0.10.1) (2026-08-19)
 
 
