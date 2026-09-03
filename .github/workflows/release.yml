@@ -102,6 +102,11 @@ jobs:
           # A channel runs only when fully configured. Missing configuration
           # skips it; partial configuration is an error, because it usually
           # means a secret was renamed and would fail halfway through.
+          #
+          # Auf stdout steht nichts als true oder false. Die Ausgabe wandert
+          # in eine Zuweisung in GITHUB_OUTPUT, und eine zweite Zeile macht
+          # daraus einen mehrzeiligen Wert, den das Dateikommando ablehnt.
+          # Meldungen gehen deshalb nach stderr; im Log stehen sie genauso.
           apt_names=(APT_GPG_PRIVATE_KEY APT_GPG_PASSPHRASE R2_ACCESS_KEY_ID
                      R2_SECRET_ACCESS_KEY APT_GPG_FINGERPRINT APT_PUBLIC_BASE_URL
                      R2_ACCOUNT_ID R2_BUCKET_NAME)
@@ -114,18 +119,24 @@ jobs:
               if [[ -n "${!name:-}" ]]; then present=$((present + 1)); else missing=$((missing + 1)); fi
             done
             if (( present == 0 )); then
-              echo "::notice::$channel is not configured and will be skipped"
+              echo "::notice::$channel is not configured and will be skipped" >&2
               printf 'false'
             elif (( missing > 0 )); then
-              echo "::error::UG7020 $channel is only partly configured; $missing value(s) missing"
-              exit 1
+              echo "::error::UG7020 $channel is only partly configured; $missing value(s) missing" >&2
+              return 1
             else
               printf 'true'
             fi
           }
 
-          echo "apt=$(decide APT "${apt_names[@]}")" >> "$GITHUB_OUTPUT"
-          echo "aur=$(decide AUR "${aur_names[@]}")" >> "$GITHUB_OUTPUT"
+          # Zuweisung und Aufruf muessen getrennt stehen. In der Form
+          # echo "apt=$(decide ...)" bleibt ein Fehlschlag von decide folgenlos,
+          # weil der Exit-Status der von echo ist; ein nur halb konfigurierter
+          # Kanal liefe dann trotz UG7020 weiter.
+          apt=$(decide APT "${apt_names[@]}")
+          aur=$(decide AUR "${aur_names[@]}")
+          echo "apt=$apt" >> "$GITHUB_OUTPUT"
+          echo "aur=$aur" >> "$GITHUB_OUTPUT"
       - name: Validate APT configuration values
         if: steps.channels.outputs.apt == 'true'
         env:
