@@ -337,33 +337,36 @@ is created and only fails to start.
 
 ## Installation
 
-### Package managers
+### Homebrew (macOS, Linux)
 
 ```bash
-# Homebrew (macOS, Linux)
 brew install metaneutrons/tap/ugos-cli
-
-# Debian, Ubuntu
-curl -fsSL https://deb.metaneutrons.cc/ugos-cli-archive-keyring.asc \
-  | sudo gpg --dearmor -o /usr/share/keyrings/ugos-cli.gpg
-echo "deb [signed-by=/usr/share/keyrings/ugos-cli.gpg] https://deb.metaneutrons.cc stable main" \
-  | sudo tee /etc/apt/sources.list.d/ugos-cli.list
-sudo apt update && sudo apt install ugos-cli
-
-# Arch Linux
-yay -S ugos-cli-bin
 ```
 
-See [docs/packaging.md](docs/packaging.md) for how these are built and verified.
+### Debian and Ubuntu
+
+Take the `.deb` for your architecture from the
+[latest release](https://github.com/metaneutrons/ugos-cli/releases/latest) and
+install it with apt, which resolves dependencies for a local file too:
+
+```bash
+sudo apt install ./ugos-cli_<version>_amd64.deb
+```
+
+An APT repository under `deb.metaneutrons.cc` is being prepared. It does not
+serve yet, so do not add it as a source.
+
+### Arch Linux
+
+There is no AUR package yet. Use the Linux archive from the releases page.
 
 ### From GitHub Releases
 
-Download pre-built binaries from the [releases page](https://github.com/metaneutrons/ugos-cli/releases).
+Every release carries binaries for Linux, macOS and Windows, each on x86_64 and
+aarch64, plus `.deb` packages for amd64 and arm64. See the
+[releases page](https://github.com/metaneutrons/ugos-cli/releases).
 
-Available for:
-- Linux (x86_64, aarch64)
-- macOS (x86_64, aarch64)
-- Windows (x86_64, aarch64)
+See [docs/packaging.md](docs/packaging.md) for how these are built and verified.
 
 ### From Source
 

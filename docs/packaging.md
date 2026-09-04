@@ -1,15 +1,23 @@
 # Packaging and release channels
 
-`ugos-cli` is published through four channels. Each is built from the same
-release archives, and each is verified after publication rather than assumed
-to have worked.
+`ugos-cli` is published through several channels, all built from the same
+release archives and verified after publication rather than assumed to have
+worked. Two of them are live today.
 
-| Channel | Artefact | Verified by |
-|---------|----------|-------------|
-| GitHub release | `.tar.gz`, `.zip`, `.deb` | the build matrix itself |
-| Homebrew | formula in `metaneutrons/homebrew-tap` | re-read from the tap after push |
-| APT | signed repository on Cloudflare R2 | `gpgv` plus a byte compare of the published `.deb` |
-| AUR | `ugos-cli-bin` | package built and compared against the release archive |
+| Channel | Artefact | State | Verified by |
+|---------|----------|-------|-------------|
+| GitHub release | `.tar.gz`, `.zip`, `.deb` | live | the build matrix itself |
+| Homebrew | formula in `metaneutrons/homebrew-tap` | live | pull request, tap qualification, re-read after merge |
+| APT | signed repository under `deb.metaneutrons.cc` | not serving | `gpgv` plus a byte compare of the published `.deb` |
+| AUR | `ugos-cli-bin` | package does not exist | package built and compared against the release archive |
+
+The APT channel is registered in `metaneutrons/apt-archive`, the central
+repository that renders and signs `deb.metaneutrons.cc`. Project repositories
+do not upload there: an R2 token can be scoped to a bucket but not to a prefix,
+so write access for one project would be write access to the whole archive.
+Projects attach their `.deb` to their GitHub release and the archive fetches
+them. That requires build attestation, which this pipeline does not yet
+produce, so nothing is published under `deb.metaneutrons.cc` so far.
 
 ## Installing
 
@@ -17,15 +25,8 @@ to have worked.
 # Homebrew (macOS, Linux)
 brew install metaneutrons/tap/ugos-cli
 
-# Debian, Ubuntu
-curl -fsSL https://deb.metaneutrons.cc/ugos-cli-archive-keyring.asc \
-  | sudo gpg --dearmor -o /usr/share/keyrings/ugos-cli.gpg
-echo "deb [signed-by=/usr/share/keyrings/ugos-cli.gpg] https://deb.metaneutrons.cc stable main" \
-  | sudo tee /etc/apt/sources.list.d/ugos-cli.list
-sudo apt update && sudo apt install ugos-cli
-
-# Arch Linux
-yay -S ugos-cli-bin
+# Debian, Ubuntu: the .deb from the release, until the APT repository serves
+sudo apt install ./ugos-cli_<version>_amd64.deb
 ```
 
 ## How the release runs
@@ -42,7 +43,14 @@ runs in this order:
 3. **package-deb** — builds `.deb` packages from those archives and installs
    the native one to confirm it works.
 4. **upload-release-artifacts** — attaches everything to the GitHub release.
-5. **publish-apt**, **update-homebrew**, **publish-aur** — publish and verify.
+5. **publish-release** — makes the draft visible. This has to happen before
+   the package channels, not after: Homebrew and AUR download from the release
+   URL in their own tests, and a draft release's assets answer 404 without
+   authentication.
+6. **update-homebrew**, **publish-apt**, **publish-aur** — publish and verify.
+   The Homebrew step opens a pull request on the tap, waits for its
+   `Formula qualification` check and merges it; `main` there is protected and
+   rejects a direct push.
 
 Both `.deb` packaging and the APT repository are built by scripts under
 `scripts/release/`, so they can be run and tested locally rather than only
