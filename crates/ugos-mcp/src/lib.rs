@@ -14,7 +14,7 @@ use std::sync::Arc;
 use rmcp::{
     ServerHandler,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
-    model::{ServerCapabilities, ServerInfo},
+    model::{Implementation, ServerCapabilities, ServerInfo},
     schemars, tool, tool_handler, tool_router,
 };
 use tokio::sync::OnceCell;
@@ -1362,7 +1362,15 @@ impl ServerHandler for UgosMcp {
                 target_names.join(", ")
             )
         };
+        // Ohne with_server_info meldet sich der Server als "rmcp" in dessen
+        // Version: ServerInfo::new setzt Implementation::from_build_env(),
+        // und das env!("CARGO_CRATE_NAME") darin steht in der Bibliothek, nicht
+        // hier. Ein Client saehe dann nicht, womit er spricht.
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
+            .with_server_info(Implementation::new(
+                env!("CARGO_PKG_NAME"),
+                env!("CARGO_PKG_VERSION"),
+            ))
             .with_instructions(instructions)
     }
 }
