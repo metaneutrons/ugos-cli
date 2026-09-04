@@ -166,3 +166,15 @@ fn target_list_works_without_auth() {
     assert_eq!(parsed[0]["name"], "test");
     assert_eq!(parsed[0]["host"], "127.0.0.1");
 }
+
+#[test]
+fn the_server_names_itself_not_the_library() {
+    use rmcp::ServerHandler;
+
+    let info = make_server().get_info();
+    // Ohne with_server_info setzt rmcp Implementation::from_build_env() und
+    // meldet damit sich selbst. Ein Client saehe dann "rmcp" statt des
+    // Servers, mit dem er spricht.
+    assert_eq!(info.server_info.name, "ugos-mcp");
+    assert_eq!(info.server_info.version, env!("CARGO_PKG_VERSION"));
+}
