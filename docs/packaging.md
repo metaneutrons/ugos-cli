@@ -8,16 +8,21 @@ worked. Two of them are live today.
 |---------|----------|-------|-------------|
 | GitHub release | `.tar.gz`, `.zip`, `.deb` | live | the build matrix itself |
 | Homebrew | formula in `metaneutrons/homebrew-tap` | live | pull request, tap qualification, re-read after merge |
-| APT | signed repository under `deb.metaneutrons.cc` | not serving | `gpgv` plus a byte compare of the published `.deb` |
+| APT | signed repository under `deb.metaneutrons.cc` | waiting on a token | the archive verifies our attestation, we compare the published `.deb` against the release asset |
 | AUR | `ugos-cli-bin` | package does not exist | package built and compared against the release archive |
 
-The APT channel is registered in `metaneutrons/apt-archive`, the central
-repository that renders and signs `deb.metaneutrons.cc`. Project repositories
-do not upload there: an R2 token can be scoped to a bucket but not to a prefix,
-so write access for one project would be write access to the whole archive.
-Projects attach their `.deb` to their GitHub release and the archive fetches
-them. That requires build attestation, which this pipeline does not yet
-produce, so nothing is published under `deb.metaneutrons.cc` so far.
+The APT channel is served by `metaneutrons/apt-archive`, the central repository
+that renders and signs `deb.metaneutrons.cc`. This repository holds no signing
+key and no R2 write access: an R2 token can be scoped to a bucket but not to a
+prefix, so write access for one project would be write access to the whole
+archive.
+
+Instead the `.deb` packages are attested with `actions/attest-build-provenance`
+and attached to the release, and the pipeline asks the archive to publish. The
+archive fetches them, verifies the attestation with `gh attestation verify` and
+aborts without it, deliberately: an account that may upload an asset is no
+statement about what built the file. Signing happens there, with the domain
+subkey; the certify-only primary key stays offline.
 
 ## Installing
 
@@ -50,22 +55,27 @@ runs in this order:
 6. **update-homebrew**, **publish-apt**, **publish-aur** — publish and verify.
    The Homebrew step opens a pull request on the tap, waits for its
    `Formula qualification` check and merges it; `main` there is protected and
-   rejects a direct push.
+   rejects a direct push. The APT step dispatches to the archive and then waits
+   for `deb.metaneutrons.cc/ugos-cli` to actually serve the version, because a
+   dispatch returns no run id and the served archive is the stronger statement
+   anyway. It finishes by comparing the published `.deb` byte for byte against
+   the release asset.
 
-Both `.deb` packaging and the APT repository are built by scripts under
-`scripts/release/`, so they can be run and tested locally rather than only
-inside CI.
+`.deb` packaging is done by a script under `scripts/release/`, so it can be run
+and tested locally rather than only inside CI.
 
 ## Reproducibility
 
 `SOURCE_DATE_EPOCH` is taken from the tagged commit and threaded through
-`dpkg-deb`, `gzip -n` and the GPG signatures, so rebuilding a tag produces
-byte-identical packages and metadata.
+`dpkg-deb` and `gzip -n`, so rebuilding a tag produces byte-identical packages.
+That is what lets the APT step compare the published file against the release
+asset with `cmp` instead of trusting a version string.
 
-One consequence is worth knowing: signing pins the clock to that timestamp,
-and GPG refuses to sign with a key created *after* it. Rotating the signing
-key and then re-running an older tag therefore fails, deliberately and with
-an explicit message (`UG7405`) rather than an opaque "Unusable secret key".
+Archive metadata is no longer built here, so the old key-age trap (`UG7405`)
+is gone with it: signing pinned the clock to `SOURCE_DATE_EPOCH`, and GPG
+refuses to sign with a key created after that moment. The archive sets its own
+publication time, and its `Valid-Until` follows from that rather than from a
+tag's age.
 
 ## Configuration for the release itself
 
@@ -77,42 +87,35 @@ the release still succeeds without them.
 | Name | Channel | Notes |
 |------|---------|-------|
 | `HOMEBREW_TAP_TOKEN` | Homebrew | needs push rights on `metaneutrons/homebrew-tap` |
-| `APT_GPG_PRIVATE_KEY` | APT | ASCII-armoured private key, `gpg --armor --export-secret-keys` |
-| `APT_GPG_PASSPHRASE` | APT | passphrase for that key |
-| `R2_ACCESS_KEY_ID` | APT | R2 token scoped to the bucket |
-| `R2_SECRET_ACCESS_KEY` | APT | |
+| `APT_ARCHIVE_DISPATCH_TOKEN` | APT | fine-grained token for `metaneutrons/apt-archive` alone, `contents: write`, which is what `repository_dispatch` requires |
 | `AUR_SSH_PRIVATE_KEY` | AUR | key registered with the AUR account |
 
 ### Variables
 
 | Name | Channel | Example |
 |------|---------|---------|
-| `APT_GPG_FINGERPRINT` | APT | full 40-hex primary key fingerprint |
-| `APT_PUBLIC_BASE_URL` | APT | `https://deb.metaneutrons.cc`, no trailing slash |
-| `R2_ACCOUNT_ID` | APT | 32-hex Cloudflare account id |
-| `R2_BUCKET_NAME` | APT | bucket serving that domain |
 | `AUR_SSH_KNOWN_HOSTS` | AUR | output of `ssh-keyscan aur.archlinux.org` |
-
-The bucket is served at the root of `APT_PUBLIC_BASE_URL`: `dists/` and
-`pool/` sit directly beneath it, next to the public keyring.
 
 `AUR_SSH_KNOWN_HOSTS` is pinned rather than trusted on first use, so the
 push cannot be redirected by a changed host key.
 
+There is deliberately no APT signing key and no R2 credential here. Everything
+the archive needs sits in its own protected environment, and the only thing
+this repository may do is knock.
+
 ## Testing the packaging locally
 
-Both scripts run outside CI. On a machine without `dpkg-deb`, a container
+`build-deb.sh` runs outside CI. On a machine without `dpkg-deb`, a container
 works:
 
 ```bash
 tar czf - archives scripts | docker run --rm -i debian:bookworm-slim bash -c '
   mkdir /work && cd /work && tar xzf -
-  apt-get update -qq && apt-get install -y -qq dpkg-dev apt-utils gnupg
+  apt-get update -qq && apt-get install -y -qq dpkg-dev
   scripts/release/build-deb.sh --archive archives/ugos-cli-x86_64-unknown-linux-gnu.tar.gz \
-    --arch amd64 --version 0.10.1 --output-dir debs --source-date-epoch "$(date +%s)"
+    --arch amd64 --version 0.11.3 --output-dir debs --source-date-epoch "$(date +%s)"
 '
 ```
 
-This is how the pipeline was validated before it first ran: the packages were
-built, a throwaway key signed a repository, and `apt install ugos-cli`
-installed it from a `file://` source.
+Archive rendering and signing are not testable from here any more; they live in
+`metaneutrons/apt-archive` and are covered by its own contract suites.

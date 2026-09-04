@@ -19,13 +19,7 @@ on:
         required: false
       AUR_SSH_PRIVATE_KEY:
         required: false
-      APT_GPG_PRIVATE_KEY:
-        required: false
-      APT_GPG_PASSPHRASE:
-        required: false
-      R2_ACCESS_KEY_ID:
-        required: false
-      R2_SECRET_ACCESS_KEY:
+      APT_ARCHIVE_DISPATCH_TOKEN:
         required: false
   workflow_dispatch:
     inputs:
@@ -94,15 +88,8 @@ jobs:
       - name: Decide which package channels are configured
         id: channels
         env:
-          APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
-          APT_GPG_PASSPHRASE: ${{ secrets.APT_GPG_PASSPHRASE }}
-          R2_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-          R2_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          APT_ARCHIVE_DISPATCH_TOKEN: ${{ secrets.APT_ARCHIVE_DISPATCH_TOKEN }}
           AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          APT_GPG_FINGERPRINT: ${{ vars.APT_GPG_FINGERPRINT }}
-          APT_PUBLIC_BASE_URL: ${{ vars.APT_PUBLIC_BASE_URL }}
-          R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID }}
-          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
           AUR_SSH_KNOWN_HOSTS: ${{ vars.AUR_SSH_KNOWN_HOSTS }}
         run: |
           set -euo pipefail
@@ -114,9 +101,9 @@ jobs:
           # in eine Zuweisung in GITHUB_OUTPUT, und eine zweite Zeile macht
           # daraus einen mehrzeiligen Wert, den das Dateikommando ablehnt.
           # Meldungen gehen deshalb nach stderr; im Log stehen sie genauso.
-          apt_names=(APT_GPG_PRIVATE_KEY APT_GPG_PASSPHRASE R2_ACCESS_KEY_ID
-                     R2_SECRET_ACCESS_KEY APT_GPG_FINGERPRINT APT_PUBLIC_BASE_URL
-                     R2_ACCOUNT_ID R2_BUCKET_NAME)
+          # Nur noch der Dispatch-Token: Signaturschluessel und R2-Zugang
+          # liegen im Archiv-Repository, nicht hier.
+          apt_names=(APT_ARCHIVE_DISPATCH_TOKEN)
           aur_names=(AUR_SSH_PRIVATE_KEY AUR_SSH_KNOWN_HOSTS)
 
           decide() {
@@ -144,23 +131,6 @@ jobs:
           aur=$(decide AUR "${aur_names[@]}")
           echo "apt=$apt" >> "$GITHUB_OUTPUT"
           echo "aur=$aur" >> "$GITHUB_OUTPUT"
-      - name: Validate APT configuration values
-        if: steps.channels.outputs.apt == 'true'
-        env:
-          APT_GPG_FINGERPRINT: ${{ vars.APT_GPG_FINGERPRINT }}
-          APT_PUBLIC_BASE_URL: ${{ vars.APT_PUBLIC_BASE_URL }}
-          R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID }}
-          R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
-        run: |
-          set -euo pipefail
-          [[ "$APT_GPG_FINGERPRINT" =~ ^[0-9A-Fa-f]{40}$ ]] || {
-            echo "::error::UG7021 APT_GPG_FINGERPRINT must be a full 40-hex fingerprint"; exit 1; }
-          [[ "$APT_PUBLIC_BASE_URL" =~ ^https://[^[:space:]?#]+[^/]$ ]] || {
-            echo "::error::UG7022 APT_PUBLIC_BASE_URL must be an HTTPS URL without a trailing slash"; exit 1; }
-          [[ "$R2_ACCOUNT_ID" =~ ^[0-9a-f]{32}$ ]] || {
-            echo "::error::UG7023 R2_ACCOUNT_ID must be a 32-hex Cloudflare account ID"; exit 1; }
-          [[ "$R2_BUCKET_NAME" =~ ^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$ ]] || {
-            echo "::error::UG7024 R2_BUCKET_NAME is malformed"; exit 1; }
 
   build:
     name: Build (${{ matrix.target }})
@@ -223,6 +193,14 @@ jobs:
     needs: [preflight, build]
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    # Die Attestierung bindet die .deb an die Identitaet dieses Workflows.
+    # metaneutrons/apt-archive prueft sie mit `gh attestation verify` und
+    # bricht ohne sie ab, absichtlich: ein Konto mit Upload-Recht ist kein
+    # Nachweis darueber, was die Datei gebaut hat.
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
     strategy:
       matrix:
         include:
@@ -269,6 +247,12 @@ jobs:
               echo "::error::UG7311 ugos-mcp is missing or not executable"; exit 1; }
             sudo dpkg -r ugos-cli
           fi
+      # Vor dem Upload: die Attestierung haengt am Digest, nicht am Ort, und
+      # gilt damit auch fuer die Kopie, die spaeter am Release haengt.
+      - name: Attest the package
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: ./debs/*.deb
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ugos-cli-deb-${{ matrix.arch }}
@@ -326,111 +310,104 @@ jobs:
           [ "$after" = false ] || { echo "::error::Release $TAG ist weiterhin ein Entwurf"; exit 1; }
 
   publish-apt:
-    name: Publish signed APT repository
-    needs: [preflight, package-deb, publish-release]
+    name: Ask the archive to publish
+    needs: [preflight, publish-release]
     if: needs.preflight.outputs.publish_apt == 'true'
     runs-on: ubuntu-latest
     environment: release
     timeout-minutes: 30
     env:
       VERSION: ${{ needs.preflight.outputs.version }}
-      SOURCE_DATE_EPOCH: ${{ needs.preflight.outputs.source_date_epoch }}
-      APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
-      APT_GPG_PASSPHRASE: ${{ secrets.APT_GPG_PASSPHRASE }}
-      APT_GPG_FINGERPRINT: ${{ vars.APT_GPG_FINGERPRINT }}
-      APT_PUBLIC_BASE_URL: ${{ vars.APT_PUBLIC_BASE_URL }}
-      R2_ACCOUNT_ID: ${{ vars.R2_ACCOUNT_ID }}
-      R2_BUCKET_NAME: ${{ vars.R2_BUCKET_NAME }}
-      AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
-      AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
-      AWS_REGION: auto
-      AWS_DEFAULT_REGION: auto
-      AWS_EC2_METADATA_DISABLED: 'true'
+      ARCHIVE_REPO: metaneutrons/apt-archive
+      ARCHIVE_DOMAIN: metaneutrons.cc
+      ARCHIVE_PROJECT: ugos-cli
+      ARCHIVE_BASE_URL: https://deb.metaneutrons.cc/ugos-cli
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: ${{ inputs.tag }}
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          pattern: ugos-cli-deb-*
-          merge-multiple: true
-          path: ./candidate
-      - name: Install APT tooling
+      # Dieses Repository laedt nichts hoch und haelt keinen Signaturschluessel.
+      # Ein R2-Token laesst sich auf einen Bucket begrenzen, nicht auf ein
+      # Praefix; ein Schreibzugang je Projekt waere ein Schreibzugang auf das
+      # ganze Archiv. Die .deb haengen attestiert am Release, und das Archiv
+      # holt sie sich.
+      - name: Anklopfen
+        env:
+          GH_TOKEN: ${{ secrets.APT_ARCHIVE_DISPATCH_TOKEN }}
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends apt-utils dpkg-dev gnupg
-      - name: Build deterministic signed repository metadata
+          # Als JSON-Rumpf statt als -f-Felder: der Payload ist verschachtelt,
+          # und die Feldsyntax waere hier eine Fehlerquelle ohne Gewinn.
+          jq -n --arg domain "$ARCHIVE_DOMAIN" --arg project "$ARCHIVE_PROJECT" \
+            '{event_type: "publish-archive",
+              client_payload: {domain: $domain, project: $project}}' \
+            | gh api -X POST "repos/${ARCHIVE_REPO}/dispatches" --input -
+          echo "::notice::${ARCHIVE_REPO} um Veroeffentlichung von ${ARCHIVE_PROJECT} gebeten"
+
+      # Der Dispatch liefert keine Lauf-ID zurueck. Geprueft wird deshalb das
+      # Ergebnis an der oeffentlichen URL, und das ist ohnehin die staerkere
+      # Aussage: nicht dass ein Lauf startete, sondern dass das Archiv die
+      # Version ausliefert.
+      #
+      # Der Debian-Versionsstring traegt eine Revision, `build-deb.sh` setzt
+      # `${version}-1`. Verglichen wird deshalb der Upstream-Teil als Praefix,
+      # als Zeichenkette und nicht als regulaerer Ausdruck: die Punkte einer
+      # Version waeren dort Platzhalter.
+      - name: Warten, bis das Archiv die Version ausliefert
         run: |
           set -euo pipefail
-          printf '%s\n' "$APT_GPG_PRIVATE_KEY" > "$RUNNER_TEMP/apt-private.asc"
-          printf '%s' "$APT_GPG_PASSPHRASE" > "$RUNNER_TEMP/apt-passphrase"
-          chmod 0600 "$RUNNER_TEMP/apt-private.asc" "$RUNNER_TEMP/apt-passphrase"
-          scripts/release/build-apt-repository.sh \
-            --candidate-dir ./candidate \
-            --output-dir "$RUNNER_TEMP/apt-repository" \
-            --version "$VERSION" \
-            --source-date-epoch "$SOURCE_DATE_EPOCH" \
-            --private-key "$RUNNER_TEMP/apt-private.asc" \
-            --passphrase-file "$RUNNER_TEMP/apt-passphrase" \
-            --fingerprint "$APT_GPG_FINGERPRINT"
-          find "$RUNNER_TEMP/apt-repository" -type f -print | sort
-      - name: Publish packages first, metadata last
-        run: |
-          set -euo pipefail
-          # Order matters: an index that names a package apt cannot fetch
-          # breaks every client until the upload finishes.
-          repository="$RUNNER_TEMP/apt-repository"
-          endpoint="https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com"
-          destination="s3://${R2_BUCKET_NAME}"
-          aws s3 cp "$repository/pool" "$destination/pool" \
-            --endpoint-url "$endpoint" --recursive \
-            --cache-control 'public,max-age=31536000,immutable' \
-            --content-type 'application/vnd.debian.binary-package'
-          aws s3 cp "$repository/ugos-cli-archive-keyring.asc" \
-            "$destination/ugos-cli-archive-keyring.asc" \
-            --endpoint-url "$endpoint" --cache-control 'public,max-age=3600' \
-            --content-type 'application/pgp-keys'
-          for arch in amd64 arm64; do
-            prefix="dists/stable/main/binary-${arch}"
-            aws s3 cp "$repository/${prefix}/Packages" "$destination/${prefix}/Packages" \
-              --endpoint-url "$endpoint" --cache-control 'no-cache' \
-              --content-type 'text/plain; charset=utf-8'
-            aws s3 cp "$repository/${prefix}/Packages.gz" "$destination/${prefix}/Packages.gz" \
-              --endpoint-url "$endpoint" --cache-control 'no-cache' \
-              --content-type 'application/gzip'
+          cat > "$RUNNER_TEMP/pick.awk" <<'AWK'
+          BEGIN { prefix = version "-" }
+          $1 == "Package:"  { pkg  = $2 }
+          $1 == "Version:"  { ver  = $2 }
+          $1 == "Filename:" { name = $2 }
+          function hit() { return pkg == package && substr(ver, 1, length(prefix)) == prefix }
+          # awk fuehrt END auch nach exit aus, deshalb die Marke.
+          /^[[:space:]]*$/ { if (hit()) { print name; done = 1; exit } pkg = ""; ver = ""; name = "" }
+          END { if (!done && hit()) print name }
+          AWK
+
+          # Ohne Cache-Buster: die Cache Rule der Zone setzt fuer dists/**
+          # `Cache-Control: no-store`, gerade damit ein alter Index nicht gegen
+          # ein neues InRelease laufen kann.
+          index="${ARCHIVE_BASE_URL}/dists/rolling/main/binary-amd64/Packages.gz"
+          deadline=$(( SECONDS + 1200 ))
+          while :; do
+            if curl --fail --silent --show-error --location "$index" --output packages.gz 2>/dev/null; then
+              found=$(gzip -dc packages.gz \
+                | awk -v package=ugos-cli -v version="$VERSION" -f "$RUNNER_TEMP/pick.awk")
+              if [[ -n "$found" ]]; then
+                echo "::notice::${ARCHIVE_BASE_URL} liefert ${VERSION} als ${found}"
+                break
+              fi
+            fi
+            if (( SECONDS > deadline )); then
+              echo "::error::UG7430 das Archiv liefert ${VERSION} nicht innerhalb der Frist; der Dispatch ging raus, die Ursache steht in den Laeufen von ${ARCHIVE_REPO}"
+              exit 1
+            fi
+            sleep 30
           done
-          for name in Release Release.gpg InRelease; do
-            case "$name" in
-              Release.gpg) type='application/pgp-signature' ;;
-              *) type='text/plain; charset=utf-8' ;;
-            esac
-            aws s3 cp "$repository/dists/stable/$name" "$destination/dists/stable/$name" \
-              --endpoint-url "$endpoint" --cache-control 'no-cache' --content-type "$type"
-          done
-      - name: Verify the published repository from the public URL
+
+      # Ein Index, der die Version nennt, ist noch keine ausgelieferte Datei.
+      - name: Das ausgelieferte Paket gegen das Release vergleichen
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          check="$RUNNER_TEMP/apt-public"
-          install -d "$check"
-          curl --fail --silent --show-error --location \
-            "$APT_PUBLIC_BASE_URL/ugos-cli-archive-keyring.asc" --output "$check/key.asc"
-          gpg --batch --dearmor < "$check/key.asc" > "$check/key.gpg"
-          curl --fail --silent --show-error --location \
-            "$APT_PUBLIC_BASE_URL/dists/stable/InRelease" --output "$check/InRelease"
-          gpgv --keyring "$check/key.gpg" "$check/InRelease"
           for arch in amd64 arm64; do
             curl --fail --silent --show-error --location \
-              "$APT_PUBLIC_BASE_URL/dists/stable/main/binary-${arch}/Packages.gz" \
-              | gzip -dc > "$check/Packages-${arch}"
-            filename=$(awk '/^Filename: / { print $2; exit }' "$check/Packages-${arch}")
+              "${ARCHIVE_BASE_URL}/dists/rolling/main/binary-${arch}/Packages.gz" \
+              --output "packages-${arch}.gz"
+            filename=$(gzip -dc "packages-${arch}.gz" \
+              | awk -v package=ugos-cli -v version="$VERSION" -f "$RUNNER_TEMP/pick.awk")
             if [[ -z "$filename" ]]; then
-              echo "::error::UG7420 published index for $arch is empty"
+              echo "::error::UG7431 der Index fuer ${arch} nennt keine Datei zu ${VERSION}"
               exit 1
             fi
             curl --fail --silent --show-error --location \
-              "$APT_PUBLIC_BASE_URL/$filename" --output "$check/${arch}.deb"
-            cmp "$check/${arch}.deb" "./candidate/ugos-cli_${VERSION}_${arch}.deb"
+              "${ARCHIVE_BASE_URL}/${filename}" --output "published-${arch}.deb"
+            gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --pattern "ugos-cli_${VERSION}_${arch}.deb" --dir ./release --clobber
+            cmp "published-${arch}.deb" "./release/ugos-cli_${VERSION}_${arch}.deb"
+            echo "::notice::${arch} identisch mit dem Release-Asset"
           done
 
   update-homebrew:
