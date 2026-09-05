@@ -19,7 +19,7 @@ on:
         required: false
       AUR_SSH_PRIVATE_KEY:
         required: false
-      APT_ARCHIVE_DISPATCH_TOKEN:
+      ARCHIVE_DISPATCH_PRIVATE_KEY:
         required: false
   workflow_dispatch:
     inputs:
@@ -143,7 +143,8 @@ jobs:
       - name: Decide which package channels are configured
         id: channels
         env:
-          APT_ARCHIVE_DISPATCH_TOKEN: ${{ secrets.APT_ARCHIVE_DISPATCH_TOKEN }}
+          ARCHIVE_DISPATCH_CLIENT_ID: ${{ vars.ARCHIVE_DISPATCH_CLIENT_ID }}
+          ARCHIVE_DISPATCH_PRIVATE_KEY: ${{ secrets.ARCHIVE_DISPATCH_PRIVATE_KEY }}
           AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
           AUR_SSH_KNOWN_HOSTS: ${{ vars.AUR_SSH_KNOWN_HOSTS }}
         run: |
@@ -157,9 +158,9 @@ jobs:
           # daraus einen mehrzeiligen Wert, den das Dateikommando ablehnt.
           # Meldungen gehen deshalb nach stderr; im Log stehen sie genauso.
           #
-          # Nur der Dispatch-Token: Signaturschluessel und R2-Zugang liegen im
-          # Archiv-Repository, nicht hier.
-          apt_names=(APT_ARCHIVE_DISPATCH_TOKEN)
+          # Nur das App-Paar: Signaturschluessel und R2-Zugang liegen im
+          # Archiv-Repository, nicht hier. Kein gespeichertes PAT.
+          apt_names=(ARCHIVE_DISPATCH_CLIENT_ID ARCHIVE_DISPATCH_PRIVATE_KEY)
           aur_names=(AUR_SSH_PRIVATE_KEY AUR_SSH_KNOWN_HOSTS)
 
           decide() {
@@ -801,42 +802,128 @@ jobs:
     if: needs.channel-preflight.outputs.publish_apt == 'true'
     runs-on: ubuntu-latest
     environment: release
-    timeout-minutes: 30
+    timeout-minutes: 40
+    permissions:
+      contents: read
     env:
       VERSION: ${{ needs.metadata.outputs.version }}
       ARCHIVE_REPO: metaneutrons/apt-archive
       ARCHIVE_DOMAIN: metaneutrons.cc
       ARCHIVE_PROJECT: ugos-cli
-      ARCHIVE_BASE_URL: https://deb.metaneutrons.cc/ugos-cli
+      DEB_PACKAGE: ugos-cli
     steps:
       # Dieses Repository laedt nichts hoch und haelt keinen Signaturschluessel.
       # Ein R2-Token laesst sich auf einen Bucket begrenzen, nicht auf ein
       # Praefix; ein Schreibzugang je Projekt waere ein Schreibzugang auf das
       # ganze Archiv. Die .deb haengen attestiert am Release, und das Archiv
-      # holt sie sich.
-      - name: Anklopfen
+      # holt sie sich von dort.
+      #
+      # Das Token wird unmittelbar vor der Benutzung gepraegt, auf genau ein
+      # Repository und genau zwei Rechte, und faellt am Jobende weg. Ein
+      # gespeichertes PAT waere ein langlebiger Generalschluessel.
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: archive-token
+        with:
+          client-id: ${{ vars.ARCHIVE_DISPATCH_CLIENT_ID }}
+          private-key: ${{ secrets.ARCHIVE_DISPATCH_PRIVATE_KEY }}
+          owner: metaneutrons
+          repositories: apt-archive
+          permission-actions: write
+          permission-contents: read
+
+      # Der Vertrag wird gelesen, nicht angenommen. Ob das Archiv je Projekt
+      # ein Praefix fuehrt oder alles an der Domain-Wurzel liegt, entscheidet
+      # das Manifest; eine hier festgeschriebene URL waere beim naechsten
+      # Umbau des Archivs still falsch.
+      - name: Den Domain-Vertrag aus dem Manifest lesen
+        id: contract
         env:
-          GH_TOKEN: ${{ secrets.APT_ARCHIVE_DISPATCH_TOKEN }}
+          GH_TOKEN: ${{ steps.archive-token.outputs.token }}
         run: |
           set -euo pipefail
-          # Als JSON-Rumpf statt als -f-Felder: der Payload ist verschachtelt,
-          # und die Feldsyntax waere hier eine Fehlerquelle ohne Gewinn.
-          jq -n --arg domain "$ARCHIVE_DOMAIN" --arg project "$ARCHIVE_PROJECT" \
-            '{event_type: "publish-archive",
-              client_payload: {domain: $domain, project: $project}}' \
-            | gh api -X POST "repos/${ARCHIVE_REPO}/dispatches" --input -
-          echo "::notice::${ARCHIVE_REPO} um Veroeffentlichung von ${ARCHIVE_PROJECT} gebeten"
+          gh api "repos/${ARCHIVE_REPO}/contents/domains/${ARCHIVE_DOMAIN}/manifest.toml" \
+            --jq .content | base64 -d > manifest.toml
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import os, sys, tomllib
+          # Alle Umgebungswerte zuerst, damit kein Fehlerpfad selbst noch
+          # etwas nachschlagen muss und statt der Meldung eine Ausnahme wirft.
+          project = os.environ["ARCHIVE_PROJECT"]
+          package = os.environ["DEB_PACKAGE"]
+          domain = os.environ.get("ARCHIVE_DOMAIN", "der Domain")
+          with open("manifest.toml", "rb") as fh:
+              m = tomllib.load(fh)
+          entry = next((p for p in m.get("projects", []) if p.get("name") == project), None)
+          if entry is None:
+              sys.exit(f"::error::UG7440 {project} steht nicht im Manifest von {domain}")
+          if package not in entry.get("packages", []):
+              sys.exit(f"::error::UG7441 {package} steht nicht unter packages von {project}")
+          rel, dom = m["release"], m["domain"]
+          if "main" not in rel.get("components", []):
+              sys.exit("::error::UG7442 die Komponente main fehlt im Manifest")
+          for arch in ("amd64", "arm64"):
+              if arch not in rel.get("architectures", []):
+                  sys.exit(f"::error::UG7443 die Architektur {arch} fehlt im Manifest")
+          # Unified: ein gemeinsames Archiv an der Domain-Wurzel, pool/ und
+          # dists/ fuer alle Projekte zusammen. Ein Projekt-Praefix waere ein
+          # anderes Layout, und dann zeigte jede hier gebaute URL ins Leere.
+          prefix = (entry.get("prefix") or "").strip("/")
+          if prefix:
+              sys.exit(f"::error::UG7444 das Manifest fuehrt fuer {project} das Praefix /{prefix}; erwartet wird ein gemeinsames Archiv an der Domain-Wurzel")
+          print(f"base_url={dom['base_url'].rstrip('/')}")
+          print(f"suite={rel['codename']}")
+          PY
+          echo "::notice::Vertrag: $(grep base_url "$GITHUB_OUTPUT" | tail -1), $(grep suite= "$GITHUB_OUTPUT" | tail -1)"
 
-      # Der Dispatch liefert keine Lauf-ID zurueck. Geprueft wird deshalb das
-      # Ergebnis an der oeffentlichen URL, und das ist ohnehin die staerkere
-      # Aussage: nicht dass ein Lauf startete, sondern dass das Archiv die
-      # Version ausliefert.
-      #
-      # Der Debian-Versionsstring traegt eine Revision, `build-deb.sh` setzt
-      # `${version}-1`. Verglichen wird deshalb der Upstream-Teil als Praefix,
-      # als Zeichenkette und nicht als regulaerer Ausdruck: die Punkte einer
-      # Version waeren dort Platzhalter.
+      # Der gepruefte Workflow auf dem geschuetzten Default-Branch, mit
+      # benannten Eingaben. Ein repository_dispatch waere ein blindes Ereignis
+      # ohne Angabe, welcher Workflow auf welcher Ref laufen soll.
+      - name: Den Archiv-Workflow anstossen
+        id: dispatch
+        env:
+          GH_TOKEN: ${{ steps.archive-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          branch=$(gh api "repos/${ARCHIVE_REPO}" --jq .default_branch)
+          since=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          echo "since=$since" >> "$GITHUB_OUTPUT"
+          gh workflow run publish.yml --repo "$ARCHIVE_REPO" --ref "$branch" \
+            -f domain="$ARCHIVE_DOMAIN" -f project="$ARCHIVE_PROJECT"
+          echo "::notice::publish.yml auf ${ARCHIVE_REPO}@${branch} angestossen"
+
+      # Nur zur Zuordnung im Log. Der Lauf wird nach seiner Startzeit gesucht,
+      # nicht als "der neueste": bei zwei Anstoessen kurz hintereinander waere
+      # das der falsche. Findet sich keiner eindeutig, ist das kein Fehler,
+      # denn der Beweis steht weiter unten am oeffentlichen Archiv.
+      - name: Den angestossenen Lauf zuordnen
+        continue-on-error: false
+        env:
+          GH_TOKEN: ${{ steps.archive-token.outputs.token }}
+          SINCE: ${{ steps.dispatch.outputs.since }}
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 10); do
+            ids=$(gh run list --repo "$ARCHIVE_REPO" --workflow publish.yml \
+              --event workflow_dispatch --limit 20 \
+              --json databaseId,createdAt \
+              --jq "[.[] | select(.createdAt >= \"$SINCE\") | .databaseId] | @tsv")
+            count=$(printf '%s' "$ids" | wc -w | tr -d ' ')
+            if [[ "$count" == 1 ]]; then
+              echo "::notice::Lauf ${ids} im Archiv"
+              break
+            fi
+            if [[ "$count" -gt 1 ]]; then
+              echo "::notice::mehrere Laeufe seit $SINCE, keine eindeutige Zuordnung; geprueft wird das Archiv"
+              break
+            fi
+            sleep 6
+          done
+
+      # Der eigentliche Beweis. Weder die Annahme des Anstosses noch ein gruener
+      # Job sagt etwas darueber, was das Archiv ausliefert.
       - name: Warten, bis das Archiv die Version ausliefert
+        env:
+          BASE_URL: ${{ steps.contract.outputs.base_url }}
+          SUITE: ${{ steps.contract.outputs.suite }}
         run: |
           set -euo pipefail
           cat > "$RUNNER_TEMP/pick.awk" <<'AWK'
@@ -850,22 +937,28 @@ jobs:
           END { if (!done && hit()) print name }
           AWK
 
+          # Der Index ist gemeinsam: er traegt auch die Stanzas anderer
+          # Projekte. Gesucht wird strikt das eigene Paket, verglichen wird der
+          # Upstream-Teil als Zeichenkette, nicht als regulaerer Ausdruck.
+          # Der Debian-Versionsstring traegt eine Revision, build-deb.sh setzt
+          # `${version}-1`.
+          #
           # Ohne Cache-Buster: die Cache Rule der Zone setzt fuer dists/**
           # `Cache-Control: no-store`, gerade damit ein alter Index nicht gegen
           # ein neues InRelease laufen kann.
-          index="${ARCHIVE_BASE_URL}/dists/rolling/main/binary-amd64/Packages.gz"
-          deadline=$(( SECONDS + 1200 ))
+          index="${BASE_URL}/dists/${SUITE}/main/binary-amd64/Packages.gz"
+          deadline=$(( SECONDS + 1500 ))
           while :; do
             if curl --fail --silent --show-error --location "$index" --output packages.gz 2>/dev/null; then
               found=$(gzip -dc packages.gz \
-                | awk -v package=ugos-cli -v version="$VERSION" -f "$RUNNER_TEMP/pick.awk")
+                | awk -v package="$DEB_PACKAGE" -v version="$VERSION" -f "$RUNNER_TEMP/pick.awk")
               if [[ -n "$found" ]]; then
-                echo "::notice::${ARCHIVE_BASE_URL} liefert ${VERSION} als ${found}"
+                echo "::notice::${BASE_URL} liefert ${VERSION} als ${found}"
                 break
               fi
             fi
             if (( SECONDS > deadline )); then
-              echo "::error::UG7430 das Archiv liefert ${VERSION} nicht innerhalb der Frist; der Dispatch ging raus, die Ursache steht in den Laeufen von ${ARCHIVE_REPO}"
+              echo "::error::UG7430 das Archiv liefert ${VERSION} nicht innerhalb der Frist; der Anstoss ging raus, die Ursache steht in den Laeufen von ${ARCHIVE_REPO}"
               exit 1
             fi
             sleep 30
@@ -876,20 +969,22 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag }}
+          BASE_URL: ${{ steps.contract.outputs.base_url }}
+          SUITE: ${{ steps.contract.outputs.suite }}
         run: |
           set -euo pipefail
           for arch in amd64 arm64; do
             curl --fail --silent --show-error --location \
-              "${ARCHIVE_BASE_URL}/dists/rolling/main/binary-${arch}/Packages.gz" \
+              "${BASE_URL}/dists/${SUITE}/main/binary-${arch}/Packages.gz" \
               --output "packages-${arch}.gz"
             filename=$(gzip -dc "packages-${arch}.gz" \
-              | awk -v package=ugos-cli -v version="$VERSION" -f "$RUNNER_TEMP/pick.awk")
+              | awk -v package="$DEB_PACKAGE" -v version="$VERSION" -f "$RUNNER_TEMP/pick.awk")
             if [[ -z "$filename" ]]; then
               echo "::error::UG7431 der Index fuer ${arch} nennt keine Datei zu ${VERSION}"
               exit 1
             fi
             curl --fail --silent --show-error --location \
-              "${ARCHIVE_BASE_URL}/${filename}" --output "published-${arch}.deb"
+              "${BASE_URL}/${filename}" --output "published-${arch}.deb"
             gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
               --pattern "ugos-cli_${VERSION}_${arch}.deb" --dir ./release --clobber
             cmp "published-${arch}.deb" "./release/ugos-cli_${VERSION}_${arch}.deb"
@@ -1099,6 +1194,40 @@ jobs:
           git add PKGBUILD .SRCINFO
           git commit -m "ugos-cli-bin ${VERSION}-1"
           git push origin HEAD:master
+      # Ein angenommener Push sagt nichts darueber, was das AUR ausliefert.
+      # Gelesen wird deshalb oeffentlich und anonym, nicht ueber denselben
+      # SSH-Zugang, mit dem geschrieben wurde.
+      - name: Das AUR zurueckholen und gegen die qualifizierten Dateien pruefen
+        run: |
+          set -euo pipefail
+          rm -rf "$RUNNER_TEMP/aur-readback"
+          git clone --quiet --depth 1 \
+            https://aur.archlinux.org/ugos-cli-bin.git "$RUNNER_TEMP/aur-readback"
+          for file in PKGBUILD .SRCINFO; do
+            if [[ ! -f "$RUNNER_TEMP/aur-readback/$file" ]]; then
+              echo "::error::UG7610 $file fehlt im oeffentlichen AUR-Repository"
+              exit 1
+            fi
+            cmp "$file" "$RUNNER_TEMP/aur-readback/$file"
+            echo "  ok $file"
+          done
+          # Und die Paketdatenbank selbst, nicht nur das Git dahinter. Die RPC
+          # braucht einen Moment nach dem Push, deshalb mit Frist.
+          deadline=$(( SECONDS + 600 ))
+          while :; do
+            served=$(curl -sS --max-time 30 \
+              "https://aur.archlinux.org/rpc/v5/info?arg[]=ugos-cli-bin" \
+              | jq -r 'try (.results[0].Version) catch ""')
+            if [[ "$served" == "${VERSION}-1" ]]; then
+              echo "::notice::das AUR fuehrt ugos-cli-bin ${served}"
+              break
+            fi
+            if (( SECONDS > deadline )); then
+              echo "::error::UG7611 die AUR-RPC meldet '${served:-nichts}' statt ${VERSION}-1"
+              exit 1
+            fi
+            sleep 20
+          done
 
   publish-crates:
     name: Publish to crates.io
