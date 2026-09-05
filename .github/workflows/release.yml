@@ -585,12 +585,16 @@ jobs:
           sudo chown -R "$(id -u):$(id -g)" ./aurwork
           [[ -s ./aurwork/.SRCINFO ]] || { echo "::error::UG7603 .SRCINFO ist leer"; exit 1; }
           install -m 0644 PKGBUILD ./meta/PKGBUILD
-          install -m 0644 ./aurwork/.SRCINFO ./meta/.SRCINFO
+          # Als ugos-cli.SRCINFO, nicht als .SRCINFO: GitHub benennt ein
+          # Release-Asset mit fuehrendem Punkt in default.SRCINFO um. Der
+          # AUR-Job legt den Punkt vor dem Push wieder davor; signiert und
+          # attestiert wird der Inhalt, nicht der Name.
+          install -m 0644 ./aurwork/.SRCINFO ./meta/ugos-cli.SRCINFO
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       - name: Metadaten signieren
         run: |
           set -euo pipefail
-          for file in ./meta/ugos-cli.rb ./meta/PKGBUILD ./meta/.SRCINFO; do
+          for file in ./meta/ugos-cli.rb ./meta/PKGBUILD ./meta/ugos-cli.SRCINFO; do
             name=$(basename "$file")
             cosign sign-blob --yes --bundle "./meta/${name}.sigstore.json" "$file"
             echo "  signiert $name"
@@ -601,7 +605,7 @@ jobs:
           subject-path: |
             ./meta/ugos-cli.rb
             ./meta/PKGBUILD
-            ./meta/.SRCINFO
+            ./meta/ugos-cli.SRCINFO
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: channel-metadata
@@ -644,7 +648,7 @@ jobs:
           while IFS= read -r file; do signed+=("${file#./}"); done < <(
             find . -maxdepth 1 -type f \
               \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.deb' \
-                 -o -name 'ugos-cli.rb' -o -name 'PKGBUILD' -o -name '.SRCINFO' \) | sort)
+                 -o -name 'ugos-cli.rb' -o -name 'PKGBUILD' -o -name 'ugos-cli.SRCINFO' \) | sort)
           # Acht Payloads plus drei Metadatendateien.
           if (( ${#signed[@]} != 11 )); then
             echo "::error::UG7210 erwartet werden 11 signierte Dateien, gefunden sind ${#signed[@]}"
@@ -1029,7 +1033,10 @@ jobs:
           # gegen das Release-Archiv geprueft, signiert und attestiert. Hier
           # wird nur noch gepusht.
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
-            --pattern 'PKGBUILD' --pattern '.SRCINFO' --dir . --clobber
+            --pattern 'PKGBUILD' --pattern 'ugos-cli.SRCINFO' --dir . --clobber
+          # Der Punkt kommt erst hier wieder davor; am Release traegt die
+          # Datei ihn nicht, weil GitHub sie sonst umbenennt.
+          mv ugos-cli.SRCINFO .SRCINFO
           grep -q "^pkgver=${VERSION}$" PKGBUILD || {
             echo "::error::UG7601 PKGBUILD traegt nicht pkgver=${VERSION}"; exit 1; }
           grep -q "^\tpkgver = ${VERSION}$" .SRCINFO || {
