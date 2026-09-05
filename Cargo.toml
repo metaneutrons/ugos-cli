@@ -6,6 +6,12 @@ resolver = "3"
 version = "0.11.2"
 edition = "2024"
 rust-version = "1.98"
+# Bewusste Abweichung vom Repository-Standard, der fuer Bibliotheken
+# LGPL-3.0-or-later vorsieht. ugos-client bleibt wie die Binaerprogramme auf
+# GPL-3.0-or-later, entschieden vom Eigentuemer. Zwei Umstaende stuetzen das:
+# die Bibliothek bedient die Anwendungen dieses Projekts, wo das schwaechere
+# Copyleft nichts hinzufuegt, und vierzehn Releases stehen bereits unter GPL,
+# sodass ein Wechsel nur vorwaerts wirkte und die Historie teilte.
 license = "GPL-3.0-or-later"
 authors = ["Fabian Schmieder <fabian@schmieder.eu>"]
 repository = "https://github.com/metaneutrons/ugos-cli"
