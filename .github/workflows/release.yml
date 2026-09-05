@@ -567,17 +567,25 @@ jobs:
           # Release-URL holen, und das Release entsteht erst in Stufe 7. Der
           # Bau samt Vergleich gegen das Archiv steht deshalb im AUR-Job,
           # vor dem Push und nach der Veroeffentlichung.
+          #
+          # Gemountet wird ein eigenes Verzeichnis, nicht das Arbeitsverzeichnis:
+          # makepkg laeuft nicht als root, und das dafuer noetige
+          # `chown -R builder` wuerde sonst alles daneben auf eine fremde UID
+          # ziehen. Danach wird die Eigentuemerschaft zurueckgeholt.
+          mkdir -p ./aurwork
+          install -m 0644 PKGBUILD ./aurwork/PKGBUILD
           docker run --rm --user root \
-            --volume "$PWD:/pkg" --workdir /pkg \
+            --volume "$PWD/aurwork:/pkg" --workdir /pkg \
             archlinux:base-devel@sha256:a26046b7363dad8e2614858f4313949ae9b05c9c5f31de343a54864b9e20806f \
             bash -euo pipefail -c '
               useradd -m builder
               chown -R builder:builder /pkg
               su builder -c "makepkg --printsrcinfo > .SRCINFO"
             '
-          [[ -s .SRCINFO ]] || { echo "::error::UG7603 .SRCINFO ist leer"; exit 1; }
+          sudo chown -R "$(id -u):$(id -g)" ./aurwork
+          [[ -s ./aurwork/.SRCINFO ]] || { echo "::error::UG7603 .SRCINFO ist leer"; exit 1; }
           install -m 0644 PKGBUILD ./meta/PKGBUILD
-          install -m 0644 .SRCINFO ./meta/.SRCINFO
+          install -m 0644 ./aurwork/.SRCINFO ./meta/.SRCINFO
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
       - name: Metadaten signieren
         run: |
@@ -1035,15 +1043,20 @@ jobs:
           # Erst hier moeglich: makepkg holt seine Quellen von der
           # Release-URL, und das Release ist seit Stufe 7 sichtbar. Gebaut
           # wird also gegen genau die Bytes, die auch die Nutzer bekommen.
+          # Eigenes Mount-Verzeichnis, siehe Stufe 6: das `chown -R builder`
+          # im Container wuerde sonst das Arbeitsverzeichnis mitnehmen.
+          mkdir -p ./aurwork
+          install -m 0644 PKGBUILD ./aurwork/PKGBUILD
           docker run --rm --user root \
-            --volume "$PWD:/pkg" --workdir /pkg \
+            --volume "$PWD/aurwork:/pkg" --workdir /pkg \
             archlinux:base-devel@sha256:a26046b7363dad8e2614858f4313949ae9b05c9c5f31de343a54864b9e20806f \
             bash -euo pipefail -c '
               useradd -m builder
               chown -R builder:builder /pkg
               su builder -c "makepkg --cleanbuild --noconfirm --nocheck"
             '
-          package=$(find . -maxdepth 1 -name '*.pkg.tar.zst' -print -quit)
+          sudo chown -R "$(id -u):$(id -g)" ./aurwork
+          package=$(find ./aurwork -maxdepth 1 -name '*.pkg.tar.zst' -print -quit)
           if [[ -z "$package" ]]; then
             echo "::error::UG7600 makepkg produced no package"
             exit 1
