@@ -71,7 +71,7 @@ jobs:
       # eine echte NAS-Verbindung braucht.
       - name: Coverage mit harter Untergrenze
         if: matrix.name == 'linux-x86_64'
-        run: cargo llvm-cov --workspace --all-features --locked --fail-under-lines 30
+        run: cargo llvm-cov --workspace --all-features --locked --fail-under-lines 31
 
   msrv:
     name: MSRV
