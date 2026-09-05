@@ -15,7 +15,7 @@ on:
     # Token brauchen, holen ihn ueber ihr Environment; preflight prueft ihn
     # dort, bevor irgendetwas Oeffentliches geschieht.
     secrets:
-      HOMEBREW_TAP_TOKEN:
+      HOMEBREW_APP_PRIVATE_KEY:
         required: false
       AUR_SSH_PRIVATE_KEY:
         required: false
@@ -126,20 +126,39 @@ jobs:
       publish_aur: ${{ steps.channels.outputs.aur }}
       publish_crates: ${{ steps.crates.outputs.crates }}
     steps:
-      - name: Verify the Homebrew tap credential before any public change
+      # Ein Token mit ausdruecklichen Rechte-Eingaben. Fehlt der Installation
+      # eines davon, scheitert schon die Praegung; ein spaeteres Scheitern
+      # mitten im Schreiben waere der schlechtere Ort.
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: tap-token
+        with:
+          client-id: ${{ vars.HOMEBREW_APP_CLIENT_ID }}
+          private-key: ${{ secrets.HOMEBREW_APP_PRIVATE_KEY }}
+          owner: metaneutrons
+          repositories: homebrew-tap
+          permission-contents: write
+          permission-pull-requests: write
+          permission-actions: read
+          permission-checks: read
+          permission-statuses: read
+          permission-administration: read
+      - name: Die Installation pruefen, nicht die Rolle des Aufrufers
         env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          GH_TOKEN: ${{ steps.tap-token.outputs.token }}
         run: |
           set -euo pipefail
-          if [[ -z "${GH_TOKEN:-}" ]]; then
-            echo "::error::UG7010 HOMEBREW_TAP_TOKEN is missing"
+          # `permissions.push` einer Repository-Antwort beschreibt die Rolle
+          # des Aufrufers, nicht die Zusage der Installation. Gefragt wird
+          # deshalb, was die Installation tatsaechlich erreicht.
+          reached=$(gh api installation/repositories --jq '[.repositories[].full_name] | sort | join(",")')
+          if [[ "$reached" != "metaneutrons/homebrew-tap" ]]; then
+            echo "::error::UG7011 die Installation erreicht '$reached' statt genau metaneutrons/homebrew-tap"
             exit 1
           fi
-          permission=$(gh api repos/metaneutrons/homebrew-tap --jq '.permissions.push')
-          if [[ "$permission" != true ]]; then
-            echo "::error::UG7011 the tap credential cannot write metaneutrons/homebrew-tap"
-            exit 1
-          fi
+          # Der Bot ueber seinen oeffentlichen Endpunkt. `/user` gilt fuer ein
+          # Installations-Token nicht und antwortete irrefuehrend.
+          bot=$(gh api "users/metaneutrons-homebrew%5Bbot%5D" --jq '"\(.login) \(.id)"')
+          echo "::notice::Installation erreicht $reached, Bot $bot"
       - name: Decide which package channels are configured
         id: channels
         env:
@@ -996,31 +1015,77 @@ jobs:
     needs: [metadata, channel-preflight, stage]
     runs-on: ubuntu-latest
     environment: release
-    # Die Qualifikation im Tap fuehrt brew install und brew test auf zwei
-    # macOS-Runnern aus. Das dauert, und der Job wartet darauf.
-    timeout-minutes: 60
+    # Die Qualifikation im Tap fuehrt brew audit, install und test auf zwei
+    # macOS-Runnern aus. Der Job wartet darauf, gebunden, und praegt danach
+    # ein frisches Token.
+    timeout-minutes: 90
+    permissions:
+      contents: read
     env:
       TAP_REPO: metaneutrons/homebrew-tap
+      VERSION: ${{ needs.metadata.outputs.version }}
+      TAG: ${{ inputs.tag }}
     steps:
-      - name: Update the tap formula
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: tap-token
+        with:
+          client-id: ${{ vars.HOMEBREW_APP_CLIENT_ID }}
+          private-key: ${{ secrets.HOMEBREW_APP_PRIVATE_KEY }}
+          owner: metaneutrons
+          repositories: homebrew-tap
+          permission-contents: write
+          permission-pull-requests: write
+          permission-actions: read
+          permission-checks: read
+          permission-statuses: read
+          permission-administration: read
+
+      - name: Installation und Bot messen
+        id: identity
         env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          VERSION: ${{ needs.metadata.outputs.version }}
-          TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ steps.tap-token.outputs.token }}
         run: |
           set -euo pipefail
+          reached=$(gh api installation/repositories --jq '[.repositories[].full_name] | sort | join(",")')
+          if [[ "$reached" != "$TAP_REPO" ]]; then
+            echo "::error::UG7510 die Installation erreicht '$reached' statt genau $TAP_REPO"
+            exit 1
+          fi
+          # Die Git-Autorschaft kommt aus der gemessenen Bot-Identitaet, nicht
+          # aus einem geratenen Namen. `/user` gilt fuer ein
+          # Installations-Token nicht, deshalb der oeffentliche Endpunkt.
+          read -r login id < <(gh api "users/metaneutrons-homebrew%5Bbot%5D" --jq '"\(.login) \(.id)"')
+          {
+            echo "bot_login=$login"
+            echo "bot_email=${id}+${login}@users.noreply.github.com"
+          } >> "$GITHUB_OUTPUT"
+          echo "::notice::Installation $reached, Bot $login"
+
+      - name: Die Formel vom Release holen
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Das Repository-Token gilt nur dem eigenen Release, nie dem Tap.
           # Die Formel wurde in Stufe 5 erzeugt, qualifiziert, signiert und
-          # attestiert und haengt am Release. Hier wird sie nicht noch einmal
-          # gebaut, sonst gaebe es zwei Quellen fuer denselben Inhalt.
-          GH_TOKEN="${{ secrets.GITHUB_TOKEN }}" gh release download "$TAG" \
-            --repo "$GITHUB_REPOSITORY" --pattern 'ugos-cli.rb' --dir . --clobber
+          # attestiert; hier wird sie nicht noch einmal gebaut.
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'ugos-cli.rb' --dir . --clobber
           mv ugos-cli.rb formula.rb
           if [[ $(grep -Fc "/releases/download/${TAG}/" formula.rb) != 4 ]]; then
             echo "::error::UG7506 the formula fetched from the release does not reference four exact release URLs"
             exit 1
           fi
 
+      - name: Zweig, Commit und Pull Request im Tap
+        id: pr
+        env:
+          GH_TOKEN: ${{ steps.tap-token.outputs.token }}
+          TAP_TOKEN: ${{ steps.tap-token.outputs.token }}
+          BOT_LOGIN: ${{ steps.identity.outputs.bot_login }}
+          BOT_EMAIL: ${{ steps.identity.outputs.bot_email }}
+        run: |
+          set -euo pipefail
           git clone "https://x-access-token:${TAP_TOKEN}@github.com/${TAP_REPO}.git" tap
           install -d tap/Formula
           install -m 0644 formula.rb tap/Formula/ugos-cli.rb
@@ -1031,80 +1096,137 @@ jobs:
           scripts/generate-readme.sh README.md
           if [[ -z $(git status --porcelain) ]]; then
             echo "::notice::the tap already carries this formula"
+            echo "unchanged=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
+          echo "unchanged=false" >> "$GITHUB_OUTPUT"
 
           # main des Taps ist geschuetzt: Pull Request und der Check
           # "Formula qualification" sind Pflicht, ein Direkt-Push wird
           # abgewiesen. Reviews verlangt der Tap keine.
           branch="ugos-cli-${VERSION}"
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name "$BOT_LOGIN"
+          git config user.email "$BOT_EMAIL"
           git checkout -b "$branch"
           git add Formula/ugos-cli.rb README.md
           git commit -m "Update ugos-cli to ${VERSION}"
           git push --force-with-lease origin "$branch"
+          head=$(git rev-parse HEAD)
 
           pr=$(gh pr list --repo "$TAP_REPO" --head "$branch" --state open \
                  --json number --jq '.[0].number // empty')
           if [[ -z "$pr" ]]; then
             url=$(gh pr create --repo "$TAP_REPO" --base main --head "$branch" \
                     --title "Update ugos-cli to ${VERSION}" \
-                    --body "Formel-Bump aus dem Release-Lauf von ugos-cli v${VERSION}.")
+                    --body "Formel-Bump aus dem Release-Lauf von ugos-cli ${TAG}.")
             pr=${url##*/}
           fi
           if [[ ! "$pr" =~ ^[0-9]+$ ]]; then
             echo "::error::UG7502 no pull request number for $branch"
             exit 1
           fi
-          echo "::notice::tap pull request #$pr"
+          {
+            echo "number=$pr"
+            echo "head=$head"
+            echo "branch=$branch"
+          } >> "$GITHUB_OUTPUT"
+          echo "::notice::tap pull request #$pr auf $head"
 
-          # Der Gate-Job laeuft mit "if: always()" nach den Lanes, taucht als
-          # Check-Run also erst spaet auf. Ein fehlender Eintrag ist deshalb
-          # kein Fehler, sondern heisst warten.
-          #
-          # Gefragt wird die Rollup-Sicht der Pull Request, nicht
-          # commits/<sha>/check-runs: bei pull_request-Ereignissen haengen die
-          # Check-Runs am Merge-Commit, nicht am Kopf des Zweiges. Die Rollup
-          # antwortet in Grossbuchstaben, die REST-Sicht in Kleinbuchstaben,
-          # deshalb wird beides kleingeschrieben verglichen.
-          deadline=$(( SECONDS + 2400 ))
-          while :; do
-            info=$(gh pr view "$pr" --repo "$TAP_REPO" --json statusCheckRollup \
-              --jq '[.statusCheckRollup[] | select(.name == "Formula qualification")] | last
-                    | if . == null then "absent none"
-                      else "\((.status // "absent") | ascii_downcase) \((.conclusion // "none") | ascii_downcase)" end')
-            if [[ "${info%% *}" == completed ]]; then
-              if [[ "${info##* }" == success ]]; then
-                break
-              fi
-              echo "::error::UG7503 Formula qualification ended with ${info##* }"
-              exit 1
-            fi
-            if (( SECONDS > deadline )); then
-              echo "::error::UG7504 Formula qualification did not finish in time"
-              exit 1
-            fi
-            sleep 20
-          done
-
-          gh pr merge "$pr" --repo "$TAP_REPO" --squash --delete-branch
-      - name: Verify the formula now on the tap
+      # Gebunden auf 45 Minuten, damit die Wartezeit innerhalb der Lebensdauer
+      # des ersten Tokens bleibt. Ein Zeitueberlauf scheitert geschlossen: er
+      # rechtfertigt weder einen Merge noch einen zweiten Versuch mit einer
+      # breiteren Berechtigung.
+      - name: Auf die Qualifikation warten
+        if: steps.pr.outputs.unchanged == 'false'
         env:
-          GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          VERSION: ${{ needs.metadata.outputs.version }}
-          TAG: ${{ inputs.tag }}
+          GH_TOKEN: ${{ steps.tap-token.outputs.token }}
+          PR: ${{ steps.pr.outputs.number }}
         run: |
           set -euo pipefail
-          published=$(gh api \
-            "repos/${TAP_REPO}/contents/Formula/ugos-cli.rb?ref=main" \
-            --jq .content | base64 --decode)
-          # Die Formel fuehrt keine version-Zeile, die Version steht in den
-          # vier Release-URLs. Dort wird sie geprueft, nicht anderswo.
-          if [[ $(grep -Fc "/releases/download/${TAG}/" <<< "$published") != 4 ]]; then
-            echo "::error::UG7505 the tap does not serve ${TAG}"
+          for _ in $(seq 1 30); do
+            n=$(gh pr checks "$PR" --repo "$TAP_REPO" --json name --jq 'length' 2>/dev/null || echo 0)
+            [[ "${n:-0}" -gt 0 ]] && break
+            sleep 10
+          done
+          set +e
+          timeout 2700 gh pr checks "$PR" --repo "$TAP_REPO" --watch --fail-fast --interval 30
+          rc=$?
+          set -e
+          case "$rc" in
+            0)   echo "::notice::Qualifikation bestanden" ;;
+            124) echo "::error::UG7504 die Qualifikation war nach 45 Minuten nicht fertig"; exit 1 ;;
+            *)   echo "::error::UG7503 die Qualifikation endete mit Exit $rc"; exit 1 ;;
+          esac
+
+      # Nach der Wartezeit ein frisches Token. Das erste ist womoeglich schon
+      # abgelaufen, und ein Merge ist der letzte und teuerste Schreibzugriff.
+      # Gepraegt wird es auch dann, wenn nichts zu mergen war: so hat das
+      # Ruecklesen genau eine Herkunft statt eines Fallback-Ausdrucks, den
+      # weder ein Leser noch ein Pruefer aufloesen kann.
+      - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
+        id: merge-token
+        with:
+          client-id: ${{ vars.HOMEBREW_APP_CLIENT_ID }}
+          private-key: ${{ secrets.HOMEBREW_APP_PRIVATE_KEY }}
+          owner: metaneutrons
+          repositories: homebrew-tap
+          permission-contents: write
+          permission-pull-requests: write
+          permission-actions: read
+          permission-checks: read
+          permission-statuses: read
+          permission-administration: read
+
+      - name: Kopf, Pflichtchecks und Tap-Schutz erneut pruefen, dann mergen
+        if: steps.pr.outputs.unchanged == 'false'
+        env:
+          GH_TOKEN: ${{ steps.merge-token.outputs.token }}
+          PR: ${{ steps.pr.outputs.number }}
+          EXPECTED_HEAD: ${{ steps.pr.outputs.head }}
+        run: |
+          set -euo pipefail
+          reached=$(gh api installation/repositories --jq '[.repositories[].full_name] | sort | join(",")')
+          [[ "$reached" == "$TAP_REPO" ]] || {
+            echo "::error::UG7510 das zweite Token erreicht '$reached'"; exit 1; }
+
+          head=$(gh pr view "$PR" --repo "$TAP_REPO" --json headRefOid --jq .headRefOid)
+          if [[ "$head" != "$EXPECTED_HEAD" ]]; then
+            echo "::error::UG7511 der Kopf der Pull Request ist $head, gepusht wurde $EXPECTED_HEAD"
             exit 1
           fi
+
+          # Der Schutz gilt weiterhin, und der Gate-Check ist weiterhin
+          # Pflicht. Sonst waere die Qualifikation nur noch Dekoration.
+          contexts=$(gh api "repos/${TAP_REPO}/branches/main/protection" \
+            --jq '[.required_status_checks.contexts[]] | join(",")')
+          if [[ ",$contexts," != *",Formula qualification,"* ]]; then
+            echo "::error::UG7512 'Formula qualification' ist auf $TAP_REPO nicht mehr Pflicht (jetzt: $contexts)"
+            exit 1
+          fi
+
+          state=$(gh pr view "$PR" --repo "$TAP_REPO" --json statusCheckRollup \
+            --jq '[.statusCheckRollup[] | select(.name == "Formula qualification")] | last
+                  | if . == null then "absent none"
+                    else "\((.status // "absent") | ascii_downcase) \((.conclusion // "none") | ascii_downcase)" end')
+          if [[ "$state" != "completed success" ]]; then
+            echo "::error::UG7513 'Formula qualification' steht auf '$state' statt auf completed success"
+            exit 1
+          fi
+
+          gh pr merge "$PR" --repo "$TAP_REPO" --squash --delete-branch
+
+      - name: Die Formel auf main zuruecklesen
+        env:
+          GH_TOKEN: ${{ steps.merge-token.outputs.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/${TAP_REPO}/contents/Formula/ugos-cli.rb?ref=main" \
+            --jq .content | base64 --decode > published.rb
+          # Byteweise gegen das erzeugte Asset, nicht nur auf die Version
+          # geprueft: eine Formel kann die richtige Version nennen und trotzdem
+          # eine andere sein.
+          cmp published.rb formula.rb
+          echo "::notice::die Formel auf $TAP_REPO ist byteweise die erzeugte"
 
   publish-aur:
     name: Publish AUR package
