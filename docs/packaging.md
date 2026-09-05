@@ -94,25 +94,38 @@ tag's age.
 
 ## Configuration for the release itself
 
-The APT and AUR channels are skipped when their configuration is absent, so
-the release still succeeds without them.
+The APT, AUR and crates.io channels are skipped when their configuration is
+absent, so the release still succeeds without them. Homebrew is not optional.
+
+Everything lives in the protected `release` environment. There are no stored
+personal access tokens: the two GitHub channels authenticate through dedicated
+Apps, each installed on exactly one repository, and mint a short-lived token
+immediately before use which is revoked when the job ends.
 
 ### Secrets
 
 | Name | Channel | Notes |
 |------|---------|-------|
-| `HOMEBREW_TAP_TOKEN` | Homebrew | needs push rights on `metaneutrons/homebrew-tap` |
-| `APT_ARCHIVE_DISPATCH_TOKEN` | APT | fine-grained token for `metaneutrons/apt-archive` alone, `contents: write`, which is what `repository_dispatch` requires |
+| `HOMEBREW_APP_PRIVATE_KEY` | Homebrew | private key of an App installed only on `metaneutrons/homebrew-tap` |
+| `ARCHIVE_DISPATCH_PRIVATE_KEY` | APT | private key of an App installed only on `metaneutrons/apt-archive`, with Actions write and Contents read |
 | `AUR_SSH_PRIVATE_KEY` | AUR | key registered with the AUR account |
 
 ### Variables
 
-| Name | Channel | Example |
-|------|---------|---------|
+| Name | Channel | Notes |
+|------|---------|-------|
+| `HOMEBREW_APP_CLIENT_ID` | Homebrew | client id of that App; not a secret |
+| `ARCHIVE_DISPATCH_CLIENT_ID` | APT | client id of that App; not a secret |
 | `AUR_SSH_KNOWN_HOSTS` | AUR | output of `ssh-keyscan aur.archlinux.org` |
 
 `AUR_SSH_KNOWN_HOSTS` is pinned rather than trusted on first use, so the
 push cannot be redirected by a changed host key.
+
+Both App tokens are requested with explicit permission inputs, so a missing
+installation grant fails at issuance rather than halfway through a write. The
+Homebrew job mints a second token after the tap qualification, because that wait
+can outlive the first one, and rechecks the pull request head, the required
+check and the tap protection with it before merging.
 
 There is deliberately no APT signing key and no R2 credential here. Everything
 the archive needs sits in its own protected environment, and the only thing
