@@ -779,12 +779,17 @@ jobs:
             "false true")  echo "::notice::vorhandene Vorabversion wird neu bestueckt" ;;
             "false false") echo "::error::UG7004 release $TAG is already promoted"; exit 1 ;;
           esac
+      # Kein softprops/action-gh-release mehr: die Aktion leitet ihren
+      # Tag-Kontext aus GITHUB_REF ab, nicht aus tag_name. Bei einem Lauf vom
+      # Default-Branch sucht sie deshalb ein Release zu refs/heads/main und
+      # bekommt 403. `gh release upload` kennt nur den Tag, den es bekommt.
+      # Der Entwurfszustand wird ohnehin von den Schritten davor und danach
+      # gefuehrt, nicht von der Aktion.
       - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
-        with:
-          tag_name: ${{ inputs.tag }}
-          draft: true
-          files: candidate/*
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber candidate/*
+          echo "::notice::$(find ./candidate -maxdepth 1 -type f | wc -l | tr -d ' ') Assets hochgeladen"
       - name: Die Bytes vom Entwurf zurueckholen und gegen die Kandidaten pruefen
         run: |
           set -euo pipefail
