@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.13.2](https://github.com/metaneutrons/ugos-cli/compare/v0.13.1...v0.13.2) (2026-09-05)
+
+
+### Bug Fixes
+
+* **release:** ship the upstream binaries unmodified, and allow a resume ([#56](https://github.com/metaneutrons/ugos-cli/issues/56)) ([5900750](https://github.com/metaneutrons/ugos-cli/commit/5900750c52b73a8285d7ce1c313fe31532b7faf5))
+* **release:** upload by tag, not by whatever ref the run is on ([#58](https://github.com/metaneutrons/ugos-cli/issues/58)) ([7cdc703](https://github.com/metaneutrons/ugos-cli/commit/7cdc703dcb5d1109465ad090a24dbf44d1bbefc5))
+
 ## [0.13.1](https://github.com/metaneutrons/ugos-cli/compare/v0.13.0...v0.13.1) (2026-09-05)
 
 
