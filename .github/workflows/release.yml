@@ -855,10 +855,29 @@ jobs:
           echo "::notice::$TAG ist sichtbar als Vorabversion, latest steht auf $latest"
 
 
+  # Nach dem promote, nicht davor. Das Archiv liest ausschliesslich stabile
+  # Releases; stage veroeffentlicht mit Absicht eine Vorabversion. Ein Anstoss
+  # davor verlangt etwas, das es noch nicht geben kann, und das Archiv bricht
+  # ab:
+  #
+  #   AR170 no stable release carries a .deb for the declared packages
+  #
+  # Weil promote frueher auf publish-apt wartete, wurde das Release dann auch
+  # nie stabil: der Kanal war unerfuellbar und hielt die Befoerderung auf, die
+  # ihn erfuellt haette. Genau daran haengt bups v0.3.2 gescheitert.
+  #
+  # APT ist kein Kanal, in den dieses Repository veroeffentlicht. Es haelt
+  # weder Signaturschluessel noch Bucket-Zugang; es haengt attestierte
+  # Payloads an sein Release, und das Archiv holt sie sich. Ein Verbraucher
+  # kann erst handeln, wenn das Verbrauchte fertig ist. Ein Fehlschlag hier
+  # kann deshalb nichts zurueckdrehen und muss es auch nicht: das Archiv
+  # liefert die vorige Version weiter aus, bis der Anstoss wiederholt wird.
   publish-apt:
     name: Ask the archive to publish
-    needs: [metadata, channel-preflight, stage]
-    if: needs.channel-preflight.outputs.publish_apt == 'true'
+    needs: [metadata, channel-preflight, promote]
+    if: >-
+      needs.channel-preflight.outputs.publish_apt == 'true'
+      && needs.metadata.outputs.is_prerelease == 'false'
     runs-on: ubuntu-latest
     environment: release
     timeout-minutes: 40
@@ -979,12 +998,49 @@ jobs:
 
       # Der eigentliche Beweis. Weder die Annahme des Anstosses noch ein gruener
       # Job sagt etwas darueber, was das Archiv ausliefert.
+      #
+      # Und es kommt darauf an, welche URL gefragt wird. Ein apt-Client mit
+      # Acquire-By-Hash liest nie
+      #   dists/<suite>/main/binary-<arch>/Packages.gz
+      # sondern nimmt die Pruefsumme dieser Datei aus InRelease und holt
+      #   dists/<suite>/main/binary-<arch>/by-hash/SHA512/<pruefsumme>
+      # SHA512 und nicht SHA256, weil apt den staerksten in Release genannten
+      # Hash zuerst anfragt. Schriebe das Archiv diesen Baum nicht mehr,
+      # antwortete der Server 404 und apt fiele ohne Fehler und ohne Warnung
+      # auf den veraenderlichen Pfad zurueck; by-hash waere dann erklaert und
+      # wirkungslos zugleich. Wer dasselbe Objekt anfragt, macht aus dieser
+      # stillen Verschlechterung einen roten Job.
+      #
+      # Nur der kanonische Pfad ist cachebar, und die Zone cacht ihn vier
+      # Stunden. Ein frueherer Kommentar behauptete hier `Cache-Control:
+      # no-store` fuer dists/**; gemessen steht dort max-age=14400. Bei bups
+      # v0.3.4 hatte das Archiv neunzig Sekunden nach dem Anstoss gerendert
+      # und signiert, der Job bekam eine neunzig Minuten alte Kopie und
+      # meldete eine Publikation als gescheitert, die geglueckt war.
+      # InRelease wird ungecacht ausgeliefert.
       - name: Warten, bis das Archiv die Version ausliefert
         env:
           BASE_URL: ${{ steps.contract.outputs.base_url }}
           SUITE: ${{ steps.contract.outputs.suite }}
         run: |
           set -euo pipefail
+
+          # Der Pruefsummenblock einer Release-Datei. Die Eintraege sind
+          # eingerueckt, der naechste Abschnittskopf und der Signaturblock
+          # nicht. Ein Abschluss ueber ^[A-Za-z-]+: traefe weder "SHA512:"
+          # noch "SHA256:", weil die Zeichenklasse Ziffern ausschliesst, und
+          # jeder folgende Abschnitt zaehlte zum aktuellen.
+          cat > "$RUNNER_TEMP/index-sha.awk" <<'AWK'
+          /^SHA512:/               { block = 1; next }
+          block && /^[^[:space:]]/ { block = 0 }
+          block && $3 == want      { print $1; exit }
+          AWK
+
+          # Der Index ist gemeinsam: er traegt auch die Stanzas anderer
+          # Projekte. Gesucht wird strikt das eigene Paket, verglichen wird der
+          # Upstream-Teil als Zeichenkette, nicht als regulaerer Ausdruck.
+          # Der Debian-Versionsstring traegt eine Revision, build-deb.sh setzt
+          # `${version}-1`.
           cat > "$RUNNER_TEMP/pick.awk" <<'AWK'
           BEGIN { prefix = version "-" }
           $1 == "Package:"  { pkg  = $2 }
@@ -996,25 +1052,38 @@ jobs:
           END { if (!done && hit()) print name }
           AWK
 
-          # Der Index ist gemeinsam: er traegt auch die Stanzas anderer
-          # Projekte. Gesucht wird strikt das eigene Paket, verglichen wird der
-          # Upstream-Teil als Zeichenkette, nicht als regulaerer Ausdruck.
-          # Der Debian-Versionsstring traegt eine Revision, build-deb.sh setzt
-          # `${version}-1`.
-          #
-          # Ohne Cache-Buster: die Cache Rule der Zone setzt fuer dists/**
-          # `Cache-Control: no-store`, gerade damit ein alter Index nicht gegen
-          # ein neues InRelease laufen kann.
-          index="${BASE_URL}/dists/${SUITE}/main/binary-amd64/Packages.gz"
+          # Gibt den Pool-Pfad zur eigenen Version einer Architektur aus, oder
+          # nichts. Still bei jedem Fehlschlag: der Aufruf steht in einer
+          # Warteschleife, in der "noch nicht da" die normale Antwort ist, und
+          # die Diagnose gehoert hinter die Frist.
+          cat > "$RUNNER_TEMP/resolve.sh" <<'SH'
+          set -euo pipefail
+          arch="$1"
+          base="${BASE_URL}/dists/${SUITE}"
+          curl --fail --silent --location "${base}/InRelease" --output inrelease
+          sum=$(awk -v want="main/binary-${arch}/Packages.gz" \
+                    -f "$RUNNER_TEMP/index-sha.awk" inrelease)
+          [ -n "$sum" ]
+          curl --fail --silent --location \
+            "${base}/main/binary-${arch}/by-hash/SHA512/${sum}" \
+            --output "packages-${arch}.gz"
+          # Inhaltsadressiert, aber die Adresse bedeutet nur, was das Archiv
+          # dahinterlegt. Geprueft, damit eine Abweichung auffaellt statt
+          # geparst zu werden.
+          printf '%s  %s\n' "$sum" "packages-${arch}.gz" | sha512sum --check --status
+          gzip -dc "packages-${arch}.gz" \
+            | awk -v package="$DEB_PACKAGE" -v version="$VERSION" -f "$RUNNER_TEMP/pick.awk"
+          SH
+
           deadline=$(( SECONDS + 1500 ))
           while :; do
-            if curl --fail --silent --show-error --location "$index" --output packages.gz 2>/dev/null; then
-              found=$(gzip -dc packages.gz \
-                | awk -v package="$DEB_PACKAGE" -v version="$VERSION" -f "$RUNNER_TEMP/pick.awk")
-              if [[ -n "$found" ]]; then
-                echo "::notice::${BASE_URL} liefert ${VERSION} als ${found}"
-                break
-              fi
+            amd64=$(bash "$RUNNER_TEMP/resolve.sh" amd64 2>/dev/null || true)
+            arm64=$(bash "$RUNNER_TEMP/resolve.sh" arm64 2>/dev/null || true)
+            if [[ -n "$amd64" && -n "$arm64" ]]; then
+              echo "::notice::${BASE_URL} liefert ${VERSION} als ${amd64} und ${arm64}"
+              printf 'PUBLISHED_AMD64=%s\nPUBLISHED_ARM64=%s\n' "$amd64" "$arm64" \
+                >> "$GITHUB_ENV"
+              break
             fi
             if (( SECONDS > deadline )); then
               echo "::error::UG7430 das Archiv liefert ${VERSION} nicht innerhalb der Frist; der Anstoss ging raus, die Ursache steht in den Laeufen von ${ARCHIVE_REPO}"
@@ -1024,24 +1093,20 @@ jobs:
           done
 
       # Ein Index, der die Version nennt, ist noch keine ausgelieferte Datei.
+      # Die Pfade kommen aus dem Schritt darueber, damit der Vergleich nicht
+      # auf einer anderen Generation landen kann als das Warten.
       - name: Das ausgelieferte Paket gegen das Release vergleichen
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag }}
           BASE_URL: ${{ steps.contract.outputs.base_url }}
-          SUITE: ${{ steps.contract.outputs.suite }}
         run: |
           set -euo pipefail
           for arch in amd64 arm64; do
-            curl --fail --silent --show-error --location \
-              "${BASE_URL}/dists/${SUITE}/main/binary-${arch}/Packages.gz" \
-              --output "packages-${arch}.gz"
-            filename=$(gzip -dc "packages-${arch}.gz" \
-              | awk -v package="$DEB_PACKAGE" -v version="$VERSION" -f "$RUNNER_TEMP/pick.awk")
-            if [[ -z "$filename" ]]; then
-              echo "::error::UG7431 der Index fuer ${arch} nennt keine Datei zu ${VERSION}"
-              exit 1
-            fi
+            case "$arch" in
+              amd64) filename="$PUBLISHED_AMD64" ;;
+              arm64) filename="$PUBLISHED_ARM64" ;;
+            esac
             curl --fail --silent --show-error --location \
               "${BASE_URL}/${filename}" --output "published-${arch}.deb"
             gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
@@ -1448,16 +1513,14 @@ jobs:
   # Ein uebersprungener Kanal blockiert nicht, ein gescheiterter schon.
   promote:
     name: Auf latest befoerdern
-    needs: [metadata, stage, publish-apt, update-homebrew, publish-aur, publish-crates]
+    needs: [metadata, stage, update-homebrew, publish-aur, publish-crates]
     if: >-
       always()
       && needs.metadata.outputs.is_prerelease == 'false'
       && needs.stage.result == 'success'
       && needs.update-homebrew.result == 'success'
-      && needs.publish-apt.result != 'failure'
       && needs.publish-aur.result != 'failure'
       && needs.publish-crates.result != 'failure'
-      && needs.publish-apt.result != 'cancelled'
       && needs.publish-aur.result != 'cancelled'
       && needs.publish-crates.result != 'cancelled'
     runs-on: ubuntu-latest
