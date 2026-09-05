@@ -9,7 +9,7 @@ authors.workspace = true
 repository.workspace = true
 keywords = ["ugreen", "nas", "ugos", "kvm", "api-client"]
 categories = ["api-bindings", "network-programming"]
-readme = "../../README.md"
+readme = "README.md"
 
 [lints]
 workspace = true

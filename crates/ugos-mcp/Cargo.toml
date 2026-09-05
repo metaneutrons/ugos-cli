@@ -15,6 +15,10 @@ readme = "../../README.md"
 name = "ugos-mcp"
 path = "src/main.rs"
 
+# Nur ugos-client geht nach crates.io. Ohne diese Zeile wuerde ein
+# `cargo publish --workspace` die Binaerprogramme mitschicken.
+publish = false
+
 [lints]
 workspace = true
 

@@ -11,6 +11,10 @@ keywords = ["ugreen", "nas", "ugos", "cli", "kvm"]
 categories = ["command-line-utilities"]
 readme = "../../README.md"
 
+# Nur ugos-client geht nach crates.io. Ohne diese Zeile wuerde ein
+# `cargo publish --workspace` die Binaerprogramme mitschicken.
+publish = false
+
 [lints]
 workspace = true
 
