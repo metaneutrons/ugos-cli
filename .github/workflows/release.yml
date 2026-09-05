@@ -58,6 +58,7 @@ jobs:
         id: identity
         env:
           RELEASE_TAG: ${{ inputs.tag }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           set -euo pipefail
           if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
@@ -80,9 +81,21 @@ jobs:
             echo "::error::UG7002 tag $RELEASE_TAG does not match Cargo.toml version $manifest"
             exit 1
           fi
-          if [[ "$(git rev-parse "${RELEASE_TAG}^{}")" != "$GITHUB_SHA" ]]; then
-            echo "::error::UG7003 tag $RELEASE_TAG does not point at the commit this run builds from"
+          # Der Tag muss auf den Commit zeigen, aus dem der Lauf kommt, oder
+          # der Lauf kommt vom geschuetzten Default-Branch. Beides ist
+          # gleichwertig, denn gebaut wird ohnehin der Tag: jeder Build-Job
+          # checkt `inputs.tag` aus. Was diese Pruefung zusaetzlich sichert,
+          # ist die Herkunft der Workflow-Datei, und dafuer ist der
+          # Default-Branch die zweite legitime Quelle. Ohne diesen Zweig laesst
+          # sich eine Vorabversion nach einem Pipeline-Fix nie wieder aufnehmen,
+          # weil der Fix per Definition nicht am alten Tag liegt.
+          tagged=$(git rev-parse "${RELEASE_TAG}^{}")
+          if [[ "$tagged" != "$GITHUB_SHA" && "$GITHUB_REF_NAME" != "$DEFAULT_BRANCH" ]]; then
+            echo "::error::UG7003 tag $RELEASE_TAG zeigt auf $tagged, der Lauf kommt aus $GITHUB_SHA auf $GITHUB_REF_NAME"
             exit 1
+          fi
+          if [[ "$tagged" != "$GITHUB_SHA" ]]; then
+            echo "::notice::Wiederaufnahme von $DEFAULT_BRANCH; gebaut wird weiterhin $RELEASE_TAG"
           fi
           # Deterministic builds need a fixed clock; the tagged commit is it.
           epoch=$(git log -1 --pretty=%ct)
@@ -576,6 +589,11 @@ jobs:
           pkgrel=1
           pkgdesc="CLI and MCP server for UGREEN NAS (UGOS) management"
           arch=('x86_64' 'aarch64')
+          # Ein -bin-Paket liefert die Binaerdateien des Upstream aus, also
+          # unveraendert. makepkg wuerde sie sonst strippen und die
+          # Debug-Symbole abspalten; das Paket enthielte dann andere Bytes als
+          # das Release-Archiv, und der Vergleich danach koennte nie stimmen.
+          options=('!strip' '!debug')
           url="https://github.com/metaneutrons/ugos-cli"
           license=('GPL-3.0-or-later')
           provides=('ugos-cli')
