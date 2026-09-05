@@ -519,4 +519,7 @@ until every field but the name was made optional.
 
 ## License
 
-This project is licensed under the [GNU General Public License v3.0](LICENSE).
+This project is licensed under the [GNU General Public License v3.0](LICENSE),
+the `ugos-client` library included. A library would ordinarily be the place for
+the weaker copyleft of the LGPL; here it is not, because the library serves this
+project's own programs and every release so far has been GPL.

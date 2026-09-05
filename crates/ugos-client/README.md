@@ -26,4 +26,6 @@ documentation.
 
 ## Licence
 
-GPL-3.0-or-later.
+GPL-3.0-or-later, deliberately, where a library would usually carry the LGPL.
+The crate serves the programs of its own project, so the weaker copyleft would
+add nothing, and every release so far has been GPL.
