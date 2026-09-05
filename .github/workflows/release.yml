@@ -118,9 +118,13 @@ jobs:
     runs-on: ubuntu-latest
     environment: release
     timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
     outputs:
       publish_apt: ${{ steps.channels.outputs.apt }}
       publish_aur: ${{ steps.channels.outputs.aur }}
+      publish_crates: ${{ steps.crates.outputs.crates }}
     steps:
       - name: Verify the Homebrew tap credential before any public change
         env:
@@ -183,6 +187,27 @@ jobs:
           aur=$(decide AUR "${aur_names[@]}")
           echo "apt=$apt" >> "$GITHUB_OUTPUT"
           echo "aur=$aur" >> "$GITHUB_OUTPUT"
+      - name: Gibt es das Crate auf crates.io schon?
+        id: crates
+        run: |
+          set -euo pipefail
+          # Trusted Publishing setzt ein bestehendes Crate voraus; die erste
+          # Version wird einmalig von Hand veroeffentlicht. Solange sie fehlt,
+          # ist der Kanal nicht konfiguriert und wird uebersprungen.
+          code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 \
+            -H 'User-Agent: ugos-cli release pipeline' \
+            'https://crates.io/api/v1/crates/ugos-client')
+          case "$code" in
+            200) echo "crates=true" >> "$GITHUB_OUTPUT" ;;
+            404) echo "::notice::ugos-client gibt es auf crates.io noch nicht; der Kanal wird uebersprungen"
+                 echo "crates=false" >> "$GITHUB_OUTPUT" ;;
+            *)   echo "::error::UG7030 crates.io antwortet mit HTTP $code"; exit 1 ;;
+          esac
+      # Kein /api/v1/me als Vorpruefung: das antwortet auch mit gueltigem
+      # Token 403. Geprueft wird der spaetere Weg selbst, indem ein
+      # kurzlebiges Token ausgestellt und verworfen wird.
+      - uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+        if: steps.crates.outputs.crates == 'true'
 
   build:
     name: Build (${{ matrix.target }})
@@ -245,14 +270,8 @@ jobs:
     needs: [metadata, build]
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    # Die Attestierung bindet die .deb an die Identitaet dieses Workflows.
-    # metaneutrons/apt-archive prueft sie mit `gh attestation verify` und
-    # bricht ohne sie ab, absichtlich: ein Konto mit Upload-Recht ist kein
-    # Nachweis darueber, was die Datei gebaut hat.
     permissions:
       contents: read
-      id-token: write
-      attestations: write
     strategy:
       matrix:
         include:
@@ -299,12 +318,6 @@ jobs:
               echo "::error::UG7311 ugos-mcp is missing or not executable"; exit 1; }
             sudo dpkg -r ugos-cli
           fi
-      # Vor dem Upload: die Attestierung haengt am Digest, nicht am Ort, und
-      # gilt damit auch fuer die Kopie, die spaeter am Release haengt.
-      - name: Attest the package
-        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
-        with:
-          subject-path: ./debs/*.deb
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ugos-cli-deb-${{ matrix.arch }}
@@ -316,14 +329,372 @@ jobs:
   # sein: Homebrew und AUR laden in ihrem eigenen Test von der Release-URL,
   # und die Assets eines Entwurfs antworten unauthentifiziert mit 404. Als
   # Prerelease installiert es dennoch niemand automatisch.
+  # Stufe 3. Signieren und attestieren. Cosign keyless ueber die
+  # OIDC-Identitaet des Laufs, dazu je Payload eine SPDX-SBOM. Die SBOMs
+  # bekommen kein eigenes Bundle; sie sind von SHA256SUMS und der
+  # Attestierung mitgedeckt.
+  sign:
+    name: Payloads signieren und attestieren
+    needs: [metadata, build, package-deb]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          path: ./incoming
+      - name: Payloads flach zusammenziehen
+        run: |
+          set -euo pipefail
+          mkdir -p ./payload
+          find ./incoming -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.deb' \) \
+            -exec cp -f {} ./payload/ ';'
+          count=$(find ./payload -type f | wc -l | tr -d ' ')
+          # Sechs Archive plus zwei .deb. Die Zahl steht hier einmal und
+          # nirgends sonst; die Stufen danach leiten ihre Erwartung daraus ab.
+          if [[ "$count" != 8 ]]; then
+            echo "::error::UG7200 erwartet werden 8 Payloads, gefunden sind $count"
+            ls -1 ./payload
+            exit 1
+          fi
+          ls -1 ./payload
+      - uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: SBOM und Signaturbundle je Payload
+        run: |
+          set -euo pipefail
+          for payload in ./payload/*; do
+            name=$(basename "$payload")
+            # Der volle Name bleibt stehen, auch wenn er schon .tar.gz oder
+            # .deb enthaelt: sonst kollidieren Archiv und Paket derselben
+            # Architektur in einer Datei.
+            syft scan "file:${payload}" -o "spdx-json=./payload/${name}.spdx.json" -q
+            cosign sign-blob --yes \
+              --bundle "./payload/${name}.sigstore.json" "$payload"
+            echo "  signiert $name"
+          done
+      - name: Attestierung fuer jeden Payload
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            ./payload/*.tar.gz
+            ./payload/*.zip
+            ./payload/*.deb
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: signed-payloads
+          path: ./payload/*
+          if-no-files-found: error
+
+  # Stufe 4. Vollstaendigkeit erzwingen. Zwischenschritt, nicht die
+  # Endabnahme: je Payload muessen Payload, SBOM und Bundle vorliegen, und
+  # jede Signatur und Attestierung muss halten.
+  aggregate:
+    name: Payload-Vollstaendigkeit
+    needs: [metadata, sign]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      attestations: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: signed-payloads
+          path: ./payload
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Zaehlen, Signaturen und Attestierungen pruefen
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          payloads=()
+          while IFS= read -r file; do payloads+=("$file"); done < <(
+            find ./payload -maxdepth 1 -type f \
+              \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.deb' \) | sort)
+          if (( ${#payloads[@]} != 8 )); then
+            echo "::error::UG7201 erwartet werden 8 Payloads, gefunden sind ${#payloads[@]}"
+            exit 1
+          fi
+          total=$(find ./payload -maxdepth 1 -type f | wc -l | tr -d ' ')
+          if (( total != 24 )); then
+            echo "::error::UG7202 erwartet werden 24 Dateien, also je Payload Payload, SBOM und Bundle; gefunden sind $total"
+            ls -1 ./payload
+            exit 1
+          fi
+          for payload in "${payloads[@]}"; do
+            name=$(basename "$payload")
+            [[ -f "./payload/${name}.spdx.json" ]] || {
+              echo "::error::UG7203 SBOM fehlt zu $name"; exit 1; }
+            [[ -f "./payload/${name}.sigstore.json" ]] || {
+              echo "::error::UG7204 Signaturbundle fehlt zu $name"; exit 1; }
+            # Die Identitaet wird als Muster geprueft. Bei einem
+            # wiederverwendbaren Workflow ist die Ref im Zertifikat die des
+            # Aufrufers, nicht die des Tags; gebunden bleibt sie an dieses
+            # Repository und diese Workflow-Datei.
+            cosign verify-blob \
+              --bundle "./payload/${name}.sigstore.json" \
+              --certificate-identity-regexp "^https://github\.com/${GITHUB_REPOSITORY}/\.github/workflows/release\.yml@refs/" \
+              --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+              "$payload"
+            gh attestation verify "$payload" --repo "$GITHUB_REPOSITORY" \
+              --deny-self-hosted-runners
+            echo "  ok $name"
+          done
+          echo "::notice::8 Payloads mit SBOM, Signatur und Attestierung geprueft"
+
+  # Stufe 5a. Kanal-Metadaten aus den qualifizierten Payloads erzeugen und
+  # gleich qualifizieren: die Arch-Paketierung baut hier und wird gegen das
+  # Release-Archiv geprueft, bevor irgendetwas veroeffentlicht wird. Signiert
+  # und attestiert werden die Metadaten wie ein Payload, eine eigene SBOM
+  # brauchen sie nicht.
+  channel-metadata:
+    name: Kanal-Metadaten erzeugen und qualifizieren
+    needs: [metadata, sign, aggregate]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    env:
+      VERSION: ${{ needs.metadata.outputs.version }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: signed-payloads
+          path: ./payload
+      - name: Homebrew-Formel schreiben
+        run: |
+          set -euo pipefail
+
+          checksum() {
+            local target=$1
+            local path="./payload/ugos-cli-${target}.tar.gz"
+            if [[ ! -f "$path" ]]; then
+              echo "::error::UG7500 release archive is missing: $path" >&2
+              exit 1
+            fi
+            sha256sum "$path" | cut -d' ' -f1
+          }
+
+          MAC_X64_SHA=$(checksum x86_64-apple-darwin)
+          MAC_ARM64_SHA=$(checksum aarch64-apple-darwin)
+          LINUX_X64_SHA=$(checksum x86_64-unknown-linux-gnu)
+          LINUX_ARM64_SHA=$(checksum aarch64-unknown-linux-gnu)
+
+          cat > formula.rb <<RUBY
+          class UgosCli < Formula
+            desc "CLI and MCP server for UGREEN NAS (UGOS) management"
+            homepage "https://github.com/metaneutrons/ugos-cli"
+            license "GPL-3.0-or-later"
+
+            on_macos do
+              if Hardware::CPU.intel?
+                url "https://github.com/metaneutrons/ugos-cli/releases/download/v${VERSION}/ugos-cli-x86_64-apple-darwin.tar.gz"
+                sha256 "${MAC_X64_SHA}"
+              else
+                url "https://github.com/metaneutrons/ugos-cli/releases/download/v${VERSION}/ugos-cli-aarch64-apple-darwin.tar.gz"
+                sha256 "${MAC_ARM64_SHA}"
+              end
+            end
+
+            on_linux do
+              if Hardware::CPU.intel?
+                url "https://github.com/metaneutrons/ugos-cli/releases/download/v${VERSION}/ugos-cli-x86_64-unknown-linux-gnu.tar.gz"
+                sha256 "${LINUX_X64_SHA}"
+              else
+                url "https://github.com/metaneutrons/ugos-cli/releases/download/v${VERSION}/ugos-cli-aarch64-unknown-linux-gnu.tar.gz"
+                sha256 "${LINUX_ARM64_SHA}"
+              end
+            end
+
+            def install
+              bin.install "ugos-cli"
+              bin.install "ugos-mcp"
+            end
+
+            test do
+              assert_match version.to_s, shell_output("#{bin}/ugos-cli --version")
+            end
+          end
+          RUBY
+
+          ruby -c formula.rb
+          if [[ $(grep -Fc "/releases/download/${TAG}/" formula.rb) != 4 ]]; then
+            echo "::error::UG7501 formula does not reference four exact release URLs"
+            exit 1
+          fi
+          mkdir -p ./meta
+          install -m 0644 formula.rb ./meta/ugos-cli.rb
+      - name: PKGBUILD schreiben, bauen und gegen das Archiv pruefen
+        run: |
+          set -euo pipefail
+          x86=$(sha256sum ./payload/ugos-cli-x86_64-unknown-linux-gnu.tar.gz | cut -d' ' -f1)
+          arm=$(sha256sum ./payload/ugos-cli-aarch64-unknown-linux-gnu.tar.gz | cut -d' ' -f1)
+          base="https://github.com/${GITHUB_REPOSITORY}/releases/download/${TAG}"
+          cat > PKGBUILD <<PKG
+          # Maintainer: Fabian Schmieder <fabian@schmieder.eu>
+          pkgname=ugos-cli-bin
+          pkgver=${VERSION}
+          pkgrel=1
+          pkgdesc="CLI and MCP server for UGREEN NAS (UGOS) management"
+          arch=('x86_64' 'aarch64')
+          url="https://github.com/metaneutrons/ugos-cli"
+          license=('GPL-3.0-or-later')
+          provides=('ugos-cli')
+          conflicts=('ugos-cli')
+          source_x86_64=("\${pkgname}-\${pkgver}-x86_64.tar.gz::${base}/ugos-cli-x86_64-unknown-linux-gnu.tar.gz")
+          source_aarch64=("\${pkgname}-\${pkgver}-aarch64.tar.gz::${base}/ugos-cli-aarch64-unknown-linux-gnu.tar.gz")
+          sha256sums_x86_64=('${x86}')
+          sha256sums_aarch64=('${arm}')
+
+          package() {
+            install -Dm755 "\${srcdir}/ugos-cli" "\${pkgdir}/usr/bin/ugos-cli"
+            install -Dm755 "\${srcdir}/ugos-mcp" "\${pkgdir}/usr/bin/ugos-mcp"
+          }
+          PKG
+          cat PKGBUILD
+          docker run --rm --user root \
+            --volume "$PWD:/pkg" --workdir /pkg \
+            archlinux:base-devel@sha256:a26046b7363dad8e2614858f4313949ae9b05c9c5f31de343a54864b9e20806f \
+            bash -euo pipefail -c '
+              useradd -m builder
+              chown -R builder:builder /pkg
+              su builder -c "makepkg --printsrcinfo > .SRCINFO"
+              su builder -c "makepkg --cleanbuild --noconfirm --nocheck"
+            '
+          package=$(find . -maxdepth 1 -name '*.pkg.tar.zst' -print -quit)
+          if [[ -z "$package" ]]; then
+            echo "::error::UG7600 makepkg produced no package"
+            exit 1
+          fi
+          mkdir -p /tmp/from-package /tmp/from-archive
+          tar -xf "$package" -C /tmp/from-package
+          tar -xzf ./payload/ugos-cli-x86_64-unknown-linux-gnu.tar.gz -C /tmp/from-archive
+          for binary in ugos-cli ugos-mcp; do
+            cmp "/tmp/from-archive/$binary" "/tmp/from-package/usr/bin/$binary"
+          done
+          install -m 0644 PKGBUILD ./meta/PKGBUILD
+          install -m 0644 .SRCINFO ./meta/.SRCINFO
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Metadaten signieren
+        run: |
+          set -euo pipefail
+          for file in ./meta/ugos-cli.rb ./meta/PKGBUILD ./meta/.SRCINFO; do
+            name=$(basename "$file")
+            cosign sign-blob --yes --bundle "./meta/${name}.sigstore.json" "$file"
+            echo "  signiert $name"
+          done
+      - name: Metadaten attestieren
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            ./meta/ugos-cli.rb
+            ./meta/PKGBUILD
+            ./meta/.SRCINFO
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: channel-metadata
+          path: ./meta/*
+          include-hidden-files: true
+          if-no-files-found: error
+
+  # Stufe 5b. Endabnahme. Die erwartete Liste entsteht aus den Payloads und
+  # den tatsaechlich erzeugten Kanal-Metadaten, nicht aus einer zweiten
+  # Konstante. Erst danach entsteht SHA256SUMS, und dessen Zeilenmenge deckt
+  # sich genau mit dieser Liste. Nach diesem Job darf keine Stufe mehr ein
+  # Asset hinzufuegen oder aendern.
+  candidate:
+    name: Endgueltige Release-Liste
+    needs: [metadata, sign, aggregate, channel-metadata]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      attestations: read
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: signed-payloads
+          path: ./release
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: channel-metadata
+          path: ./release
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Liste bilden, alles pruefen, dann SHA256SUMS schreiben
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          cd ./release
+
+          signed=()
+          while IFS= read -r file; do signed+=("${file#./}"); done < <(
+            find . -maxdepth 1 -type f \
+              \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.deb' \
+                 -o -name 'ugos-cli.rb' -o -name 'PKGBUILD' -o -name '.SRCINFO' \) | sort)
+          # Acht Payloads plus drei Metadatendateien.
+          if (( ${#signed[@]} != 11 )); then
+            echo "::error::UG7210 erwartet werden 11 signierte Dateien, gefunden sind ${#signed[@]}"
+            ls -1a
+            exit 1
+          fi
+
+          expected=()
+          for file in "${signed[@]}"; do
+            expected+=("$file" "${file}.sigstore.json")
+            case "$file" in
+              *.tar.gz|*.zip|*.deb) expected+=("${file}.spdx.json") ;;
+            esac
+            [[ -f "${file}.sigstore.json" ]] || {
+              echo "::error::UG7211 Signaturbundle fehlt zu $file"; exit 1; }
+            cosign verify-blob \
+              --bundle "${file}.sigstore.json" \
+              --certificate-identity-regexp "^https://github\.com/${GITHUB_REPOSITORY}/\.github/workflows/release\.yml@refs/" \
+              --certificate-oidc-issuer 'https://token.actions.githubusercontent.com' \
+              "$file"
+            gh attestation verify "$file" --repo "$GITHUB_REPOSITORY" --deny-self-hosted-runners
+            echo "  ok $file"
+          done
+
+          # Vorhandene Dateien gegen die erwartete Liste, in beide Richtungen.
+          printf '%s\n' "${expected[@]}" | sort > /tmp/expected
+          find . -maxdepth 1 -type f | sed 's|^\./||' | sort > /tmp/present
+          if ! diff -u /tmp/expected /tmp/present; then
+            echo "::error::UG7212 die Kandidatenliste weicht vom Verzeichnis ab"
+            exit 1
+          fi
+
+          sha256sum "${expected[@]}" > SHA256SUMS
+          lines=$(wc -l < SHA256SUMS | tr -d ' ')
+          if (( lines != ${#expected[@]} )); then
+            echo "::error::UG7213 SHA256SUMS hat $lines Zeilen, erwartet sind ${#expected[@]}"
+            exit 1
+          fi
+          sha256sum --check --quiet SHA256SUMS
+          echo "::notice::${#expected[@]} Assets plus SHA256SUMS abgenommen"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: release-assets
+          path: ./release/*
+          include-hidden-files: true
+          if-no-files-found: error
+
   stage:
     name: Vorabveroeffentlichung
-    needs: [metadata, channel-preflight, build, package-deb]
+    needs: [metadata, channel-preflight, candidate]
     if: >-
       !cancelled()
       && needs.metadata.result == 'success'
-      && needs.build.result == 'success'
-      && needs.package-deb.result == 'success'
+      && needs.candidate.result == 'success'
       && (
         (needs.metadata.outputs.is_prerelease == 'true'
           && needs.channel-preflight.result == 'skipped')
@@ -341,6 +712,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
+          name: release-assets
           path: ./candidate
       - name: Entwurf anlegen, falls keiner da ist
         run: |
@@ -356,22 +728,17 @@ jobs:
         with:
           tag_name: ${{ inputs.tag }}
           draft: true
-          files: |
-            candidate/ugos-cli-*/*.tar.gz
-            candidate/ugos-cli-*/*.zip
-            candidate/ugos-cli-deb-*/*.deb
+          files: candidate/*
       - name: Die Bytes vom Entwurf zurueckholen und gegen die Kandidaten pruefen
         run: |
           set -euo pipefail
           # Ein erfolgreicher Upload ist keine Aussage darueber, was am Release
           # liegt. Geprueft wird, was von dort zurueckkommt.
           #
-          # download-artifact legt je Artefakt ein Verzeichnis an; die Liste
-          # wird zuerst flach gezogen, damit sie sich mit dem Release-Inhalt
-          # vergleichen laesst.
+          # candidate liegt bereits flach; es ist genau die in Stufe 5b
+          # abgenommene Liste.
           mkdir -p ./flat ./staged
-          find ./candidate -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.deb' \) \
-            -exec cp -f {} ./flat/ ';'
+          find ./candidate -maxdepth 1 -type f -exec cp -f {} ./flat/ ';'
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir ./staged --clobber
 
           status=0
@@ -396,7 +763,11 @@ jobs:
               status=1; }
           done
           (( status == 0 )) || exit 1
-          echo "::notice::$(find ./flat -type f | wc -l | tr -d ' ') Assets geprueft"
+
+          # Die Pruefsummendatei gilt gegen die Bytes vom Release, nicht gegen
+          # die lokalen Kandidaten: sonst prueft sie sich selbst.
+          ( cd ./staged && sha256sum --check --quiet SHA256SUMS )
+          echo "::notice::$(find ./flat -type f | wc -l | tr -d ' ') Assets geprueft, SHA256SUMS gegen das Release bestaetigt"
       - name: Als Vorabversion sichtbar machen, ohne latest
         run: |
           set -euo pipefail
@@ -528,76 +899,22 @@ jobs:
     env:
       TAP_REPO: metaneutrons/homebrew-tap
     steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          path: ./artifacts
       - name: Update the tap formula
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           VERSION: ${{ needs.metadata.outputs.version }}
+          TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-
-          checksum() {
-            local target=$1
-            local path="./artifacts/ugos-cli-${target}/ugos-cli-${target}.tar.gz"
-            if [[ ! -f "$path" ]]; then
-              echo "::error::UG7500 release archive is missing: $path" >&2
-              exit 1
-            fi
-            sha256sum "$path" | cut -d' ' -f1
-          }
-
-          MAC_X64_SHA=$(checksum x86_64-apple-darwin)
-          MAC_ARM64_SHA=$(checksum aarch64-apple-darwin)
-          LINUX_X64_SHA=$(checksum x86_64-unknown-linux-gnu)
-          LINUX_ARM64_SHA=$(checksum aarch64-unknown-linux-gnu)
-
-          # Ohne version-Zeile: brew audit --strict verwirft sie als redundant,
-          # weil Homebrew die Version aus der URL liest. Genau deshalb wurde
-          # sie im Tap mit "fix(ugos-cli): satisfy current Homebrew audit"
-          # (44866ec) entfernt, und die Formel darf sie nicht zurueckbringen.
-          cat > formula.rb <<RUBY
-          class UgosCli < Formula
-            desc "CLI and MCP server for UGREEN NAS (UGOS) management"
-            homepage "https://github.com/metaneutrons/ugos-cli"
-            license "GPL-3.0-or-later"
-
-            on_macos do
-              if Hardware::CPU.intel?
-                url "https://github.com/metaneutrons/ugos-cli/releases/download/v${VERSION}/ugos-cli-x86_64-apple-darwin.tar.gz"
-                sha256 "${MAC_X64_SHA}"
-              else
-                url "https://github.com/metaneutrons/ugos-cli/releases/download/v${VERSION}/ugos-cli-aarch64-apple-darwin.tar.gz"
-                sha256 "${MAC_ARM64_SHA}"
-              end
-            end
-
-            on_linux do
-              if Hardware::CPU.intel?
-                url "https://github.com/metaneutrons/ugos-cli/releases/download/v${VERSION}/ugos-cli-x86_64-unknown-linux-gnu.tar.gz"
-                sha256 "${LINUX_X64_SHA}"
-              else
-                url "https://github.com/metaneutrons/ugos-cli/releases/download/v${VERSION}/ugos-cli-aarch64-unknown-linux-gnu.tar.gz"
-                sha256 "${LINUX_ARM64_SHA}"
-              end
-            end
-
-            def install
-              bin.install "ugos-cli"
-              bin.install "ugos-mcp"
-            end
-
-            test do
-              assert_match version.to_s, shell_output("#{bin}/ugos-cli --version")
-            end
-          end
-          RUBY
-
-          ruby -c formula.rb
-          if [[ $(grep -Fc "/releases/download/v${VERSION}/" formula.rb) != 4 ]]; then
-            echo "::error::UG7501 formula does not reference four exact release URLs"
+          # Die Formel wurde in Stufe 5 erzeugt, qualifiziert, signiert und
+          # attestiert und haengt am Release. Hier wird sie nicht noch einmal
+          # gebaut, sonst gaebe es zwei Quellen fuer denselben Inhalt.
+          GH_TOKEN="${{ secrets.GITHUB_TOKEN }}" gh release download "$TAG" \
+            --repo "$GITHUB_REPOSITORY" --pattern 'ugos-cli.rb' --dir . --clobber
+          mv ugos-cli.rb formula.rb
+          if [[ $(grep -Fc "/releases/download/${TAG}/" formula.rb) != 4 ]]; then
+            echo "::error::UG7506 the formula fetched from the release does not reference four exact release URLs"
             exit 1
           fi
 
@@ -697,62 +1014,21 @@ jobs:
       AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
       AUR_SSH_KNOWN_HOSTS: ${{ vars.AUR_SSH_KNOWN_HOSTS }}
     steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-        with:
-          path: ./artifacts
-      - name: Write the PKGBUILD
+      - name: PKGBUILD und .SRCINFO vom Release holen
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          x86=$(sha256sum ./artifacts/ugos-cli-x86_64-unknown-linux-gnu/ugos-cli-x86_64-unknown-linux-gnu.tar.gz | cut -d' ' -f1)
-          arm=$(sha256sum ./artifacts/ugos-cli-aarch64-unknown-linux-gnu/ugos-cli-aarch64-unknown-linux-gnu.tar.gz | cut -d' ' -f1)
-          base="https://github.com/metaneutrons/ugos-cli/releases/download/v${VERSION}"
-          cat > PKGBUILD <<PKG
-          # Maintainer: Fabian Schmieder <fabian@schmieder.eu>
-          pkgname=ugos-cli-bin
-          pkgver=${VERSION}
-          pkgrel=1
-          pkgdesc="CLI and MCP server for UGREEN NAS (UGOS) management"
-          arch=('x86_64' 'aarch64')
-          url="https://github.com/metaneutrons/ugos-cli"
-          license=('GPL-3.0-or-later')
-          provides=('ugos-cli')
-          conflicts=('ugos-cli')
-          source_x86_64=("\${pkgname}-\${pkgver}-x86_64.tar.gz::${base}/ugos-cli-x86_64-unknown-linux-gnu.tar.gz")
-          source_aarch64=("\${pkgname}-\${pkgver}-aarch64.tar.gz::${base}/ugos-cli-aarch64-unknown-linux-gnu.tar.gz")
-          sha256sums_x86_64=('${x86}')
-          sha256sums_aarch64=('${arm}')
-
-          package() {
-            install -Dm755 "\${srcdir}/ugos-cli" "\${pkgdir}/usr/bin/ugos-cli"
-            install -Dm755 "\${srcdir}/ugos-mcp" "\${pkgdir}/usr/bin/ugos-mcp"
-          }
-          PKG
-          sed -i 's/^          //' PKGBUILD
-          cat PKGBUILD
-      - name: Build the package and verify it against the release archive
-        run: |
-          set -euo pipefail
-          docker run --rm --user root \
-            --volume "$PWD:/pkg" --workdir /pkg \
-            archlinux:base-devel@sha256:a26046b7363dad8e2614858f4313949ae9b05c9c5f31de343a54864b9e20806f \
-            bash -euo pipefail -c '
-              useradd -m builder
-              chown -R builder:builder /pkg
-              su builder -c "makepkg --printsrcinfo > .SRCINFO"
-              su builder -c "makepkg --cleanbuild --noconfirm --nocheck"
-            '
-          package=$(find . -maxdepth 1 -name '*.pkg.tar.zst' -print -quit)
-          if [[ -z "$package" ]]; then
-            echo "::error::UG7600 makepkg produced no package"
-            exit 1
-          fi
-          mkdir -p /tmp/from-package /tmp/from-archive
-          tar -xf "$package" -C /tmp/from-package
-          tar -xzf ./artifacts/ugos-cli-x86_64-unknown-linux-gnu/ugos-cli-x86_64-unknown-linux-gnu.tar.gz \
-            -C /tmp/from-archive
-          for binary in ugos-cli ugos-mcp; do
-            cmp "/tmp/from-archive/$binary" "/tmp/from-package/usr/bin/$binary"
-          done
+          # Beide wurden in Stufe 5 erzeugt, dort im Arch-Container gebaut und
+          # gegen das Release-Archiv geprueft, signiert und attestiert. Hier
+          # wird nur noch gepusht.
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'PKGBUILD' --pattern '.SRCINFO' --dir . --clobber
+          grep -q "^pkgver=${VERSION}$" PKGBUILD || {
+            echo "::error::UG7601 PKGBUILD traegt nicht pkgver=${VERSION}"; exit 1; }
+          grep -q "^\tpkgver = ${VERSION}$" .SRCINFO || {
+            echo "::error::UG7602 .SRCINFO traegt nicht pkgver = ${VERSION}"; exit 1; }
       - name: Push to the AUR
         run: |
           set -euo pipefail
@@ -776,12 +1052,59 @@ jobs:
           git commit -m "ugos-cli-bin ${VERSION}-1"
           git push origin HEAD:master
 
+  publish-crates:
+    name: Publish to crates.io
+    needs: [metadata, channel-preflight, stage]
+    if: needs.channel-preflight.outputs.publish_crates == 'true'
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      VERSION: ${{ needs.metadata.outputs.version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ inputs.tag }}
+      - run: rustup show
+      - uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
+        id: auth
+      - name: Publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
+        run: |
+          set -euo pipefail
+          # Nur ugos-client hat kein `publish = false`; cargo bestimmt die
+          # Reihenfolge selbst. Keine Wiederholschleife und kein `|| true`:
+          # ein gescheiterter Publish muss die Pipeline anhalten.
+          cargo publish --workspace --locked
+      - name: Nachsehen, ob crates.io die Version ausliefert
+        run: |
+          set -euo pipefail
+          deadline=$(( SECONDS + 600 ))
+          while :; do
+            found=$(curl -sS --max-time 30 -H 'User-Agent: ugos-cli release pipeline' \
+              "https://crates.io/api/v1/crates/ugos-client/${VERSION}" \
+              | jq -r 'try .version.num catch ""')
+            if [[ "$found" == "$VERSION" ]]; then
+              echo "::notice::crates.io liefert ugos-client ${VERSION}"
+              break
+            fi
+            if (( SECONDS > deadline )); then
+              echo "::error::UG7700 crates.io liefert ugos-client ${VERSION} nicht innerhalb der Frist"
+              exit 1
+            fi
+            sleep 20
+          done
+
   # Stufe 9. Befoerdern. Erst wenn jeder konfigurierte Kanal durch ist, wird
   # aus der Vorabversion `latest`. Die Assets werden dabei nicht angefasst.
   # Ein uebersprungener Kanal blockiert nicht, ein gescheiterter schon.
   promote:
     name: Auf latest befoerdern
-    needs: [metadata, stage, publish-apt, update-homebrew, publish-aur]
+    needs: [metadata, stage, publish-apt, update-homebrew, publish-aur, publish-crates]
     if: >-
       always()
       && needs.metadata.outputs.is_prerelease == 'false'
@@ -789,8 +1112,10 @@ jobs:
       && needs.update-homebrew.result == 'success'
       && needs.publish-apt.result != 'failure'
       && needs.publish-aur.result != 'failure'
+      && needs.publish-crates.result != 'failure'
       && needs.publish-apt.result != 'cancelled'
       && needs.publish-aur.result != 'cancelled'
+      && needs.publish-crates.result != 'cancelled'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

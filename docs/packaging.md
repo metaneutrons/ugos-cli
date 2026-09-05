@@ -36,33 +36,48 @@ sudo apt install ./ugos-cli_<version>_amd64.deb
 
 ## How the release runs
 
-`release-please` tags a version, which calls `release.yml`. That workflow
-runs in this order:
+`release-please` tags a version, which calls `release.yml`. Nine stages, each a
+precondition of the next:
 
-1. **preflight** — derives the version from the tag, checks it against
-   `Cargo.toml`, confirms the Homebrew credential can actually write to the
-   tap, and decides which package channels are configured. A channel that is
-   only *partly* configured fails here rather than halfway through
-   publication.
+1. **metadata** — derives the release core from the tag, checks it against
+   `Cargo.toml`, verifies the tag points at the commit the run builds from, and
+   aborts when the tag already carries a published release. No environment and
+   no secrets: this stage has to run for a prerelease tag too.
 2. **build** — six targets, producing the release archives.
-3. **package-deb** — builds `.deb` packages from those archives and installs
-   the native one to confirm it works.
-4. **upload-release-artifacts** — attaches everything to the GitHub release.
-5. **publish-release** — makes the draft visible. This has to happen before
-   the package channels, not after: Homebrew and AUR download from the release
-   URL in their own tests, and a draft release's assets answer 404 without
-   authentication.
-6. **update-homebrew**, **publish-apt**, **publish-aur** — publish and verify.
-   The Homebrew step opens a pull request on the tap, waits for its
-   `Formula qualification` check and merges it; `main` there is protected and
-   rejects a direct push. The APT step dispatches to the archive and then waits
-   for `deb.metaneutrons.cc/ugos-cli` to actually serve the version, because a
-   dispatch returns no run id and the served archive is the stronger statement
-   anyway. It finishes by comparing the published `.deb` byte for byte against
-   the release asset.
+3. **package-deb** — builds `.deb` packages from those archives and installs the
+   native one to confirm it works.
+4. **sign** — one SPDX SBOM and one cosign bundle per payload, keyless through
+   the run's OIDC identity, plus a GitHub build attestation for every payload.
+5. **aggregate** — requires payload, SBOM and bundle for each of the eight
+   payloads and verifies every signature and attestation. An intermediate gate.
+6. **channel-metadata** — generates the Homebrew formula, the PKGBUILD and the
+   `.SRCINFO` from the qualified payloads, builds the Arch package and compares
+   it against the release archive, then signs and attests the three files.
+7. **candidate** — forms the final asset list from the payloads and the channel
+   metadata actually produced, verifies everything once more, and only then
+   writes `SHA256SUMS` over exactly that list. No later stage adds or changes an
+   asset.
+8. **channel-preflight** — checks the channel accesses without publishing
+   anything. A prerelease tag skips this deliberately, since it never reaches
+   the channels.
+9. **stage**, then the channels, then **promote** — the assets go onto the
+   draft, are read back and compared byte for byte in both directions, and the
+   release becomes visible as a **prerelease**, without `latest`. Visible it
+   must be, because Homebrew and AUR download from the release URL in their own
+   tests and a draft's assets answer 404. As a prerelease nobody installs it
+   automatically. Only once every configured channel has succeeded does
+   `promote` set `latest`, and the assets are not touched in the process.
 
-`.deb` packaging is done by a script under `scripts/release/`, so it can be run
-and tested locally rather than only inside CI.
+That order is the point: a channel that fails leaves a prerelease behind that
+nobody installs, instead of a half-published stable release.
+
+### What a release carries
+
+Per payload the payload itself, `<payload>.spdx.json` and
+`<payload>.sigstore.json`, keeping the full payload name so archive and package
+of one architecture cannot collide. Per channel metadata file the file and its
+bundle. Plus `SHA256SUMS` over all of them. Eight payloads and three metadata
+files make 31 assets.
 
 ## Reproducibility
 
