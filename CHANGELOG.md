@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.1](https://github.com/metaneutrons/ugos-cli/compare/v0.13.0...v0.13.1) (2026-09-05)
+
+
+### Bug Fixes
+
+* **release:** compare the SRCINFO version without a grep dialect ([#54](https://github.com/metaneutrons/ugos-cli/issues/54)) ([666fcbc](https://github.com/metaneutrons/ugos-cli/commit/666fcbcf1af7c77a13f78acabfc46489f40b1c7b))
+
 ## [0.13.0](https://github.com/metaneutrons/ugos-cli/compare/v0.12.0...v0.13.0) (2026-09-05)
 
 
