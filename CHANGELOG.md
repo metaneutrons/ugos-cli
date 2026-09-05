@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.12.0](https://github.com/metaneutrons/ugos-cli/compare/v0.11.2...v0.12.0) (2026-09-05)
+
+
+### Features
+
+* **release:** attest the packages and let the archive publish them ([#46](https://github.com/metaneutrons/ugos-cli/issues/46)) ([00b0d59](https://github.com/metaneutrons/ugos-cli/commit/00b0d599356886f0f677ce8fbe8ce9ac6a7eb548))
+* **release:** complete the hardened profile ([#48](https://github.com/metaneutrons/ugos-cli/issues/48)) ([0da62fc](https://github.com/metaneutrons/ugos-cli/commit/0da62fcf6b9e79b16ec1db3590b4c028e3ac87f6))
+
+
+### Bug Fixes
+
+* **mcp:** name the server, not the library it is built on ([#43](https://github.com/metaneutrons/ugos-cli/issues/43)) ([d77bba4](https://github.com/metaneutrons/ugos-cli/commit/d77bba41da43d21c62346ca5751a60a316fd71b1))
+* **release:** raise the caller's permission ceiling ([#49](https://github.com/metaneutrons/ugos-cli/issues/49)) ([31dc6bf](https://github.com/metaneutrons/ugos-cli/commit/31dc6bfd82d9fa15c86bb6cee20c43cf2d90dc2a))
+
 ## [0.11.2](https://github.com/metaneutrons/ugos-cli/compare/v0.11.1...v0.11.2) (2026-09-03)
 
 
