@@ -100,12 +100,20 @@ jobs:
           # Der Entwurf von release-please ist der Normalfall. Ein Release,
           # das bereits ausgeliefert ist, wird nicht ueberschrieben: dessen
           # Metadaten liegen schon bei den Nutzern.
-          state=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null || echo absent)
+          # Ein Entwurf ist der Normalfall, eine Vorabversion ist der Zustand
+          # nach einem gescheiterten Kanal und ausdruecklich wiederaufnehmbar:
+          # sie traegt kein `latest` und wird von niemandem automatisch
+          # installiert. Genau dafuer ist die Stufung da. Abgebrochen wird nur
+          # bei einem befoerderten Release, dessen Metadaten schon bei den
+          # Nutzern liegen.
+          state=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft,isPrerelease --jq '"\(.isDraft) \(.isPrerelease)"' 2>/dev/null || echo absent)
           case "$state" in
-            absent) echo "::notice::kein Release unter $TAG, Stufe 7 legt einen Entwurf an" ;;
-            true)   echo "::notice::Entwurf unter $TAG vorhanden" ;;
-            false)  echo "::error::UG7004 release $TAG is already published"; exit 1 ;;
-            *)      echo "::error::UG7005 unexpected release state for $TAG: $state"; exit 1 ;;
+            absent)       echo "::notice::kein Release unter $TAG, Stufe 7 legt einen Entwurf an" ;;
+            "true "*)     echo "::notice::Entwurf unter $TAG vorhanden" ;;
+            "false true") echo "::notice::Vorabversion unter $TAG wird wieder aufgenommen" ;;
+            "false false") echo "::error::UG7004 release $TAG is already promoted"; exit 1 ;;
+            *)            echo "::error::UG7005 unexpected release state for $TAG: $state"; exit 1 ;;
           esac
 
   # Stufe 6. Kanal-Preflight. Prueft ausschliesslich Zugaenge, veraendert
@@ -745,11 +753,13 @@ jobs:
       - name: Entwurf anlegen, falls keiner da ist
         run: |
           set -euo pipefail
-          state=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null || echo absent)
+          state=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft,isPrerelease --jq '"\(.isDraft) \(.isPrerelease)"' 2>/dev/null || echo absent)
           case "$state" in
-            absent) gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "$TAG" --notes "Pipeline-Testlauf." ;;
-            true)   echo "::notice::Entwurf von release-please wird bestueckt" ;;
-            false)  echo "::error::UG7004 release $TAG is already published"; exit 1 ;;
+            absent)        gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "$TAG" --notes "Pipeline-Testlauf." ;;
+            "true "*)      echo "::notice::Entwurf von release-please wird bestueckt" ;;
+            "false true")  echo "::notice::vorhandene Vorabversion wird neu bestueckt" ;;
+            "false false") echo "::error::UG7004 release $TAG is already promoted"; exit 1 ;;
           esac
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
@@ -799,8 +809,15 @@ jobs:
       - name: Als Vorabversion sichtbar machen, ohne latest
         run: |
           set -euo pipefail
-          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" \
-            --draft=false --prerelease --latest=false
+          # Kein `|| true` auf einem Veroeffentlichungspfad. Umgeschaltet wird
+          # nur, wenn der Zustand es braucht; eine wiederaufgenommene
+          # Vorabversion ist bereits richtig.
+          before=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft,isPrerelease --jq '"\(.isDraft) \(.isPrerelease)"')
+          if [[ "$before" != "false true" ]]; then
+            gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --draft=false --prerelease --latest=false
+          fi
           read -r draft pre < <(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
             --json isDraft,isPrerelease --jq '"\(.isDraft) \(.isPrerelease)"')
           [[ "$draft" == false && "$pre" == true ]] || {
@@ -1254,9 +1271,14 @@ jobs:
           # Der Punkt kommt erst hier wieder davor; am Release traegt die
           # Datei ihn nicht, weil GitHub sie sonst umbenennt.
           mv ugos-cli.SRCINFO .SRCINFO
-          grep -q "^pkgver=${VERSION}$" PKGBUILD || {
+          grep -qx "pkgver=${VERSION}" PKGBUILD || {
             echo "::error::UG7601 PKGBUILD traegt nicht pkgver=${VERSION}"; exit 1; }
-          grep -q "^\tpkgver = ${VERSION}$" .SRCINFO || {
+          # Mit awk statt grep: .SRCINFO rueckt seine Felder mit einem
+          # Tabulator ein, und `\t` im Muster ist Dialektsache. BSD-grep liest
+          # es als Tabulator, GNU-grep als das Zeichen t. Lokal bestand die
+          # Pruefung deshalb und auf dem Runner nie.
+          awk -v v="$VERSION" '$1 == "pkgver" && $2 == "=" && $3 == v { found = 1 }
+                               END { exit !found }' .SRCINFO || {
             echo "::error::UG7602 .SRCINFO traegt nicht pkgver = ${VERSION}"; exit 1; }
       - name: Das Paket bauen und gegen das Release-Archiv pruefen
         env:
