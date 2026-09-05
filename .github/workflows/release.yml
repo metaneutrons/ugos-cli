@@ -483,6 +483,9 @@ jobs:
             sha256sum "$path" | cut -d' ' -f1
           }
 
+          # Jede Download-URL wird aus dem vollstaendigen Tag gebaut, nicht
+          # aus v$VERSION. Bei einem Vorabtag sind das zwei verschiedene
+          # Dinge, und die Datei liegt unter dem Tag.
           MAC_X64_SHA=$(checksum x86_64-apple-darwin)
           MAC_ARM64_SHA=$(checksum aarch64-apple-darwin)
           LINUX_X64_SHA=$(checksum x86_64-unknown-linux-gnu)
@@ -496,20 +499,20 @@ jobs:
 
             on_macos do
               if Hardware::CPU.intel?
-                url "https://github.com/metaneutrons/ugos-cli/releases/download/v${VERSION}/ugos-cli-x86_64-apple-darwin.tar.gz"
+                url "https://github.com/metaneutrons/ugos-cli/releases/download/${TAG}/ugos-cli-x86_64-apple-darwin.tar.gz"
                 sha256 "${MAC_X64_SHA}"
               else
-                url "https://github.com/metaneutrons/ugos-cli/releases/download/v${VERSION}/ugos-cli-aarch64-apple-darwin.tar.gz"
+                url "https://github.com/metaneutrons/ugos-cli/releases/download/${TAG}/ugos-cli-aarch64-apple-darwin.tar.gz"
                 sha256 "${MAC_ARM64_SHA}"
               end
             end
 
             on_linux do
               if Hardware::CPU.intel?
-                url "https://github.com/metaneutrons/ugos-cli/releases/download/v${VERSION}/ugos-cli-x86_64-unknown-linux-gnu.tar.gz"
+                url "https://github.com/metaneutrons/ugos-cli/releases/download/${TAG}/ugos-cli-x86_64-unknown-linux-gnu.tar.gz"
                 sha256 "${LINUX_X64_SHA}"
               else
-                url "https://github.com/metaneutrons/ugos-cli/releases/download/v${VERSION}/ugos-cli-aarch64-unknown-linux-gnu.tar.gz"
+                url "https://github.com/metaneutrons/ugos-cli/releases/download/${TAG}/ugos-cli-aarch64-unknown-linux-gnu.tar.gz"
                 sha256 "${LINUX_ARM64_SHA}"
               end
             end
@@ -990,6 +993,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           VERSION: ${{ needs.metadata.outputs.version }}
+          TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           published=$(gh api \
@@ -997,8 +1001,8 @@ jobs:
             --jq .content | base64 --decode)
           # Die Formel fuehrt keine version-Zeile, die Version steht in den
           # vier Release-URLs. Dort wird sie geprueft, nicht anderswo.
-          if [[ $(grep -Fc "/releases/download/v${VERSION}/" <<< "$published") != 4 ]]; then
-            echo "::error::UG7505 the tap does not serve version ${VERSION}"
+          if [[ $(grep -Fc "/releases/download/${TAG}/" <<< "$published") != 4 ]]; then
+            echo "::error::UG7505 the tap does not serve ${TAG}"
             exit 1
           fi
 
