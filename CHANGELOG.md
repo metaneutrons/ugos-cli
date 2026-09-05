@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.13.0](https://github.com/metaneutrons/ugos-cli/compare/v0.12.0...v0.13.0) (2026-09-05)
+
+
+### Features
+
+* **release:** publish to the tap through the App, not a PAT ([#53](https://github.com/metaneutrons/ugos-cli/issues/53)) ([8ea82fe](https://github.com/metaneutrons/ugos-cli/commit/8ea82fe4172435d26a436313c2a2cccac49b0c4c))
+* **release:** reach the archive through an App, and read the AUR back ([#51](https://github.com/metaneutrons/ugos-cli/issues/51)) ([66445b1](https://github.com/metaneutrons/ugos-cli/commit/66445b178f415078ddc02a5d3d2a5df9414bda62))
+
 ## [0.12.0](https://github.com/metaneutrons/ugos-cli/compare/v0.11.2...v0.12.0) (2026-09-05)
 
 
