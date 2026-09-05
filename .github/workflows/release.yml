@@ -535,7 +535,7 @@ jobs:
           fi
           mkdir -p ./meta
           install -m 0644 formula.rb ./meta/ugos-cli.rb
-      - name: PKGBUILD schreiben, bauen und gegen das Archiv pruefen
+      - name: PKGBUILD und .SRCINFO schreiben
         run: |
           set -euo pipefail
           x86=$(sha256sum ./payload/ugos-cli-x86_64-unknown-linux-gnu.tar.gz | cut -d' ' -f1)
@@ -563,6 +563,10 @@ jobs:
           }
           PKG
           cat PKGBUILD
+          # Nur --printsrcinfo, kein Bau. makepkg wuerde die Quellen von der
+          # Release-URL holen, und das Release entsteht erst in Stufe 7. Der
+          # Bau samt Vergleich gegen das Archiv steht deshalb im AUR-Job,
+          # vor dem Push und nach der Veroeffentlichung.
           docker run --rm --user root \
             --volume "$PWD:/pkg" --workdir /pkg \
             archlinux:base-devel@sha256:a26046b7363dad8e2614858f4313949ae9b05c9c5f31de343a54864b9e20806f \
@@ -570,19 +574,8 @@ jobs:
               useradd -m builder
               chown -R builder:builder /pkg
               su builder -c "makepkg --printsrcinfo > .SRCINFO"
-              su builder -c "makepkg --cleanbuild --noconfirm --nocheck"
             '
-          package=$(find . -maxdepth 1 -name '*.pkg.tar.zst' -print -quit)
-          if [[ -z "$package" ]]; then
-            echo "::error::UG7600 makepkg produced no package"
-            exit 1
-          fi
-          mkdir -p /tmp/from-package /tmp/from-archive
-          tar -xf "$package" -C /tmp/from-package
-          tar -xzf ./payload/ugos-cli-x86_64-unknown-linux-gnu.tar.gz -C /tmp/from-archive
-          for binary in ugos-cli ugos-mcp; do
-            cmp "/tmp/from-archive/$binary" "/tmp/from-package/usr/bin/$binary"
-          done
+          [[ -s .SRCINFO ]] || { echo "::error::UG7603 .SRCINFO ist leer"; exit 1; }
           install -m 0644 PKGBUILD ./meta/PKGBUILD
           install -m 0644 .SRCINFO ./meta/.SRCINFO
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
@@ -1033,6 +1026,37 @@ jobs:
             echo "::error::UG7601 PKGBUILD traegt nicht pkgver=${VERSION}"; exit 1; }
           grep -q "^\tpkgver = ${VERSION}$" .SRCINFO || {
             echo "::error::UG7602 .SRCINFO traegt nicht pkgver = ${VERSION}"; exit 1; }
+      - name: Das Paket bauen und gegen das Release-Archiv pruefen
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          # Erst hier moeglich: makepkg holt seine Quellen von der
+          # Release-URL, und das Release ist seit Stufe 7 sichtbar. Gebaut
+          # wird also gegen genau die Bytes, die auch die Nutzer bekommen.
+          docker run --rm --user root \
+            --volume "$PWD:/pkg" --workdir /pkg \
+            archlinux:base-devel@sha256:a26046b7363dad8e2614858f4313949ae9b05c9c5f31de343a54864b9e20806f \
+            bash -euo pipefail -c '
+              useradd -m builder
+              chown -R builder:builder /pkg
+              su builder -c "makepkg --cleanbuild --noconfirm --nocheck"
+            '
+          package=$(find . -maxdepth 1 -name '*.pkg.tar.zst' -print -quit)
+          if [[ -z "$package" ]]; then
+            echo "::error::UG7600 makepkg produced no package"
+            exit 1
+          fi
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --pattern 'ugos-cli-x86_64-unknown-linux-gnu.tar.gz' --dir . --clobber
+          mkdir -p /tmp/from-package /tmp/from-archive
+          tar -xf "$package" -C /tmp/from-package
+          tar -xzf ugos-cli-x86_64-unknown-linux-gnu.tar.gz -C /tmp/from-archive
+          for binary in ugos-cli ugos-mcp; do
+            cmp "/tmp/from-archive/$binary" "/tmp/from-package/usr/bin/$binary"
+          done
+          echo "::notice::das gebaute Arch-Paket entspricht dem Release-Archiv"
       - name: Push to the AUR
         run: |
           set -euo pipefail
