@@ -36,41 +36,92 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  preflight:
-    name: Validate release identity and credentials
+  # Stufe 1. Identitaet feststellen. Bewusst ohne Environment und ohne
+  # Secrets: dieser Job muss auch fuer einen Prerelease-Tag laufen, und er
+  # veraendert nichts.
+  metadata:
+    name: Release-Identitaet feststellen
     runs-on: ubuntu-latest
-    environment: release
     timeout-minutes: 10
+    permissions:
+      contents: read
     outputs:
       version: ${{ steps.identity.outputs.version }}
       source_date_epoch: ${{ steps.identity.outputs.source_date_epoch }}
-      publish_apt: ${{ steps.channels.outputs.apt }}
-      publish_aur: ${{ steps.channels.outputs.aur }}
+      is_prerelease: ${{ steps.identity.outputs.is_prerelease }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ inputs.tag }}
           fetch-depth: 0
-      - name: Derive an immutable version and build timestamp
+      - name: Version, Vorabkennung und Bauzeit ableiten
         id: identity
         env:
           RELEASE_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          version="${RELEASE_TAG#v}"
-          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
             echo "::error::UG7001 tag must be a canonical vX.Y.Z release tag: $RELEASE_TAG"
             exit 1
           fi
+          # Der Release-Kern ohne Vorabsuffix. Nur er steht in Cargo.toml und
+          # nur er darf in Arch' pkgver landen, wo ein Bindestrich verboten
+          # ist. Die Release-Identitaet bleibt der vollstaendige Tag, aus dem
+          # jede Download-URL gebaut wird.
+          version="${RELEASE_TAG#v}"
+          core="${version%%-*}"
+          if [[ "$core" == "$version" ]]; then
+            is_prerelease=false
+          else
+            is_prerelease=true
+          fi
           manifest=$(grep -m1 '^version' Cargo.toml | cut -d'"' -f2)
-          if [[ "$manifest" != "$version" ]]; then
+          if [[ "$manifest" != "$core" ]]; then
             echo "::error::UG7002 tag $RELEASE_TAG does not match Cargo.toml version $manifest"
+            exit 1
+          fi
+          if [[ "$(git rev-parse "${RELEASE_TAG}^{}")" != "$GITHUB_SHA" ]]; then
+            echo "::error::UG7003 tag $RELEASE_TAG does not point at the commit this run builds from"
             exit 1
           fi
           # Deterministic builds need a fixed clock; the tagged commit is it.
           epoch=$(git log -1 --pretty=%ct)
-          echo "version=$version" >> "$GITHUB_OUTPUT"
-          echo "source_date_epoch=$epoch" >> "$GITHUB_OUTPUT"
+          {
+            echo "version=$core"
+            echo "source_date_epoch=$epoch"
+            echo "is_prerelease=$is_prerelease"
+          } >> "$GITHUB_OUTPUT"
+      - name: Ein bereits veroeffentlichtes Release nicht mehr anfassen
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          # Der Entwurf von release-please ist der Normalfall. Ein Release,
+          # das bereits ausgeliefert ist, wird nicht ueberschrieben: dessen
+          # Metadaten liegen schon bei den Nutzern.
+          state=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null || echo absent)
+          case "$state" in
+            absent) echo "::notice::kein Release unter $TAG, Stufe 7 legt einen Entwurf an" ;;
+            true)   echo "::notice::Entwurf unter $TAG vorhanden" ;;
+            false)  echo "::error::UG7004 release $TAG is already published"; exit 1 ;;
+            *)      echo "::error::UG7005 unexpected release state for $TAG: $state"; exit 1 ;;
+          esac
+
+  # Stufe 6. Kanal-Preflight. Prueft ausschliesslich Zugaenge, veraendert
+  # nichts. Ein Vorabtag erreicht Stufe 8 nie und braucht die Zugaenge nicht,
+  # deshalb faellt dieser Job dort bewusst weg.
+  channel-preflight:
+    name: Kanal-Zugaenge pruefen
+    needs: [metadata]
+    if: needs.metadata.outputs.is_prerelease == 'false'
+    runs-on: ubuntu-latest
+    environment: release
+    timeout-minutes: 10
+    outputs:
+      publish_apt: ${{ steps.channels.outputs.apt }}
+      publish_aur: ${{ steps.channels.outputs.aur }}
+    steps:
       - name: Verify the Homebrew tap credential before any public change
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
@@ -101,8 +152,9 @@ jobs:
           # in eine Zuweisung in GITHUB_OUTPUT, und eine zweite Zeile macht
           # daraus einen mehrzeiligen Wert, den das Dateikommando ablehnt.
           # Meldungen gehen deshalb nach stderr; im Log stehen sie genauso.
-          # Nur noch der Dispatch-Token: Signaturschluessel und R2-Zugang
-          # liegen im Archiv-Repository, nicht hier.
+          #
+          # Nur der Dispatch-Token: Signaturschluessel und R2-Zugang liegen im
+          # Archiv-Repository, nicht hier.
           apt_names=(APT_ARCHIVE_DISPATCH_TOKEN)
           aur_names=(AUR_SSH_PRIVATE_KEY AUR_SSH_KNOWN_HOSTS)
 
@@ -134,7 +186,7 @@ jobs:
 
   build:
     name: Build (${{ matrix.target }})
-    needs: [preflight]
+    needs: [metadata]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     strategy:
@@ -190,7 +242,7 @@ jobs:
 
   package-deb:
     name: Debian package (${{ matrix.arch }})
-    needs: [preflight, build]
+    needs: [metadata, build]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     # Die Attestierung bindet die .deb an die Identitaet dieses Workflows.
@@ -218,8 +270,8 @@ jobs:
           path: ./archives
       - name: Build the package from the released archive
         env:
-          VERSION: ${{ needs.preflight.outputs.version }}
-          SOURCE_DATE_EPOCH: ${{ needs.preflight.outputs.source_date_epoch }}
+          VERSION: ${{ needs.metadata.outputs.version }}
+          SOURCE_DATE_EPOCH: ${{ needs.metadata.outputs.source_date_epoch }}
         run: |
           set -euo pipefail
           scripts/release/build-deb.sh \
@@ -230,7 +282,7 @@ jobs:
             --source-date-epoch "$SOURCE_DATE_EPOCH"
       - name: Verify the package installs and runs
         env:
-          VERSION: ${{ needs.preflight.outputs.version }}
+          VERSION: ${{ needs.metadata.outputs.version }}
         run: |
           set -euo pipefail
           deb="./debs/ugos-cli_${VERSION}_${{ matrix.arch }}.deb"
@@ -258,66 +310,121 @@ jobs:
           name: ugos-cli-deb-${{ matrix.arch }}
           path: ./debs/*.deb
 
-  upload-release-artifacts:
-    name: Upload Release Artifacts
-    needs: [build, package-deb]
+  # Stufe 7. Gestufte Vorabveroeffentlichung. Die Assets haengen am Entwurf,
+  # werden von dort zurueckgelesen und geprueft, und erst dann wird das
+  # Release sichtbar, aber ohne `latest`. Sichtbar muss es vor den Kanaelen
+  # sein: Homebrew und AUR laden in ihrem eigenen Test von der Release-URL,
+  # und die Assets eines Entwurfs antworten unauthentifiziert mit 404. Als
+  # Prerelease installiert es dennoch niemand automatisch.
+  stage:
+    name: Vorabveroeffentlichung
+    needs: [metadata, channel-preflight, build, package-deb]
+    if: >-
+      !cancelled()
+      && needs.metadata.result == 'success'
+      && needs.build.result == 'success'
+      && needs.package-deb.result == 'success'
+      && (
+        (needs.metadata.outputs.is_prerelease == 'true'
+          && needs.channel-preflight.result == 'skipped')
+        || (needs.metadata.outputs.is_prerelease == 'false'
+          && needs.channel-preflight.result == 'success')
+      )
     runs-on: ubuntu-latest
     environment: release
-    timeout-minutes: 15
-    permissions:
-      contents: write
-    steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-      - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
-        with:
-          tag_name: ${{ inputs.tag }}
-          # Bleibt ein Entwurf: release-please legt das Release als Draft an,
-          # und sichtbar wird es erst, wenn jedes Artefakt daran haengt.
-          draft: true
-          files: |
-            ugos-cli-*/*.tar.gz
-            ugos-cli-*/*.zip
-            ugos-cli-deb-*/*.deb
-
-  # Steht bewusst vor den Paketkanaelen. Homebrew und AUR laden in ihrem
-  # eigenen Test von der Release-URL, und die Assets eines Entwurfs sind
-  # unauthentifiziert nicht erreichbar: ein Kanal als Vorbedingung der
-  # Veroeffentlichung waere zirkulaer. Der Entwurf schuetzt weiterhin davor,
-  # dass ein Release sichtbar wird, bevor seine Artefakte daran haengen.
-  publish-release:
-    name: Publish the release
-    needs: [preflight, upload-release-artifacts]
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     permissions:
       contents: write
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TAG: ${{ inputs.tag }}
     steps:
-      - name: Entwurf sichtbar machen
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          path: ./candidate
+      - name: Entwurf anlegen, falls keiner da ist
         run: |
           set -euo pipefail
-          state=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
-          if [ "$state" != true ]; then
-            echo "::notice::Release $TAG ist bereits veroeffentlicht"
-            exit 0
-          fi
-          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
-          # Zuruecklesen statt dem Rueckgabewert vertrauen.
-          after=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft)
-          [ "$after" = false ] || { echo "::error::Release $TAG ist weiterhin ein Entwurf"; exit 1; }
+          state=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isDraft --jq .isDraft 2>/dev/null || echo absent)
+          case "$state" in
+            absent) gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "$TAG" --notes "Pipeline-Testlauf." ;;
+            true)   echo "::notice::Entwurf von release-please wird bestueckt" ;;
+            false)  echo "::error::UG7004 release $TAG is already published"; exit 1 ;;
+          esac
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
+        with:
+          tag_name: ${{ inputs.tag }}
+          draft: true
+          files: |
+            candidate/ugos-cli-*/*.tar.gz
+            candidate/ugos-cli-*/*.zip
+            candidate/ugos-cli-deb-*/*.deb
+      - name: Die Bytes vom Entwurf zurueckholen und gegen die Kandidaten pruefen
+        run: |
+          set -euo pipefail
+          # Ein erfolgreicher Upload ist keine Aussage darueber, was am Release
+          # liegt. Geprueft wird, was von dort zurueckkommt.
+          #
+          # download-artifact legt je Artefakt ein Verzeichnis an; die Liste
+          # wird zuerst flach gezogen, damit sie sich mit dem Release-Inhalt
+          # vergleichen laesst.
+          mkdir -p ./flat ./staged
+          find ./candidate -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.deb' \) \
+            -exec cp -f {} ./flat/ ';'
+          gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir ./staged --clobber
+
+          status=0
+          for path in ./flat/*; do
+            name=$(basename "$path")
+            if [[ ! -f "./staged/$name" ]]; then
+              echo "::error::UG7100 $name fehlt am Release"
+              status=1
+              continue
+            fi
+            cmp "$path" "./staged/$name"
+            echo "  ok $name"
+          done
+          (( status == 0 )) || exit 1
+
+          # Das Release darf auch nichts Zusaetzliches tragen: eine Datei, die
+          # kein Kandidat ist, waere aus einem frueheren Lauf uebrig.
+          for path in ./staged/*; do
+            name=$(basename "$path")
+            [[ -f "./flat/$name" ]] || {
+              echo "::error::UG7101 das Release traegt ein fremdes Asset: $name"
+              status=1; }
+          done
+          (( status == 0 )) || exit 1
+          echo "::notice::$(find ./flat -type f | wc -l | tr -d ' ') Assets geprueft"
+      - name: Als Vorabversion sichtbar machen, ohne latest
+        run: |
+          set -euo pipefail
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --draft=false --prerelease --latest=false
+          read -r draft pre < <(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
+            --json isDraft,isPrerelease --jq '"\(.isDraft) \(.isPrerelease)"')
+          [[ "$draft" == false && "$pre" == true ]] || {
+            echo "::error::UG7102 $TAG ist nicht als Vorabversion sichtbar (draft=$draft prerelease=$pre)"
+            exit 1; }
+          # `latest` ist kein Feld des Releases, sondern eine Auswahl des
+          # Repositories. Gefragt wird deshalb, was das Repository ausliefert.
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name 2>/dev/null || echo none)
+          [[ "$latest" != "$TAG" ]] || {
+            echo "::error::UG7103 $TAG steht bereits auf latest, obwohl noch kein Kanal lief"
+            exit 1; }
+          echo "::notice::$TAG ist sichtbar als Vorabversion, latest steht auf $latest"
+
 
   publish-apt:
     name: Ask the archive to publish
-    needs: [preflight, publish-release]
-    if: needs.preflight.outputs.publish_apt == 'true'
+    needs: [metadata, channel-preflight, stage]
+    if: needs.channel-preflight.outputs.publish_apt == 'true'
     runs-on: ubuntu-latest
     environment: release
     timeout-minutes: 30
     env:
-      VERSION: ${{ needs.preflight.outputs.version }}
+      VERSION: ${{ needs.metadata.outputs.version }}
       ARCHIVE_REPO: metaneutrons/apt-archive
       ARCHIVE_DOMAIN: metaneutrons.cc
       ARCHIVE_PROJECT: ugos-cli
@@ -412,7 +519,7 @@ jobs:
 
   update-homebrew:
     name: Update Homebrew Tap
-    needs: [preflight, build, publish-release]
+    needs: [metadata, channel-preflight, stage]
     runs-on: ubuntu-latest
     environment: release
     # Die Qualifikation im Tap fuehrt brew install und brew test auf zwei
@@ -428,7 +535,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          VERSION: ${{ needs.preflight.outputs.version }}
+          VERSION: ${{ needs.metadata.outputs.version }}
         run: |
           set -euo pipefail
 
@@ -565,7 +672,7 @@ jobs:
       - name: Verify the formula now on the tap
         env:
           GH_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-          VERSION: ${{ needs.preflight.outputs.version }}
+          VERSION: ${{ needs.metadata.outputs.version }}
         run: |
           set -euo pipefail
           published=$(gh api \
@@ -580,13 +687,13 @@ jobs:
 
   publish-aur:
     name: Publish AUR package
-    needs: [preflight, build, publish-release]
-    if: needs.preflight.outputs.publish_aur == 'true'
+    needs: [metadata, channel-preflight, stage]
+    if: needs.channel-preflight.outputs.publish_aur == 'true'
     runs-on: ubuntu-latest
     environment: release
     timeout-minutes: 20
     env:
-      VERSION: ${{ needs.preflight.outputs.version }}
+      VERSION: ${{ needs.metadata.outputs.version }}
       AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
       AUR_SSH_KNOWN_HOSTS: ${{ vars.AUR_SSH_KNOWN_HOSTS }}
     steps:
@@ -668,3 +775,37 @@ jobs:
           git add PKGBUILD .SRCINFO
           git commit -m "ugos-cli-bin ${VERSION}-1"
           git push origin HEAD:master
+
+  # Stufe 9. Befoerdern. Erst wenn jeder konfigurierte Kanal durch ist, wird
+  # aus der Vorabversion `latest`. Die Assets werden dabei nicht angefasst.
+  # Ein uebersprungener Kanal blockiert nicht, ein gescheiterter schon.
+  promote:
+    name: Auf latest befoerdern
+    needs: [metadata, stage, publish-apt, update-homebrew, publish-aur]
+    if: >-
+      always()
+      && needs.metadata.outputs.is_prerelease == 'false'
+      && needs.stage.result == 'success'
+      && needs.update-homebrew.result == 'success'
+      && needs.publish-apt.result != 'failure'
+      && needs.publish-aur.result != 'failure'
+      && needs.publish-apt.result != 'cancelled'
+      && needs.publish-aur.result != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: ${{ inputs.tag }}
+    steps:
+      - name: Vorabkennung entfernen und latest setzen
+        run: |
+          set -euo pipefail
+          gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease=false --latest
+          pre=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq .isPrerelease)
+          latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+          [[ "$pre" == false && "$latest" == "$TAG" ]] || {
+            echo "::error::UG7110 $TAG ist nicht befoerdert (prerelease=$pre latest=$latest)"
+            exit 1; }
+          echo "::notice::$TAG ist jetzt latest"
