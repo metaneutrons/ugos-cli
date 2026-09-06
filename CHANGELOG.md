@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.1](https://github.com/metaneutrons/ugos-cli/compare/v0.14.0...v0.14.1) (2026-09-06)
+
+
+### Bug Fixes
+
+* **release:** give the .deb a control member every tool can read ([#65](https://github.com/metaneutrons/ugos-cli/issues/65)) ([2873a27](https://github.com/metaneutrons/ugos-cli/commit/2873a27dcbe5939c45963f06d864da3c808a464d))
+
 ## [0.14.0](https://github.com/metaneutrons/ugos-cli/compare/v0.13.2...v0.14.0) (2026-09-06)
 
 
