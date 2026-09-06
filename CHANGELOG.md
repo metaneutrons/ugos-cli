@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.3](https://github.com/metaneutrons/ugos-cli/compare/v0.14.2...v0.14.3) (2026-09-06)
+
+
+### Reverts
+
+* the merge_group trigger, because this repository cannot have a queue ([#77](https://github.com/metaneutrons/ugos-cli/issues/77)) ([600e736](https://github.com/metaneutrons/ugos-cli/commit/600e736824297ce1dc69ffc760729966ba7159cb))
+
 ## [0.14.2](https://github.com/metaneutrons/ugos-cli/compare/v0.14.1...v0.14.2) (2026-09-06)
 
 

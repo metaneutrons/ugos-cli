@@ -2195,7 +2195,7 @@ checksum = "b6f5e870be6c3b371b77fe0ee0bafb859fa4964b4404c27de1d380043c4dda20"
 
 [[package]]
 name = "ugos-cli"
-version = "0.14.2"
+version = "0.14.3"
 dependencies = [
  "anyhow",
  "clap",
@@ -2211,7 +2211,7 @@ dependencies = [
 
 [[package]]
 name = "ugos-client"
-version = "0.14.2"
+version = "0.14.3"
 dependencies = [
  "aes-gcm",
  "base64 0.23.1",
@@ -2233,7 +2233,7 @@ dependencies = [
 
 [[package]]
 name = "ugos-mcp"
-version = "0.14.2"
+version = "0.14.3"
 dependencies = [
  "anyhow",
  "rmcp",
