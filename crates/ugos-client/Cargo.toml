@@ -1,6 +1,6 @@
 [package]
 name = "ugos-client"
-description = "Rust client library for the UGREEN NAS (UGOS) API — authentication, KVM virtual machine management, snapshots, networks, storage, and images"
+description = "Rust client library for the UGREEN NAS (UGOS) API: authentication, KVM virtual machine management, snapshots, networks, storage, and images"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

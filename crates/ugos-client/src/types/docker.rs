@@ -252,7 +252,7 @@ pub struct ComposeProject {
     /// Project name.
     #[serde(default)]
     pub name: String,
-    /// Storage path on the NAS (e.g. "/volume1/docker/<name>").
+    /// Storage path on the NAS (e.g. `/volume1/docker/<name>`).
     #[serde(default)]
     pub path: String,
     /// Project status (observed: 1 = up).
