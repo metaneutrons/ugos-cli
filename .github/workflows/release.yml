@@ -875,8 +875,16 @@ jobs:
   publish-apt:
     name: Ask the archive to publish
     needs: [metadata, channel-preflight, promote]
+    # Mit Statusfunktion, sonst greift das Ueberspringen durch. promote traegt
+    # `always()` und faengt ein uebersprungenes publish-crates ab; ohne
+    # `!cancelled()` erbt dieser Job das Ueberspringen trotzdem, obwohl sein
+    # direkter Vorgaenger erfolgreich war. Genau so ist der APT-Anstoss bei
+    # 0.13.2 ausgefallen: alle Zugaenge da, promote gruen, Job trotzdem
+    # uebersprungen.
     if: >-
-      needs.channel-preflight.outputs.publish_apt == 'true'
+      !cancelled()
+      && needs.promote.result == 'success'
+      && needs.channel-preflight.outputs.publish_apt == 'true'
       && needs.metadata.outputs.is_prerelease == 'false'
     runs-on: ubuntu-latest
     environment: release
