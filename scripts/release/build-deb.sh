@@ -38,7 +38,7 @@ while (($#)); do
     esac
 done
 
-for command in dpkg-deb install tar; do
+for command in dpkg-deb install tar ar; do
     command -v "$command" >/dev/null || fail UG7300 "required command is missing: $command"
 done
 
@@ -88,13 +88,30 @@ chmod 0644 "$root/DEBIAN/control"
 output="$output_dir/ugos-cli_${version}_${arch}.deb"
 # --root-owner-group keeps the package independent of the build user, and
 # SOURCE_DATE_EPOCH makes repeated builds byte-identical.
+#
+# --no-uniform-compression ist der Punkt: Ubuntus dpkg komprimiert beide
+# Mitglieder mit zstd, und ein `control.tar.zst` ist nicht ueberall lesbar.
+# Das APT-Archiv hat es rundheraus abgelehnt:
+#
+#   AR100 unsupported Debian control compression in 'control.tar.zst'
+#
+# Ohne uniform compression gilt -Z nur den Daten, das Control-Mitglied bleibt
+# gzip. Genau das erzeugt Debian selbst, und jedes Werkzeug liest es.
 SOURCE_DATE_EPOCH="$source_date_epoch" \
-    dpkg-deb --root-owner-group --build "$root" "$output" >/dev/null
+    dpkg-deb --root-owner-group --no-uniform-compression -Zxz \
+    --build "$root" "$output" >/dev/null
 
 # Prove the package says what it should before anything downstream trusts it.
 [[ $(dpkg-deb --field "$output" Version) == "${version}-1" ]] || \
     fail UG7302 'built package carries the wrong version'
 [[ $(dpkg-deb --field "$output" Architecture) == "$arch" ]] || \
     fail UG7302 'built package carries the wrong architecture'
+# Und dass die Mitglieder heissen, was Verbraucher lesen koennen. Die
+# Kompression ist Teil der Schnittstelle, nicht nur eine Bauentscheidung.
+members=$(ar t "$output")
+grep -qx 'control.tar.gz' <<< "$members" || \
+    fail UG7303 "control member is not gzip: $(tr '\n' ' ' <<< "$members")"
+grep -qxE 'data\.tar\.(xz|gz)' <<< "$members" || \
+    fail UG7303 "data member has an unexpected compression: $(tr '\n' ' ' <<< "$members")"
 
 printf '%s\n' "$output"
