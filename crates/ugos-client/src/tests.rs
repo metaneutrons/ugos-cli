@@ -488,6 +488,23 @@ fn result_wrapper_string() {
 // ── Token URL appending ─────────────────────────────────────────────
 
 #[test]
+fn append_token_percent_encodes_the_token() {
+    // Ein `&` wuerde die Query aufspalten, ein `#` alles danach abschneiden,
+    // ein `+` als Leerzeichen ankommen.
+    let url = UgosClient::append_token("https://nas/ugreen/v1/kvm/vm/list", "a&b#c+d/e");
+    assert!(
+        url.ends_with("?token=a%26b%23c%2Bd%2Fe"),
+        "token not encoded: {url}"
+    );
+}
+
+#[test]
+fn append_token_leaves_ordinary_tokens_readable() {
+    let url = UgosClient::append_token("https://nas/x", "ABC123");
+    assert!(url.ends_with("?token=ABC123"), "{url}");
+}
+
+#[test]
 fn append_token_no_query() {
     let url = "https://nas:9443/ugreen/v1/kvm/manager/ShowLocalVirtualList";
     let result = UgosClient::append_token(url, "ABC123");

@@ -10,14 +10,15 @@ repository.workspace = true
 keywords = ["ugreen", "nas", "ugos", "mcp", "kvm"]
 categories = ["command-line-utilities", "api-bindings"]
 readme = "../../README.md"
+# Nur ugos-client geht nach crates.io. Ohne diese Zeile wuerde ein
+# `cargo publish --workspace` die Binaerprogramme mitschicken. Sie gehoert in
+# [package]; unter [[bin]] ist sie ein unbekannter Schluessel, den cargo nur
+# als Warnung meldet und sonst ignoriert.
+publish = false
 
 [[bin]]
 name = "ugos-mcp"
 path = "src/main.rs"
-
-# Nur ugos-client geht nach crates.io. Ohne diese Zeile wuerde ein
-# `cargo publish --workspace` die Binaerprogramme mitschicken.
-publish = false
 
 [lints]
 workspace = true

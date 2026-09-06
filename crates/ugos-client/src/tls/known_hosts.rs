@@ -64,13 +64,13 @@ pub fn put(host: &str, port: u16, fp: &CertFingerprint) -> Result<()> {
     let path = store_path()?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)
-            .map_err(|e| UgosError::Encryption(format!("creating {}: {e}", parent.display())))?;
+            .map_err(|e| UgosError::io(format!("creating {}", parent.display()), e))?;
     }
     let mut all = read_all();
     let _previous = all.insert(key(host, port), fp.to_hex());
     let json = serde_json::to_string_pretty(&all)?;
     std::fs::write(&path, json)
-        .map_err(|e| UgosError::Encryption(format!("writing {}: {e}", path.display())))?;
+        .map_err(|e| UgosError::io(format!("writing {}", path.display()), e))?;
     Ok(())
 }
 
@@ -87,7 +87,7 @@ pub fn forget(host: &str, port: u16) -> Result<bool> {
     let path = store_path()?;
     let json = serde_json::to_string_pretty(&all)?;
     std::fs::write(&path, json)
-        .map_err(|e| UgosError::Encryption(format!("writing {}: {e}", path.display())))?;
+        .map_err(|e| UgosError::io(format!("writing {}", path.display()), e))?;
     Ok(true)
 }
 

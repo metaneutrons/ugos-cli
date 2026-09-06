@@ -247,7 +247,15 @@ impl ServerCertVerifier for LearningVerifier {
         _ocsp_response: &[u8],
         _now: UnixTime,
     ) -> std::result::Result<ServerCertVerified, RustlsError> {
-        if let Ok(mut slot) = self.seen.lock() {
+        // Auch bei vergiftetem Mutex eintragen. Wurde die Beobachtung sonst
+        // verworfen, meldete der Aufrufer "no certificate seen during
+        // handshake" und zeigte damit auf den Handshake statt auf den Panic
+        // in einem anderen Thread, der die eigentliche Ursache war.
+        {
+            let mut slot = self
+                .seen
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner);
             *slot = Some(CertFingerprint::of(end_entity.as_ref()));
         }
         Ok(ServerCertVerified::assertion())
@@ -350,7 +358,7 @@ pub async fn probe_fingerprint(host: &str, port: u16) -> Result<CertFingerprint>
 
     let observed = seen
         .lock()
-        .map_err(|_| UgosError::Encryption("fingerprint lock poisoned".into()))?;
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     observed.ok_or_else(|| UgosError::Encryption("no certificate seen during handshake".into()))
 }
 
