@@ -77,11 +77,11 @@ impl RequestKey {
 
         let mut iv = [0u8; IV_LEN];
         rsa::rand_core::RngCore::fill_bytes(&mut rsa::rand_core::OsRng, &mut iv);
-        let nonce = Nonce::from_slice(&iv);
+        let nonce = Nonce::from(iv);
 
         let sealed = cipher
             .encrypt(
-                nonce,
+                &nonce,
                 Payload {
                     msg: plaintext.as_bytes(),
                     aad: &[],
@@ -111,11 +111,12 @@ impl RequestKey {
 
         let cipher = Aes256Gcm::new_from_slice(&self.key)
             .map_err(|e| UgosError::Encryption(format!("AES key: {e}")))?;
-        let nonce = Nonce::from_slice(&raw[..IV_LEN]);
+        let nonce = Nonce::try_from(&raw[..IV_LEN])
+            .map_err(|e| UgosError::Encryption(format!("nonce: {e}")))?;
 
         let plain = cipher
             .decrypt(
-                nonce,
+                &nonce,
                 Payload {
                     msg: &raw[IV_LEN..],
                     aad: &[],
