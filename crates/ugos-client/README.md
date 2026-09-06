@@ -24,6 +24,12 @@ Part of [ugos-cli](https://github.com/metaneutrons/ugos-cli). See that
 repository for the command line tool, the MCP server and the full
 documentation.
 
+## Errors
+
+`UgosError` is `#[non_exhaustive]`. Match the variants you handle and keep a
+`_` arm for the rest, so a new error kind does not break your build. `Io`
+covers filesystem failures and is deliberately separate from `Encryption`.
+
 ## Licence
 
 GPL-3.0-or-later, deliberately, where a library would usually carry the LGPL.
