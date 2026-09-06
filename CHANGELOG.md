@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.2](https://github.com/metaneutrons/ugos-cli/compare/v0.14.1...v0.14.2) (2026-09-06)
+
+
+### Bug Fixes
+
+* **client:** ship the licence and fix what docs.rs would render wrong ([#67](https://github.com/metaneutrons/ugos-cli/issues/67)) ([be4f27a](https://github.com/metaneutrons/ugos-cli/commit/be4f27aff878ecfcef12e7c13423f63dfacd4e88))
+
 ## [0.14.1](https://github.com/metaneutrons/ugos-cli/compare/v0.14.0...v0.14.1) (2026-09-06)
 
 
