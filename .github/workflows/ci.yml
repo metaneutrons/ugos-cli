@@ -2,11 +2,6 @@ name: CI
 
 on:
   pull_request:
-  # Mandatory for the merge queue: a queued pull request is built on a
-  # temporary ref, and GitHub reports the required check from that run alone.
-  # Without this trigger every entry waits for a "CI Success" that never
-  # arrives and falls out of the queue when the response timeout expires.
-  merge_group:
   push:
     branches: [main]
   workflow_dispatch:
@@ -97,9 +92,6 @@ jobs:
 
   commit-hygiene:
     name: Commit-Hygiene
-    # There is no pull request in a merge_group run, and the title was already
-    # checked on the way into the queue. `ci-success` accepts a skipped job, so
-    # the required check still reports.
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     steps:
