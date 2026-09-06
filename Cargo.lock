@@ -2212,6 +2212,7 @@ dependencies = [
  "der",
  "dirs",
  "hex",
+ "http",
  "md-5",
  "reqwest",
  "rsa",

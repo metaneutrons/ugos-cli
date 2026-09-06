@@ -56,6 +56,19 @@ pub enum UgosError {
     #[error(transparent)]
     Json(#[from] serde_json::Error),
 
+    /// Filesystem failure while reading or writing a local file.
+    ///
+    /// Kept apart from [`UgosError::Encryption`] on purpose. A download into
+    /// an unwritable directory used to report an encryption error, which sent
+    /// the reader looking at TLS and keys instead of at the directory.
+    #[error("{context}")]
+    Io {
+        /// What was being attempted, including the path.
+        context: String,
+        /// The underlying filesystem error.
+        source: std::io::Error,
+    },
+
     /// VM or resource not found by display name.
     #[error("{kind} not found: {name}")]
     NotFound {
@@ -64,6 +77,16 @@ pub enum UgosError {
         /// The name that was looked up.
         name: String,
     },
+}
+
+impl UgosError {
+    /// Wrap a filesystem error with what was being attempted.
+    pub(crate) fn io(context: impl Into<String>, source: std::io::Error) -> Self {
+        Self::Io {
+            context: context.into(),
+            source,
+        }
+    }
 }
 
 /// Convenience alias used throughout the library.

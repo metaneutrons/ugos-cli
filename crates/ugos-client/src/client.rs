@@ -3,6 +3,7 @@
 //! [`UgosClient`] wraps a [`reqwest::Client`] with automatic token
 //! management and transparent re-authentication on token expiry (code 1024).
 
+use std::future::Future;
 use std::sync::Arc;
 
 use serde::de::DeserializeOwned;
@@ -22,6 +23,8 @@ pub struct UgosClient {
     session: Arc<RwLock<Session>>,
     /// Cached RSA key, fetched on first use by an encrypted request.
     public_key: Arc<RwLock<Option<rsa::RsaPublicKey>>>,
+    /// Serialises re-authentication so one expiry causes one login.
+    reauth: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl UgosClient {
@@ -50,6 +53,7 @@ impl UgosClient {
             creds,
             session: Arc::new(RwLock::new(session)),
             public_key: Arc::new(RwLock::new(None)),
+            reauth: Arc::new(tokio::sync::Mutex::new(())),
         })
     }
 
@@ -75,6 +79,7 @@ impl UgosClient {
             creds,
             session: Arc::new(RwLock::new(session)),
             public_key: Arc::new(RwLock::new(None)),
+            reauth: Arc::new(tokio::sync::Mutex::new(())),
         })
     }
 
@@ -96,7 +101,12 @@ impl UgosClient {
     }
 
     /// Append `?token=` (or `&token=`) to a URL.
+    ///
+    /// The token is percent-encoded. It is an opaque server-issued string,
+    /// and a `&` in it would split the query, a `#` would drop everything
+    /// after it, a `+` would arrive as a space.
     pub(crate) fn append_token(url: &str, token: &str) -> String {
+        let token = crate::crypto::urlencode_component(token);
         if url.contains('?') {
             format!("{url}&token={token}")
         } else {
@@ -124,14 +134,7 @@ impl UgosClient {
         path: &str,
         params: &[(&str, &str)],
     ) -> Result<T> {
-        let result = self.do_get::<T>(path, params).await;
-
-        if matches!(&result, Err(UgosError::LoginExpired)) {
-            self.re_auth().await?;
-            return self.do_get(path, params).await;
-        }
-
-        result
+        self.retrying(|| self.do_get::<T>(path, params)).await
     }
 
     /// Perform a POST request with a JSON body.
@@ -144,14 +147,7 @@ impl UgosClient {
         path: &str,
         body: &B,
     ) -> Result<T> {
-        let result = self.do_post::<T, B>(path, body).await;
-
-        if matches!(&result, Err(UgosError::LoginExpired)) {
-            self.re_auth().await?;
-            return self.do_post(path, body).await;
-        }
-
-        result
+        self.retrying(|| self.do_post::<T, B>(path, body)).await
     }
 
     /// Perform a PUT request with a JSON body.
@@ -167,16 +163,8 @@ impl UgosClient {
         path: &str,
         body: &B,
     ) -> Result<T> {
-        let result = self
-            .do_request::<T, B>(reqwest::Method::PUT, path, body)
-            .await;
-
-        if matches!(&result, Err(UgosError::LoginExpired)) {
-            self.re_auth().await?;
-            return self.do_request(reqwest::Method::PUT, path, body).await;
-        }
-
-        result
+        self.retrying(|| self.do_request::<T, B>(reqwest::Method::PUT, path, body))
+            .await
     }
 
     /// Perform a DELETE request that carries a JSON body.
@@ -192,16 +180,8 @@ impl UgosClient {
         path: &str,
         body: &B,
     ) -> Result<T> {
-        let result = self
-            .do_request::<T, B>(reqwest::Method::DELETE, path, body)
-            .await;
-
-        if matches!(&result, Err(UgosError::LoginExpired)) {
-            self.re_auth().await?;
-            return self.do_request(reqwest::Method::DELETE, path, body).await;
-        }
-
-        result
+        self.retrying(|| self.do_request::<T, B>(reqwest::Method::DELETE, path, body))
+            .await
     }
 
     /// Internal request with a JSON body for methods other than POST.
@@ -272,6 +252,9 @@ impl UgosClient {
         path: &str,
         form: reqwest::multipart::Form,
     ) -> Result<T> {
+        // Ein multipart::Form laesst sich nicht klonen, deshalb kein
+        // retrying() hier: bei Ablauf wird einmal neu angemeldet und der
+        // Aufrufer schickt das Formular erneut.
         let token = self.session.read().await.token.clone();
         let url = Self::append_token(&self.url_for(path), &token);
 
@@ -297,15 +280,60 @@ impl UgosClient {
         path: &str,
         params: &[(&str, &str)],
     ) -> Result<reqwest::Response> {
+        self.retrying(|| self.do_get_bytes(path, params)).await
+    }
+
+    /// One attempt at a byte GET.
+    ///
+    /// UGOS answers a failed download with HTTP 200 and the ordinary
+    /// `{code, msg}` envelope. Only the status was checked here, so an
+    /// expired session ended up written into the target file and reported as
+    /// a successful download. A JSON content type is now read back and
+    /// decoded; anything that is not an error envelope is handed on
+    /// unchanged, because a downloaded file may legitimately be JSON.
+    async fn do_get_bytes(&self, path: &str, params: &[(&str, &str)]) -> Result<reqwest::Response> {
         let token = self.session.read().await.token.clone();
         let url = Self::append_token(&self.url_for(path), &token);
-        Ok(self
+        let resp = self
             .http
             .get(&url)
             .query(params)
             .send()
             .await?
-            .error_for_status()?)
+            .error_for_status()?;
+
+        let is_json = resp
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|v| v.to_str().ok())
+            .is_some_and(|v| v.starts_with("application/json"));
+        if !is_json {
+            return Ok(resp);
+        }
+
+        let bytes = resp.bytes().await?;
+        if let Ok(envelope) = serde_json::from_slice::<ApiResponse<serde_json::Value>>(&bytes)
+            && envelope.code != 200
+        {
+            // Denselben Weg wie jede andere Antwort: decode() bildet den Code
+            // auf die passende Variante ab, 1024 also auf LoginExpired, das
+            // retrying() dann als Wiederholungsgrund erkennt.
+            return match Self::decode::<serde_json::Value>(envelope) {
+                Err(e) => Err(e),
+                Ok(_) => Err(UgosError::Api {
+                    code: 0,
+                    msg: "unexpected envelope in a byte response".into(),
+                }),
+            };
+        }
+        // Kein Fehlerumschlag: die Bytes sind der Inhalt. Sie wurden fuer die
+        // Pruefung gelesen und werden als neue Antwort zurueckgereicht.
+        Ok(reqwest::Response::from(
+            http::Response::builder()
+                .status(reqwest::StatusCode::OK)
+                .body(bytes)
+                .map_err(|e| UgosError::Encryption(format!("rebuilding response: {e}")))?,
+        ))
     }
 
     /// POST a raw body, which is how the file manager takes file contents.
@@ -343,6 +371,25 @@ impl UgosClient {
             .json()
             .await?;
         Self::decode(resp)
+    }
+
+    /// Run an operation, and once more if the token expired in between.
+    ///
+    /// Stand vorher viermal ausgeschrieben und fehlte in sechs weiteren
+    /// Methoden. Wer eine neue Anfrageart ergaenzt, bekommt das Verhalten
+    /// jetzt dadurch, dass er hier durchgeht.
+    async fn retrying<T, F, Fut>(&self, mut op: F) -> Result<T>
+    where
+        F: FnMut() -> Fut,
+        Fut: Future<Output = Result<T>>,
+    {
+        match op().await {
+            Err(UgosError::LoginExpired) => {
+                self.re_auth().await?;
+                op().await
+            }
+            other => other,
+        }
     }
 
     /// The RSA key used to wrap per-request AES keys.
@@ -511,9 +558,27 @@ impl UgosClient {
 
     /// Re-authenticate and update the stored session.
     async fn re_auth(&self) -> Result<()> {
+        // Ein Ablauf trifft alle laufenden Anfragen gleichzeitig. Ohne diese
+        // Sperre meldet sich jede einzeln neu an, und jede Anmeldung kann das
+        // Token der vorigen entwerten. Wer die Sperre bekommt, meldet sich an;
+        // wer wartet, prueft danach, ob das noch noetig ist.
+        let _guard = self.reauth.lock().await;
+        let token_before = self.session.read().await.token.clone();
+
         tracing::info!("token expired, re-authenticating");
         let new_session = auth::login(&self.http, &self.base_url, &self.creds).await?;
+        {
+            let current = self.session.read().await;
+            if current.token != token_before {
+                // Waehrend des Wartens hat schon jemand erneuert.
+                return Ok(());
+            }
+        }
         *self.session.write().await = new_session;
+        // Der RSA-Schluessel gehoert zur Sitzung. Bliebe er stehen, wickelte
+        // jede spaetere verschluesselte Anfrage ihren AES-Schluessel mit dem
+        // Schluessel der vorigen Anmeldung ein.
+        *self.public_key.write().await = None;
         Ok(())
     }
 }

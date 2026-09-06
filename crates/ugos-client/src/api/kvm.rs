@@ -732,10 +732,10 @@ impl KvmApi for UgosClient {
         let file_name = unique_file_name(self, &wanted).await?;
 
         let mut file = std::fs::File::open(path)
-            .map_err(|e| UgosError::Encryption(format!("opening '{}': {e}", path.display())))?;
+            .map_err(|e| UgosError::io(format!("opening '{}'", path.display()), e))?;
         let size = file
             .metadata()
-            .map_err(|e| UgosError::Encryption(format!("reading file size: {e}")))?
+            .map_err(|e| UgosError::io("reading file size", e))?
             .len();
         ensure_nonempty(size)?;
 
@@ -751,7 +751,7 @@ impl KvmApi for UgosClient {
             while filled < buf.len() {
                 let n = file
                     .read(&mut buf[filled..])
-                    .map_err(|e| UgosError::Encryption(format!("reading chunk {index}: {e}")))?;
+                    .map_err(|e| UgosError::io(format!("reading chunk {index}"), e))?;
                 if n == 0 {
                     break;
                 }
@@ -797,11 +797,11 @@ impl KvmApi for UgosClient {
         let mut resp = plain.get(url).send().await?.error_for_status()?;
 
         let mut out = std::fs::File::create(&temp)
-            .map_err(|e| UgosError::Encryption(format!("creating '{}': {e}", temp.display())))?;
+            .map_err(|e| UgosError::io(format!("creating '{}'", temp.display()), e))?;
         let mut downloaded = 0usize;
         while let Some(chunk) = resp.chunk().await? {
             out.write_all(&chunk)
-                .map_err(|e| UgosError::Encryption(format!("writing download: {e}")))?;
+                .map_err(|e| UgosError::io("writing download", e))?;
             downloaded += chunk.len();
             progress(downloaded, 0);
         }
@@ -952,6 +952,23 @@ fn safe_download_name(url: &str, iso_name: &str) -> String {
 /// included — fails instead of being written through.
 ///
 /// Returns the directory and the file path; the caller removes both.
+/// Create a directory that is private from the moment it exists.
+///
+/// `create_dir` followed by a `chmod` leaves a window in which the directory
+/// carries the umask default, and the chmod can fail without anyone noticing.
+/// The mode belongs in the creating call.
+fn new_private_dir(path: &std::path::Path) -> std::io::Result<()> {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        std::fs::DirBuilder::new().mode(0o700).create(path)
+    }
+    #[cfg(not(unix))]
+    {
+        std::fs::DirBuilder::new().create(path)
+    }
+}
+
 fn create_scratch_file(file_name: &str) -> Result<(std::path::PathBuf, std::path::PathBuf)> {
     use std::sync::atomic::{AtomicU64, Ordering};
     // The clock alone is not enough: two calls can land in the same tick, and
@@ -969,7 +986,7 @@ fn create_scratch_file(file_name: &str) -> Result<(std::path::PathBuf, std::path
         let seq = SEQUENCE.fetch_add(1, Ordering::Relaxed);
         let candidate =
             std::env::temp_dir().join(format!("ugos-cli-{}-{stamp}-{seq}", std::process::id()));
-        match std::fs::create_dir(&candidate) {
+        match new_private_dir(&candidate) {
             Ok(()) => {
                 dir = candidate;
                 last = None;
@@ -993,12 +1010,6 @@ fn create_scratch_file(file_name: &str) -> Result<(std::path::PathBuf, std::path
         )));
     }
 
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700));
-    }
-
     let path = dir.join(file_name);
     // Prove the path is fresh before anything is written to it. The handle
     // is dropped straight away; the caller opens the file for the download.
@@ -1006,7 +1017,7 @@ fn create_scratch_file(file_name: &str) -> Result<(std::path::PathBuf, std::path
         .write(true)
         .create_new(true)
         .open(&path)
-        .map_err(|e| UgosError::Encryption(format!("creating '{}': {e}", path.display())))?;
+        .map_err(|e| UgosError::io(format!("creating '{}'", path.display()), e))?;
     drop(probe);
 
     Ok((dir, path))
