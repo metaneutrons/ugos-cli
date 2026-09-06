@@ -247,10 +247,10 @@ impl ServerCertVerifier for LearningVerifier {
         _ocsp_response: &[u8],
         _now: UnixTime,
     ) -> std::result::Result<ServerCertVerified, RustlsError> {
-        // Auch bei vergiftetem Mutex eintragen. Wurde die Beobachtung sonst
-        // verworfen, meldete der Aufrufer "no certificate seen during
-        // handshake" und zeigte damit auf den Handshake statt auf den Panic
-        // in einem anderen Thread, der die eigentliche Ursache war.
+        // Record it even when the mutex is poisoned. Dropping the observation
+        // made the caller report "no certificate seen during handshake",
+        // pointing at the handshake instead of at the panic in another thread
+        // that was the actual cause.
         {
             let mut slot = self
                 .seen

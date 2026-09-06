@@ -245,9 +245,9 @@ mod tests {
 
     #[test]
     fn md5_matches_reference_vectors() {
-        // RFC 1321, Anhang A.5. Der Wert geht als X-Ugreen-Security-Key
-        // ueber die Leitung, ein Wechsel der Hash-Bibliothek darf ihn also
-        // nicht veraendern.
+        // RFC 1321, appendix A.5. The value goes over the wire as
+        // X-Ugreen-Security-Key, so switching the hash library must not change
+        // it.
         assert_eq!(md5_hex(""), "d41d8cd98f00b204e9800998ecf8427e");
         assert_eq!(md5_hex("abc"), "900150983cd24fb0d6963f7d28e17f72");
     }

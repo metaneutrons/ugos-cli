@@ -7,13 +7,13 @@ on:
         description: Existing release tag to build and publish.
         required: true
         type: string
-    # Alle als optional deklariert, auch der Homebrew-Token. Die Werte liegen
-    # im Environment "release", nicht als Repository-Secrets, und `secrets:
-    # inherit` reicht nur Repository- und Organisations-Secrets weiter. Ein
-    # `required: true` laesst deshalb jeden Job scheitern, der kein
-    # `environment: release` fuehrt, noch bevor er etwas tut. Die Jobs, die den
-    # Token brauchen, holen ihn ueber ihr Environment; preflight prueft ihn
-    # dort, bevor irgendetwas Oeffentliches geschieht.
+    # All declared optional, the Homebrew token included. The values live in
+    # the "release" environment rather than as repository secrets, and
+    # `secrets: inherit` forwards only repository and organisation secrets. A
+    # `required: true` would therefore fail every job that carries no
+    # `environment: release`, before it does anything at all. The jobs that
+    # need the token read it through their environment; preflight proves it
+    # there, before anything public happens.
     secrets:
       HOMEBREW_APP_PRIVATE_KEY:
         required: false
@@ -36,11 +36,11 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Stufe 1. Identitaet feststellen. Bewusst ohne Environment und ohne
-  # Secrets: dieser Job muss auch fuer einen Prerelease-Tag laufen, und er
-  # veraendert nichts.
+  # Stage 1. Establish the identity. Deliberately without an environment and
+  # without secrets: this job has to run for a prerelease tag as well, and it
+  # changes nothing.
   metadata:
-    name: Release-Identitaet feststellen
+    name: Establish the release identity
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
@@ -54,7 +54,7 @@ jobs:
         with:
           ref: ${{ inputs.tag }}
           fetch-depth: 0
-      - name: Version, Vorabkennung und Bauzeit ableiten
+      - name: Derive version, prerelease marker and build time
         id: identity
         env:
           RELEASE_TAG: ${{ inputs.tag }}
@@ -65,10 +65,10 @@ jobs:
             echo "::error::UG7001 tag must be a canonical vX.Y.Z release tag: $RELEASE_TAG"
             exit 1
           fi
-          # Der Release-Kern ohne Vorabsuffix. Nur er steht in Cargo.toml und
-          # nur er darf in Arch' pkgver landen, wo ein Bindestrich verboten
-          # ist. Die Release-Identitaet bleibt der vollstaendige Tag, aus dem
-          # jede Download-URL gebaut wird.
+          # The release core without the prerelease suffix. Only it appears in
+          # Cargo.toml, and only it may end up in Arch's pkgver, where a hyphen
+          # is forbidden. The release identity stays the full tag, and every
+          # download URL is built from that.
           version="${RELEASE_TAG#v}"
           core="${version%%-*}"
           if [[ "$core" == "$version" ]]; then
@@ -81,21 +81,21 @@ jobs:
             echo "::error::UG7002 tag $RELEASE_TAG does not match Cargo.toml version $manifest"
             exit 1
           fi
-          # Der Tag muss auf den Commit zeigen, aus dem der Lauf kommt, oder
-          # der Lauf kommt vom geschuetzten Default-Branch. Beides ist
-          # gleichwertig, denn gebaut wird ohnehin der Tag: jeder Build-Job
-          # checkt `inputs.tag` aus. Was diese Pruefung zusaetzlich sichert,
-          # ist die Herkunft der Workflow-Datei, und dafuer ist der
-          # Default-Branch die zweite legitime Quelle. Ohne diesen Zweig laesst
-          # sich eine Vorabversion nach einem Pipeline-Fix nie wieder aufnehmen,
-          # weil der Fix per Definition nicht am alten Tag liegt.
+          # The tag has to point at the commit the run comes from, or the run
+          # comes from the protected default branch. The two are equivalent,
+          # because the tag is what gets built either way: every build job
+          # checks out `inputs.tag`. What this check adds is the provenance of
+          # the workflow file, and for that the default branch is the second
+          # legitimate source. Without that branch a prerelease could never be
+          # resumed after a pipeline fix, because the fix by definition does
+          # not sit at the old tag.
           tagged=$(git rev-parse "${RELEASE_TAG}^{}")
           if [[ "$tagged" != "$GITHUB_SHA" && "$GITHUB_REF_NAME" != "$DEFAULT_BRANCH" ]]; then
-            echo "::error::UG7003 tag $RELEASE_TAG zeigt auf $tagged, der Lauf kommt aus $GITHUB_SHA auf $GITHUB_REF_NAME"
+            echo "::error::UG7003 tag $RELEASE_TAG points at $tagged, the run comes from $GITHUB_SHA on $GITHUB_REF_NAME"
             exit 1
           fi
           if [[ "$tagged" != "$GITHUB_SHA" ]]; then
-            echo "::notice::Wiederaufnahme von $DEFAULT_BRANCH; gebaut wird weiterhin $RELEASE_TAG"
+            echo "::notice::resuming from $DEFAULT_BRANCH; $RELEASE_TAG is still what gets built"
           fi
           # Deterministic builds need a fixed clock; the tagged commit is it.
           epoch=$(git log -1 --pretty=%ct)
@@ -104,36 +104,32 @@ jobs:
             echo "source_date_epoch=$epoch"
             echo "is_prerelease=$is_prerelease"
           } >> "$GITHUB_OUTPUT"
-      - name: Ein bereits veroeffentlichtes Release nicht mehr anfassen
+      - name: Never touch a release that is already published
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          # Der Entwurf von release-please ist der Normalfall. Ein Release,
-          # das bereits ausgeliefert ist, wird nicht ueberschrieben: dessen
-          # Metadaten liegen schon bei den Nutzern.
-          # Ein Entwurf ist der Normalfall, eine Vorabversion ist der Zustand
-          # nach einem gescheiterten Kanal und ausdruecklich wiederaufnehmbar:
-          # sie traegt kein `latest` und wird von niemandem automatisch
-          # installiert. Genau dafuer ist die Stufung da. Abgebrochen wird nur
-          # bei einem befoerderten Release, dessen Metadaten schon bei den
-          # Nutzern liegen.
+          # A draft is the normal case; a prerelease is the state after a
+          # failed channel and is explicitly resumable, because it carries no
+          # `latest` and nobody installs it automatically. That is what the
+          # staging is for. The only abort is on a promoted release, whose
+          # metadata already sits with users.
           state=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
             --json isDraft,isPrerelease --jq '"\(.isDraft) \(.isPrerelease)"' 2>/dev/null || echo absent)
           case "$state" in
-            absent)       echo "::notice::kein Release unter $TAG, Stufe 7 legt einen Entwurf an" ;;
-            "true "*)     echo "::notice::Entwurf unter $TAG vorhanden" ;;
-            "false true") echo "::notice::Vorabversion unter $TAG wird wieder aufgenommen" ;;
+            absent)       echo "::notice::no release under $TAG, stage 7 creates a draft" ;;
+            "true "*)     echo "::notice::a draft exists under $TAG" ;;
+            "false true") echo "::notice::resuming the prerelease under $TAG" ;;
             "false false") echo "::error::UG7004 release $TAG is already promoted"; exit 1 ;;
             *)            echo "::error::UG7005 unexpected release state for $TAG: $state"; exit 1 ;;
           esac
 
-  # Stufe 6. Kanal-Preflight. Prueft ausschliesslich Zugaenge, veraendert
-  # nichts. Ein Vorabtag erreicht Stufe 8 nie und braucht die Zugaenge nicht,
-  # deshalb faellt dieser Job dort bewusst weg.
+  # Stage 6. Channel preflight. Proves access and nothing else; it changes
+  # nothing. A prerelease tag never reaches stage 8 and needs no channel
+  # access, so this job is deliberately absent there.
   channel-preflight:
-    name: Kanal-Zugaenge pruefen
+    name: Prove the channel credentials
     needs: [metadata]
     if: needs.metadata.outputs.is_prerelease == 'false'
     runs-on: ubuntu-latest
@@ -147,9 +143,9 @@ jobs:
       publish_aur: ${{ steps.channels.outputs.aur }}
       publish_crates: ${{ steps.crates.outputs.crates }}
     steps:
-      # Ein Token mit ausdruecklichen Rechte-Eingaben. Fehlt der Installation
-      # eines davon, scheitert schon die Praegung; ein spaeteres Scheitern
-      # mitten im Schreiben waere der schlechtere Ort.
+      # A token with explicit permission inputs. If the installation lacks one
+      # of them, minting already fails; failing later, halfway through a write,
+      # would be the worse place.
       - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         id: tap-token
         with:
@@ -163,23 +159,23 @@ jobs:
           permission-checks: read
           permission-statuses: read
           permission-administration: read
-      - name: Die Installation pruefen, nicht die Rolle des Aufrufers
+      - name: Check the installation, not the caller's role
         env:
           GH_TOKEN: ${{ steps.tap-token.outputs.token }}
         run: |
           set -euo pipefail
-          # `permissions.push` einer Repository-Antwort beschreibt die Rolle
-          # des Aufrufers, nicht die Zusage der Installation. Gefragt wird
-          # deshalb, was die Installation tatsaechlich erreicht.
+          # `permissions.push` in a repository response describes the caller's
+          # role, not what the installation is allowed to do. So the question
+          # asked is what the installation actually reaches.
           reached=$(gh api installation/repositories --jq '[.repositories[].full_name] | sort | join(",")')
           if [[ "$reached" != "metaneutrons/homebrew-tap" ]]; then
-            echo "::error::UG7011 die Installation erreicht '$reached' statt genau metaneutrons/homebrew-tap"
+            echo "::error::UG7011 the installation reaches '$reached' instead of exactly metaneutrons/homebrew-tap"
             exit 1
           fi
-          # Der Bot ueber seinen oeffentlichen Endpunkt. `/user` gilt fuer ein
-          # Installations-Token nicht und antwortete irrefuehrend.
+          # The bot through its public endpoint. `/user` does not apply to an
+          # installation token and answered misleadingly.
           bot=$(gh api "users/metaneutrons-homebrew%5Bbot%5D" --jq '"\(.login) \(.id)"')
-          echo "::notice::Installation erreicht $reached, Bot $bot"
+          echo "::notice::installation reaches $reached, bot $bot"
       - name: Decide which package channels are configured
         id: channels
         env:
@@ -193,13 +189,13 @@ jobs:
           # skips it; partial configuration is an error, because it usually
           # means a secret was renamed and would fail halfway through.
           #
-          # Auf stdout steht nichts als true oder false. Die Ausgabe wandert
-          # in eine Zuweisung in GITHUB_OUTPUT, und eine zweite Zeile macht
-          # daraus einen mehrzeiligen Wert, den das Dateikommando ablehnt.
-          # Meldungen gehen deshalb nach stderr; im Log stehen sie genauso.
+          # stdout carries nothing but true or false. The output goes into an
+          # assignment in GITHUB_OUTPUT, and a second line would turn it into a
+          # multi-line value the file command rejects. Messages therefore go to
+          # stderr; they read the same way in the log.
           #
-          # Nur das App-Paar: Signaturschluessel und R2-Zugang liegen im
-          # Archiv-Repository, nicht hier. Kein gespeichertes PAT.
+          # The App pair only: signing key and R2 access live in the archive
+          # repository, not here. No stored PAT.
           apt_names=(ARCHIVE_DISPATCH_CLIENT_ID ARCHIVE_DISPATCH_PRIVATE_KEY)
           aur_names=(AUR_SSH_PRIVATE_KEY AUR_SSH_KNOWN_HOSTS)
 
@@ -220,33 +216,33 @@ jobs:
             fi
           }
 
-          # Zuweisung und Aufruf muessen getrennt stehen. In der Form
-          # echo "apt=$(decide ...)" bleibt ein Fehlschlag von decide folgenlos,
-          # weil der Exit-Status der von echo ist; ein nur halb konfigurierter
-          # Kanal liefe dann trotz UG7020 weiter.
+          # Assignment and call have to stand apart. Written as
+          # echo "apt=$(decide ...)" a failure of decide stays without effect,
+          # because the exit status is echo's; a half-configured channel would
+          # then carry on despite UG7020.
           apt=$(decide APT "${apt_names[@]}")
           aur=$(decide AUR "${aur_names[@]}")
           echo "apt=$apt" >> "$GITHUB_OUTPUT"
           echo "aur=$aur" >> "$GITHUB_OUTPUT"
-      - name: Gibt es das Crate auf crates.io schon?
+      - name: Does the crate exist on crates.io yet?
         id: crates
         run: |
           set -euo pipefail
-          # Trusted Publishing setzt ein bestehendes Crate voraus; die erste
-          # Version wird einmalig von Hand veroeffentlicht. Solange sie fehlt,
-          # ist der Kanal nicht konfiguriert und wird uebersprungen.
+          # Trusted publishing presupposes an existing crate; the first version
+          # is published once by hand. While it is missing, the channel counts
+          # as unconfigured and is skipped.
           code=$(curl -sS -o /dev/null -w '%{http_code}' --max-time 30 \
             -H 'User-Agent: ugos-cli release pipeline' \
             'https://crates.io/api/v1/crates/ugos-client')
           case "$code" in
             200) echo "crates=true" >> "$GITHUB_OUTPUT" ;;
-            404) echo "::notice::ugos-client gibt es auf crates.io noch nicht; der Kanal wird uebersprungen"
+            404) echo "::notice::ugos-client does not exist on crates.io yet; the channel is skipped"
                  echo "crates=false" >> "$GITHUB_OUTPUT" ;;
-            *)   echo "::error::UG7030 crates.io antwortet mit HTTP $code"; exit 1 ;;
+            *)   echo "::error::UG7030 crates.io answers with HTTP $code"; exit 1 ;;
           esac
-      # Kein /api/v1/me als Vorpruefung: das antwortet auch mit gueltigem
-      # Token 403. Geprueft wird der spaetere Weg selbst, indem ein
-      # kurzlebiges Token ausgestellt und verworfen wird.
+      # No /api/v1/me as a precheck: that answers 403 even with a valid token.
+      # What gets proven is the later path itself, by minting a short-lived
+      # token and discarding it.
       - uses: rust-lang/crates-io-auth-action@c6f97d42243bad5fab37ca0427f495c86d5b1a18 # v1.0.5
         if: steps.crates.outputs.crates == 'true'
 
@@ -274,13 +270,13 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           ref: ${{ inputs.tag }}
-      # Kein dtolnay/rust-toolchain: die Version steht in rust-toolchain.toml
-      # und rustup installiert sie daraus, genau wie in der CI. Die Aktion
-      # haengt den Zieltriple sonst an die aktuelle stable, waehrend cargo im
-      # Repo die festgelegte Toolchain benutzt. Beim Cross-Build fehlt dort
-      # dann die Standardbibliothek, und rustc bricht mit E0463 ab.
+      # No dtolnay/rust-toolchain: the version stands in rust-toolchain.toml
+      # and rustup installs it from there, exactly as CI does. The action would
+      # otherwise attach the target triple to the current stable, while cargo
+      # in the repository uses the pinned toolchain. On a cross build the
+      # standard library is then missing there, and rustc aborts with E0463.
       - run: rustup show
-      - name: Zieltriple zur festgelegten Toolchain hinzufuegen
+      - name: Add the target triple to the pinned toolchain
         run: rustup target add ${{ matrix.target }}
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2
       - name: Build release
@@ -364,18 +360,11 @@ jobs:
           name: ugos-cli-deb-${{ matrix.arch }}
           path: ./debs/*.deb
 
-  # Stufe 7. Gestufte Vorabveroeffentlichung. Die Assets haengen am Entwurf,
-  # werden von dort zurueckgelesen und geprueft, und erst dann wird das
-  # Release sichtbar, aber ohne `latest`. Sichtbar muss es vor den Kanaelen
-  # sein: Homebrew und AUR laden in ihrem eigenen Test von der Release-URL,
-  # und die Assets eines Entwurfs antworten unauthentifiziert mit 404. Als
-  # Prerelease installiert es dennoch niemand automatisch.
-  # Stufe 3. Signieren und attestieren. Cosign keyless ueber die
-  # OIDC-Identitaet des Laufs, dazu je Payload eine SPDX-SBOM. Die SBOMs
-  # bekommen kein eigenes Bundle; sie sind von SHA256SUMS und der
-  # Attestierung mitgedeckt.
+  # Stage 3. Sign and attest. Cosign keyless through the run's OIDC identity,
+  # plus one SPDX SBOM per payload. The SBOMs get no bundle of their own; they
+  # are covered by SHA256SUMS and the attestation.
   sign:
-    name: Payloads signieren und attestieren
+    name: Sign and attest the payloads
     needs: [metadata, build, package-deb]
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -387,37 +376,37 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
           path: ./incoming
-      - name: Payloads flach zusammenziehen
+      - name: Collect the payloads into one flat directory
         run: |
           set -euo pipefail
           mkdir -p ./payload
           find ./incoming -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.deb' \) \
             -exec cp -f {} ./payload/ ';'
           count=$(find ./payload -type f | wc -l | tr -d ' ')
-          # Sechs Archive plus zwei .deb. Die Zahl steht hier einmal und
-          # nirgends sonst; die Stufen danach leiten ihre Erwartung daraus ab.
+          # Six archives plus two .deb files. The number stands here once and
+          # nowhere else; the later stages derive their expectation from it.
           if [[ "$count" != 8 ]]; then
-            echo "::error::UG7200 erwartet werden 8 Payloads, gefunden sind $count"
+            echo "::error::UG7200 expected 8 payloads, found $count"
             ls -1 ./payload
             exit 1
           fi
           ls -1 ./payload
       - uses: anchore/sbom-action/download-syft@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
-      - name: SBOM und Signaturbundle je Payload
+      - name: One SBOM and signature bundle per payload
         run: |
           set -euo pipefail
           for payload in ./payload/*; do
             name=$(basename "$payload")
-            # Der volle Name bleibt stehen, auch wenn er schon .tar.gz oder
-            # .deb enthaelt: sonst kollidieren Archiv und Paket derselben
-            # Architektur in einer Datei.
+            # The full name stays, even where it already carries .tar.gz or
+            # .deb: otherwise the archive and the package of the same
+            # architecture would collide in one file.
             syft scan "file:${payload}" -o "spdx-json=./payload/${name}.spdx.json" -q
             cosign sign-blob --yes \
               --bundle "./payload/${name}.sigstore.json" "$payload"
             echo "  signiert $name"
           done
-      - name: Attestierung fuer jeden Payload
+      - name: Attest every payload
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
@@ -430,11 +419,11 @@ jobs:
           path: ./payload/*
           if-no-files-found: error
 
-  # Stufe 4. Vollstaendigkeit erzwingen. Zwischenschritt, nicht die
-  # Endabnahme: je Payload muessen Payload, SBOM und Bundle vorliegen, und
-  # jede Signatur und Attestierung muss halten.
+  # Stage 4. Enforce completeness. An intermediate step, not the final
+  # acceptance: every payload needs its payload, SBOM and bundle, and every
+  # signature and attestation has to hold.
   aggregate:
-    name: Payload-Vollstaendigkeit
+    name: Payload completeness
     needs: [metadata, sign]
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -448,7 +437,7 @@ jobs:
           name: signed-payloads
           path: ./payload
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
-      - name: Zaehlen, Signaturen und Attestierungen pruefen
+      - name: Count, then verify signatures and attestations
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -458,25 +447,24 @@ jobs:
             find ./payload -maxdepth 1 -type f \
               \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.deb' \) | sort)
           if (( ${#payloads[@]} != 8 )); then
-            echo "::error::UG7201 erwartet werden 8 Payloads, gefunden sind ${#payloads[@]}"
+            echo "::error::UG7201 expected 8 payloads, found ${#payloads[@]}"
             exit 1
           fi
           total=$(find ./payload -maxdepth 1 -type f | wc -l | tr -d ' ')
           if (( total != 24 )); then
-            echo "::error::UG7202 erwartet werden 24 Dateien, also je Payload Payload, SBOM und Bundle; gefunden sind $total"
+            echo "::error::UG7202 expected 24 files, that is payload, SBOM and bundle each; found $total"
             ls -1 ./payload
             exit 1
           fi
           for payload in "${payloads[@]}"; do
             name=$(basename "$payload")
             [[ -f "./payload/${name}.spdx.json" ]] || {
-              echo "::error::UG7203 SBOM fehlt zu $name"; exit 1; }
+              echo "::error::UG7203 SBOM is missing for $name"; exit 1; }
             [[ -f "./payload/${name}.sigstore.json" ]] || {
-              echo "::error::UG7204 Signaturbundle fehlt zu $name"; exit 1; }
-            # Die Identitaet wird als Muster geprueft. Bei einem
-            # wiederverwendbaren Workflow ist die Ref im Zertifikat die des
-            # Aufrufers, nicht die des Tags; gebunden bleibt sie an dieses
-            # Repository und diese Workflow-Datei.
+              echo "::error::UG7204 signature bundle is missing for $name"; exit 1; }
+            # The identity is checked as a pattern. For a reusable workflow the
+            # ref in the certificate is the caller's, not the tag's; it stays
+            # bound to this repository and this workflow file.
             cosign verify-blob \
               --bundle "./payload/${name}.sigstore.json" \
               --certificate-identity-regexp "^https://github\.com/${GITHUB_REPOSITORY}/\.github/workflows/release\.yml@refs/" \
@@ -486,15 +474,14 @@ jobs:
               --deny-self-hosted-runners
             echo "  ok $name"
           done
-          echo "::notice::8 Payloads mit SBOM, Signatur und Attestierung geprueft"
+          echo "::notice::8 payloads verified with SBOM, signature and attestation"
 
-  # Stufe 5a. Kanal-Metadaten aus den qualifizierten Payloads erzeugen und
-  # gleich qualifizieren: die Arch-Paketierung baut hier und wird gegen das
-  # Release-Archiv geprueft, bevor irgendetwas veroeffentlicht wird. Signiert
-  # und attestiert werden die Metadaten wie ein Payload, eine eigene SBOM
-  # brauchen sie nicht.
+  # Stage 5a. Produce the channel metadata from the qualified payloads and
+  # qualify it right away: the Arch packaging builds here and is checked
+  # against the release archive before anything is published. The metadata is
+  # signed and attested like a payload; it needs no SBOM of its own.
   channel-metadata:
-    name: Kanal-Metadaten erzeugen und qualifizieren
+    name: Produce and qualify the channel metadata
     needs: [metadata, sign, aggregate]
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -510,7 +497,7 @@ jobs:
         with:
           name: signed-payloads
           path: ./payload
-      - name: Homebrew-Formel schreiben
+      - name: Write the Homebrew formula
         run: |
           set -euo pipefail
 
@@ -524,9 +511,9 @@ jobs:
             sha256sum "$path" | cut -d' ' -f1
           }
 
-          # Jede Download-URL wird aus dem vollstaendigen Tag gebaut, nicht
-          # aus v$VERSION. Bei einem Vorabtag sind das zwei verschiedene
-          # Dinge, und die Datei liegt unter dem Tag.
+          # Every download URL is built from the full tag, not from v$VERSION.
+          # For a prerelease tag those are two different things, and the file
+          # sits under the tag.
           MAC_X64_SHA=$(checksum x86_64-apple-darwin)
           MAC_ARM64_SHA=$(checksum aarch64-apple-darwin)
           LINUX_X64_SHA=$(checksum x86_64-unknown-linux-gnu)
@@ -576,7 +563,7 @@ jobs:
           fi
           mkdir -p ./meta
           install -m 0644 formula.rb ./meta/ugos-cli.rb
-      - name: PKGBUILD und .SRCINFO schreiben
+      - name: Write PKGBUILD and .SRCINFO
         run: |
           set -euo pipefail
           x86=$(sha256sum ./payload/ugos-cli-x86_64-unknown-linux-gnu.tar.gz | cut -d' ' -f1)
@@ -589,10 +576,10 @@ jobs:
           pkgrel=1
           pkgdesc="CLI and MCP server for UGREEN NAS (UGOS) management"
           arch=('x86_64' 'aarch64')
-          # Ein -bin-Paket liefert die Binaerdateien des Upstream aus, also
-          # unveraendert. makepkg wuerde sie sonst strippen und die
-          # Debug-Symbole abspalten; das Paket enthielte dann andere Bytes als
-          # das Release-Archiv, und der Vergleich danach koennte nie stimmen.
+          # A -bin package ships the upstream binaries, which means unchanged.
+          # makepkg would otherwise strip them and split off the debug symbols;
+          # the package would then hold different bytes than the release
+          # archive, and the comparison afterwards could never match.
           options=('!strip' '!debug')
           url="https://github.com/metaneutrons/ugos-cli"
           license=('GPL-3.0-or-later')
@@ -609,15 +596,15 @@ jobs:
           }
           PKG
           cat PKGBUILD
-          # Nur --printsrcinfo, kein Bau. makepkg wuerde die Quellen von der
-          # Release-URL holen, und das Release entsteht erst in Stufe 7. Der
-          # Bau samt Vergleich gegen das Archiv steht deshalb im AUR-Job,
-          # vor dem Push und nach der Veroeffentlichung.
+          # Only --printsrcinfo, no build. makepkg would fetch its sources from
+          # the release URL, and the release does not exist before stage 7. The
+          # build and the comparison against the archive therefore sit in the
+          # AUR job, before the push and after publication.
           #
-          # Gemountet wird ein eigenes Verzeichnis, nicht das Arbeitsverzeichnis:
-          # makepkg laeuft nicht als root, und das dafuer noetige
-          # `chown -R builder` wuerde sonst alles daneben auf eine fremde UID
-          # ziehen. Danach wird die Eigentuemerschaft zurueckgeholt.
+          # A directory of its own is mounted rather than the workspace:
+          # makepkg does not run as root, and the `chown -R builder` that needs
+          # would otherwise drag everything beside it onto a foreign UID.
+          # Ownership is taken back afterwards.
           mkdir -p ./aurwork
           install -m 0644 PKGBUILD ./aurwork/PKGBUILD
           docker run --rm --user root \
@@ -629,15 +616,15 @@ jobs:
               su builder -c "makepkg --printsrcinfo > .SRCINFO"
             '
           sudo chown -R "$(id -u):$(id -g)" ./aurwork
-          [[ -s ./aurwork/.SRCINFO ]] || { echo "::error::UG7603 .SRCINFO ist leer"; exit 1; }
+          [[ -s ./aurwork/.SRCINFO ]] || { echo "::error::UG7603 .SRCINFO is empty"; exit 1; }
           install -m 0644 PKGBUILD ./meta/PKGBUILD
-          # Als ugos-cli.SRCINFO, nicht als .SRCINFO: GitHub benennt ein
-          # Release-Asset mit fuehrendem Punkt in default.SRCINFO um. Der
-          # AUR-Job legt den Punkt vor dem Push wieder davor; signiert und
-          # attestiert wird der Inhalt, nicht der Name.
+          # As ugos-cli.SRCINFO, not as .SRCINFO: GitHub renames a release
+          # asset with a leading dot to default.SRCINFO. The AUR job puts the
+          # dot back before the push; what is signed and attested is the
+          # content, not the name.
           install -m 0644 ./aurwork/.SRCINFO ./meta/ugos-cli.SRCINFO
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
-      - name: Metadaten signieren
+      - name: Sign the metadata
         run: |
           set -euo pipefail
           for file in ./meta/ugos-cli.rb ./meta/PKGBUILD ./meta/ugos-cli.SRCINFO; do
@@ -645,7 +632,7 @@ jobs:
             cosign sign-blob --yes --bundle "./meta/${name}.sigstore.json" "$file"
             echo "  signiert $name"
           done
-      - name: Metadaten attestieren
+      - name: Attest the metadata
         uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
         with:
           subject-path: |
@@ -659,13 +646,12 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
 
-  # Stufe 5b. Endabnahme. Die erwartete Liste entsteht aus den Payloads und
-  # den tatsaechlich erzeugten Kanal-Metadaten, nicht aus einer zweiten
-  # Konstante. Erst danach entsteht SHA256SUMS, und dessen Zeilenmenge deckt
-  # sich genau mit dieser Liste. Nach diesem Job darf keine Stufe mehr ein
-  # Asset hinzufuegen oder aendern.
+  # Stage 5b. Final acceptance. The expected list arises from the payloads and
+  # the channel metadata actually produced, not from a second constant. Only
+  # then is SHA256SUMS written, and its set of lines coincides exactly with
+  # that list. After this job no stage may add or change an asset.
   candidate:
-    name: Endgueltige Release-Liste
+    name: Final release list
     needs: [metadata, sign, aggregate, channel-metadata]
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -683,7 +669,7 @@ jobs:
           name: channel-metadata
           path: ./release
       - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
-      - name: Liste bilden, alles pruefen, dann SHA256SUMS schreiben
+      - name: Form the list, verify everything, then write SHA256SUMS
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -695,9 +681,9 @@ jobs:
             find . -maxdepth 1 -type f \
               \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.deb' \
                  -o -name 'ugos-cli.rb' -o -name 'PKGBUILD' -o -name 'ugos-cli.SRCINFO' \) | sort)
-          # Acht Payloads plus drei Metadatendateien.
+          # Eight payloads plus three metadata files.
           if (( ${#signed[@]} != 11 )); then
-            echo "::error::UG7210 erwartet werden 11 signierte Dateien, gefunden sind ${#signed[@]}"
+            echo "::error::UG7210 expected 11 signed files, found ${#signed[@]}"
             ls -1a
             exit 1
           fi
@@ -709,7 +695,7 @@ jobs:
               *.tar.gz|*.zip|*.deb) expected+=("${file}.spdx.json") ;;
             esac
             [[ -f "${file}.sigstore.json" ]] || {
-              echo "::error::UG7211 Signaturbundle fehlt zu $file"; exit 1; }
+              echo "::error::UG7211 signature bundle is missing for $file"; exit 1; }
             cosign verify-blob \
               --bundle "${file}.sigstore.json" \
               --certificate-identity-regexp "^https://github\.com/${GITHUB_REPOSITORY}/\.github/workflows/release\.yml@refs/" \
@@ -719,22 +705,22 @@ jobs:
             echo "  ok $file"
           done
 
-          # Vorhandene Dateien gegen die erwartete Liste, in beide Richtungen.
+          # The files present against the expected list, in both directions.
           printf '%s\n' "${expected[@]}" | sort > /tmp/expected
           find . -maxdepth 1 -type f | sed 's|^\./||' | sort > /tmp/present
           if ! diff -u /tmp/expected /tmp/present; then
-            echo "::error::UG7212 die Kandidatenliste weicht vom Verzeichnis ab"
+            echo "::error::UG7212 the candidate list differs from the directory"
             exit 1
           fi
 
           sha256sum "${expected[@]}" > SHA256SUMS
           lines=$(wc -l < SHA256SUMS | tr -d ' ')
           if (( lines != ${#expected[@]} )); then
-            echo "::error::UG7213 SHA256SUMS hat $lines Zeilen, erwartet sind ${#expected[@]}"
+            echo "::error::UG7213 SHA256SUMS has $lines lines, expected ${#expected[@]}"
             exit 1
           fi
           sha256sum --check --quiet SHA256SUMS
-          echo "::notice::${#expected[@]} Assets plus SHA256SUMS abgenommen"
+          echo "::notice::${#expected[@]} assets plus SHA256SUMS accepted"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: release-assets
@@ -743,7 +729,7 @@ jobs:
           if-no-files-found: error
 
   stage:
-    name: Vorabveroeffentlichung
+    name: Staged prerelease
     needs: [metadata, channel-preflight, candidate]
     if: >-
       !cancelled()
@@ -768,36 +754,36 @@ jobs:
         with:
           name: release-assets
           path: ./candidate
-      - name: Entwurf anlegen, falls keiner da ist
+      - name: Create a draft if none exists
         run: |
           set -euo pipefail
           state=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
             --json isDraft,isPrerelease --jq '"\(.isDraft) \(.isPrerelease)"' 2>/dev/null || echo absent)
           case "$state" in
             absent)        gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --draft --verify-tag --title "$TAG" --notes "Pipeline-Testlauf." ;;
-            "true "*)      echo "::notice::Entwurf von release-please wird bestueckt" ;;
-            "false true")  echo "::notice::vorhandene Vorabversion wird neu bestueckt" ;;
+            "true "*)      echo "::notice::filling the draft release-please created" ;;
+            "false true")  echo "::notice::refilling the existing prerelease" ;;
             "false false") echo "::error::UG7004 release $TAG is already promoted"; exit 1 ;;
           esac
-      # Kein softprops/action-gh-release mehr: die Aktion leitet ihren
-      # Tag-Kontext aus GITHUB_REF ab, nicht aus tag_name. Bei einem Lauf vom
-      # Default-Branch sucht sie deshalb ein Release zu refs/heads/main und
-      # bekommt 403. `gh release upload` kennt nur den Tag, den es bekommt.
-      # Der Entwurfszustand wird ohnehin von den Schritten davor und danach
-      # gefuehrt, nicht von der Aktion.
+      # No more softprops/action-gh-release: the action derives its tag context
+      # from GITHUB_REF rather than from tag_name. On a run from the default
+      # branch it therefore looks for a release on refs/heads/main and gets a
+      # 403. `gh release upload` knows only the tag it is handed. The draft
+      # state is carried by the steps before and after anyway, not by the
+      # action.
       - name: Upload to GitHub Release
         run: |
           set -euo pipefail
           gh release upload "$TAG" --repo "$GITHUB_REPOSITORY" --clobber candidate/*
-          echo "::notice::$(find ./candidate -maxdepth 1 -type f | wc -l | tr -d ' ') Assets hochgeladen"
-      - name: Die Bytes vom Entwurf zurueckholen und gegen die Kandidaten pruefen
+          echo "::notice::$(find ./candidate -maxdepth 1 -type f | wc -l | tr -d ' ') assets uploaded"
+      - name: Read the bytes back from the draft and check them against the candidates
         run: |
           set -euo pipefail
-          # Ein erfolgreicher Upload ist keine Aussage darueber, was am Release
-          # liegt. Geprueft wird, was von dort zurueckkommt.
+          # A successful upload says nothing about what hangs on the release.
+          # What is checked is what comes back from there.
           #
-          # candidate liegt bereits flach; es ist genau die in Stufe 5b
-          # abgenommene Liste.
+          # candidate is already flat; it is exactly the list accepted in stage
+          # 5b.
           mkdir -p ./flat ./staged
           find ./candidate -maxdepth 1 -type f -exec cp -f {} ./flat/ ';'
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" --dir ./staged --clobber
@@ -806,7 +792,7 @@ jobs:
           for path in ./flat/*; do
             name=$(basename "$path")
             if [[ ! -f "./staged/$name" ]]; then
-              echo "::error::UG7100 $name fehlt am Release"
+              echo "::error::UG7100 $name is missing from the release"
               status=1
               continue
             fi
@@ -815,26 +801,25 @@ jobs:
           done
           (( status == 0 )) || exit 1
 
-          # Das Release darf auch nichts Zusaetzliches tragen: eine Datei, die
-          # kein Kandidat ist, waere aus einem frueheren Lauf uebrig.
+          # The release must carry nothing extra either: a file that is not a
+          # candidate would be left over from an earlier run.
           for path in ./staged/*; do
             name=$(basename "$path")
             [[ -f "./flat/$name" ]] || {
-              echo "::error::UG7101 das Release traegt ein fremdes Asset: $name"
+              echo "::error::UG7101 the release carries a foreign asset: $name"
               status=1; }
           done
           (( status == 0 )) || exit 1
 
-          # Die Pruefsummendatei gilt gegen die Bytes vom Release, nicht gegen
-          # die lokalen Kandidaten: sonst prueft sie sich selbst.
+          # The checksum file applies to the bytes from the release, not to the
+          # local candidates: otherwise it would be checking itself.
           ( cd ./staged && sha256sum --check --quiet SHA256SUMS )
-          echo "::notice::$(find ./flat -type f | wc -l | tr -d ' ') Assets geprueft, SHA256SUMS gegen das Release bestaetigt"
-      - name: Als Vorabversion sichtbar machen, ohne latest
+          echo "::notice::$(find ./flat -type f | wc -l | tr -d ' ') assets verified, SHA256SUMS confirmed against the release"
+      - name: Make it visible as a prerelease, without latest
         run: |
           set -euo pipefail
-          # Kein `|| true` auf einem Veroeffentlichungspfad. Umgeschaltet wird
-          # nur, wenn der Zustand es braucht; eine wiederaufgenommene
-          # Vorabversion ist bereits richtig.
+          # No `|| true` on a publication path. The state is switched only when
+          # it needs switching; a resumed prerelease is already right.
           before=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
             --json isDraft,isPrerelease --jq '"\(.isDraft) \(.isPrerelease)"')
           if [[ "$before" != "false true" ]]; then
@@ -844,43 +829,41 @@ jobs:
           read -r draft pre < <(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" \
             --json isDraft,isPrerelease --jq '"\(.isDraft) \(.isPrerelease)"')
           [[ "$draft" == false && "$pre" == true ]] || {
-            echo "::error::UG7102 $TAG ist nicht als Vorabversion sichtbar (draft=$draft prerelease=$pre)"
+            echo "::error::UG7102 $TAG is not visible as a prerelease (draft=$draft prerelease=$pre)"
             exit 1; }
-          # `latest` ist kein Feld des Releases, sondern eine Auswahl des
-          # Repositories. Gefragt wird deshalb, was das Repository ausliefert.
+          # `latest` is not a field of the release but a choice of the
+          # repository. So the question asked is what the repository serves.
           latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name 2>/dev/null || echo none)
           [[ "$latest" != "$TAG" ]] || {
-            echo "::error::UG7103 $TAG steht bereits auf latest, obwohl noch kein Kanal lief"
+            echo "::error::UG7103 $TAG already stands as latest although no channel has run"
             exit 1; }
-          echo "::notice::$TAG ist sichtbar als Vorabversion, latest steht auf $latest"
+          echo "::notice::$TAG is visible as a prerelease, latest stands at $latest"
 
 
-  # Nach dem promote, nicht davor. Das Archiv liest ausschliesslich stabile
-  # Releases; stage veroeffentlicht mit Absicht eine Vorabversion. Ein Anstoss
-  # davor verlangt etwas, das es noch nicht geben kann, und das Archiv bricht
-  # ab:
+  # After the promote, not before it. The archive reads stable releases only;
+  # stage deliberately publishes a prerelease. A dispatch before that asks for
+  # something that cannot exist yet, and the archive aborts:
   #
   #   AR170 no stable release carries a .deb for the declared packages
   #
-  # Weil promote frueher auf publish-apt wartete, wurde das Release dann auch
-  # nie stabil: der Kanal war unerfuellbar und hielt die Befoerderung auf, die
-  # ihn erfuellt haette. Genau daran haengt bups v0.3.2 gescheitert.
+  # Because promote used to wait on publish-apt, the release then never became
+  # stable either: the channel was unsatisfiable and held back the promotion
+  # that would have satisfied it. That is exactly what bups v0.3.2 died of.
   #
-  # APT ist kein Kanal, in den dieses Repository veroeffentlicht. Es haelt
-  # weder Signaturschluessel noch Bucket-Zugang; es haengt attestierte
-  # Payloads an sein Release, und das Archiv holt sie sich. Ein Verbraucher
-  # kann erst handeln, wenn das Verbrauchte fertig ist. Ein Fehlschlag hier
-  # kann deshalb nichts zurueckdrehen und muss es auch nicht: das Archiv
-  # liefert die vorige Version weiter aus, bis der Anstoss wiederholt wird.
+  # APT is not a channel this repository publishes into. It holds neither a
+  # signing key nor bucket access; it hangs attested payloads on its release,
+  # and the archive fetches them. A consumer can only act once what it consumes
+  # is finished. A failure here can therefore roll nothing back, and needs not
+  # to: the archive keeps serving the previous version until the dispatch is
+  # repeated.
   publish-apt:
     name: Ask the archive to publish
     needs: [metadata, channel-preflight, promote]
-    # Mit Statusfunktion, sonst greift das Ueberspringen durch. promote traegt
-    # `always()` und faengt ein uebersprungenes publish-crates ab; ohne
-    # `!cancelled()` erbt dieser Job das Ueberspringen trotzdem, obwohl sein
-    # direkter Vorgaenger erfolgreich war. Genau so ist der APT-Anstoss bei
-    # 0.13.2 ausgefallen: alle Zugaenge da, promote gruen, Job trotzdem
-    # uebersprungen.
+    # With a status function, or the skip propagates through. promote carries
+    # `always()` and catches a skipped publish-crates; without `!cancelled()`
+    # this job inherits the skip anyway, although its direct predecessor
+    # succeeded. That is exactly how the APT dispatch went missing at 0.13.2:
+    # every credential in place, promote green, job skipped regardless.
     if: >-
       !cancelled()
       && needs.promote.result == 'success'
@@ -898,15 +881,14 @@ jobs:
       ARCHIVE_PROJECT: ugos-cli
       DEB_PACKAGE: ugos-cli
     steps:
-      # Dieses Repository laedt nichts hoch und haelt keinen Signaturschluessel.
-      # Ein R2-Token laesst sich auf einen Bucket begrenzen, nicht auf ein
-      # Praefix; ein Schreibzugang je Projekt waere ein Schreibzugang auf das
-      # ganze Archiv. Die .deb haengen attestiert am Release, und das Archiv
-      # holt sie sich von dort.
+      # This repository uploads nothing and holds no signing key. An R2 token
+      # can be limited to a bucket, not to a prefix; write access per project
+      # would be write access to the whole archive. The .deb files hang attested
+      # on the release, and the archive fetches them from there.
       #
-      # Das Token wird unmittelbar vor der Benutzung gepraegt, auf genau ein
-      # Repository und genau zwei Rechte, und faellt am Jobende weg. Ein
-      # gespeichertes PAT waere ein langlebiger Generalschluessel.
+      # The token is minted immediately before use, for exactly one repository
+      # and exactly two permissions, and falls away at the end of the job. A
+      # stored PAT would be a long-lived master key.
       - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         id: archive-token
         with:
@@ -917,11 +899,11 @@ jobs:
           permission-actions: write
           permission-contents: read
 
-      # Der Vertrag wird gelesen, nicht angenommen. Ob das Archiv je Projekt
-      # ein Praefix fuehrt oder alles an der Domain-Wurzel liegt, entscheidet
-      # das Manifest; eine hier festgeschriebene URL waere beim naechsten
-      # Umbau des Archivs still falsch.
-      - name: Den Domain-Vertrag aus dem Manifest lesen
+      # The contract is read, not assumed. Whether the archive keeps a prefix
+      # per project or puts everything at the domain root is decided by the
+      # manifest; a URL written down here would be silently wrong at the next
+      # rebuild of the archive.
+      - name: Read the domain contract from the manifest
         id: contract
         env:
           GH_TOKEN: ${{ steps.archive-token.outputs.token }}
@@ -931,39 +913,39 @@ jobs:
             --jq .content | base64 -d > manifest.toml
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import os, sys, tomllib
-          # Alle Umgebungswerte zuerst, damit kein Fehlerpfad selbst noch
-          # etwas nachschlagen muss und statt der Meldung eine Ausnahme wirft.
+          # Every environment value first, so that no error path has to look
+          # something up itself and raise an exception instead of the message.
           project = os.environ["ARCHIVE_PROJECT"]
           package = os.environ["DEB_PACKAGE"]
-          domain = os.environ.get("ARCHIVE_DOMAIN", "der Domain")
+          domain = os.environ.get("ARCHIVE_DOMAIN", "the domain")
           with open("manifest.toml", "rb") as fh:
               m = tomllib.load(fh)
           entry = next((p for p in m.get("projects", []) if p.get("name") == project), None)
           if entry is None:
-              sys.exit(f"::error::UG7440 {project} steht nicht im Manifest von {domain}")
+              sys.exit(f"::error::UG7440 {project} is not in the manifest of {domain}")
           if package not in entry.get("packages", []):
-              sys.exit(f"::error::UG7441 {package} steht nicht unter packages von {project}")
+              sys.exit(f"::error::UG7441 {package} is not listed under packages of {project}")
           rel, dom = m["release"], m["domain"]
           if "main" not in rel.get("components", []):
-              sys.exit("::error::UG7442 die Komponente main fehlt im Manifest")
+              sys.exit("::error::UG7442 the component main is missing from the manifest")
           for arch in ("amd64", "arm64"):
               if arch not in rel.get("architectures", []):
-                  sys.exit(f"::error::UG7443 die Architektur {arch} fehlt im Manifest")
-          # Unified: ein gemeinsames Archiv an der Domain-Wurzel, pool/ und
-          # dists/ fuer alle Projekte zusammen. Ein Projekt-Praefix waere ein
-          # anderes Layout, und dann zeigte jede hier gebaute URL ins Leere.
+                  sys.exit(f"::error::UG7443 the architecture {arch} is missing from the manifest")
+          # Unified: one shared archive at the domain root, pool/ and dists/ for
+          # every project together. A project prefix would be a different
+          # layout, and every URL built here would then point nowhere.
           prefix = (entry.get("prefix") or "").strip("/")
           if prefix:
-              sys.exit(f"::error::UG7444 das Manifest fuehrt fuer {project} das Praefix /{prefix}; erwartet wird ein gemeinsames Archiv an der Domain-Wurzel")
+              sys.exit(f"::error::UG7444 the manifest keeps the prefix /{prefix} for {project}; a shared archive at the domain root is expected")
           print(f"base_url={dom['base_url'].rstrip('/')}")
           print(f"suite={rel['codename']}")
           PY
-          echo "::notice::Vertrag: $(grep base_url "$GITHUB_OUTPUT" | tail -1), $(grep suite= "$GITHUB_OUTPUT" | tail -1)"
+          echo "::notice::contract: $(grep base_url "$GITHUB_OUTPUT" | tail -1), $(grep suite= "$GITHUB_OUTPUT" | tail -1)"
 
-      # Der gepruefte Workflow auf dem geschuetzten Default-Branch, mit
-      # benannten Eingaben. Ein repository_dispatch waere ein blindes Ereignis
-      # ohne Angabe, welcher Workflow auf welcher Ref laufen soll.
-      - name: Den Archiv-Workflow anstossen
+      # The reviewed workflow on the protected default branch, with named
+      # inputs. A repository_dispatch would be a blind event that says nothing
+      # about which workflow is to run on which ref.
+      - name: Dispatch the archive workflow
         id: dispatch
         env:
           GH_TOKEN: ${{ steps.archive-token.outputs.token }}
@@ -974,13 +956,13 @@ jobs:
           echo "since=$since" >> "$GITHUB_OUTPUT"
           gh workflow run publish.yml --repo "$ARCHIVE_REPO" --ref "$branch" \
             -f domain="$ARCHIVE_DOMAIN" -f project="$ARCHIVE_PROJECT"
-          echo "::notice::publish.yml auf ${ARCHIVE_REPO}@${branch} angestossen"
+          echo "::notice::publish.yml dispatched on ${ARCHIVE_REPO}@${branch}"
 
-      # Nur zur Zuordnung im Log. Der Lauf wird nach seiner Startzeit gesucht,
-      # nicht als "der neueste": bei zwei Anstoessen kurz hintereinander waere
-      # das der falsche. Findet sich keiner eindeutig, ist das kein Fehler,
-      # denn der Beweis steht weiter unten am oeffentlichen Archiv.
-      - name: Den angestossenen Lauf zuordnen
+      # For correlation in the log only. The run is looked up by its start
+      # time, not as "the newest one": with two dispatches in quick succession
+      # that would be the wrong one. Finding none unambiguously is not an error,
+      # because the proof stands further down at the public archive.
+      - name: Correlate the dispatched run
         continue-on-error: false
         env:
           GH_TOKEN: ${{ steps.archive-token.outputs.token }}
@@ -994,60 +976,59 @@ jobs:
               --jq "[.[] | select(.createdAt >= \"$SINCE\") | .databaseId] | @tsv")
             count=$(printf '%s' "$ids" | wc -w | tr -d ' ')
             if [[ "$count" == 1 ]]; then
-              echo "::notice::Lauf ${ids} im Archiv"
+              echo "::notice::run ${ids} in the archive"
               break
             fi
             if [[ "$count" -gt 1 ]]; then
-              echo "::notice::mehrere Laeufe seit $SINCE, keine eindeutige Zuordnung; geprueft wird das Archiv"
+              echo "::notice::several runs since $SINCE, no unambiguous correlation; the archive itself is what gets checked"
               break
             fi
             sleep 6
           done
 
-      # Der eigentliche Beweis. Weder die Annahme des Anstosses noch ein gruener
-      # Job sagt etwas darueber, was das Archiv ausliefert.
+      # The actual proof. Neither the dispatch being accepted nor a green job
+      # says anything about what the archive serves.
       #
-      # Und es kommt darauf an, welche URL gefragt wird. Ein apt-Client mit
-      # Acquire-By-Hash liest nie
+      # And it matters which URL is asked for. An apt client with
+      # Acquire-By-Hash never reads
       #   dists/<suite>/main/binary-<arch>/Packages.gz
-      # sondern nimmt die Pruefsumme dieser Datei aus InRelease und holt
-      #   dists/<suite>/main/binary-<arch>/by-hash/SHA512/<pruefsumme>
-      # SHA512 und nicht SHA256, weil apt den staerksten in Release genannten
-      # Hash zuerst anfragt. Schriebe das Archiv diesen Baum nicht mehr,
-      # antwortete der Server 404 und apt fiele ohne Fehler und ohne Warnung
-      # auf den veraenderlichen Pfad zurueck; by-hash waere dann erklaert und
-      # wirkungslos zugleich. Wer dasselbe Objekt anfragt, macht aus dieser
-      # stillen Verschlechterung einen roten Job.
+      # but takes that file's checksum from InRelease and fetches
+      #   dists/<suite>/main/binary-<arch>/by-hash/SHA512/<checksum>
+      # SHA512 rather than SHA256, because apt asks for the strongest hash
+      # named in Release first. If the archive stopped writing that tree, the
+      # server would answer 404 and apt would fall back to the mutable path
+      # without an error and without a warning; by-hash would then be both
+      # declared and ineffective. Asking for the same object turns that silent
+      # degradation into a red job.
       #
-      # Nur der kanonische Pfad ist cachebar, und die Zone cacht ihn vier
-      # Stunden. Ein frueherer Kommentar behauptete hier `Cache-Control:
-      # no-store` fuer dists/**; gemessen steht dort max-age=14400. Bei bups
-      # v0.3.4 hatte das Archiv neunzig Sekunden nach dem Anstoss gerendert
-      # und signiert, der Job bekam eine neunzig Minuten alte Kopie und
-      # meldete eine Publikation als gescheitert, die geglueckt war.
-      # InRelease wird ungecacht ausgeliefert.
-      - name: Warten, bis das Archiv die Version ausliefert
+      # Only the canonical path is cacheable, and the zone caches it for four
+      # hours. An earlier comment claimed `Cache-Control: no-store` for
+      # dists/** here; measured, it says max-age=14400. At bups v0.3.4 the
+      # archive had rendered and signed ninety seconds after the dispatch, the
+      # job received a ninety-minute-old copy and reported a publication as
+      # failed that had succeeded. InRelease is served uncached.
+      - name: Wait until the archive serves the version
         env:
           BASE_URL: ${{ steps.contract.outputs.base_url }}
           SUITE: ${{ steps.contract.outputs.suite }}
         run: |
           set -euo pipefail
 
-          # Der Pruefsummenblock einer Release-Datei. Die Eintraege sind
-          # eingerueckt, der naechste Abschnittskopf und der Signaturblock
-          # nicht. Ein Abschluss ueber ^[A-Za-z-]+: traefe weder "SHA512:"
-          # noch "SHA256:", weil die Zeichenklasse Ziffern ausschliesst, und
-          # jeder folgende Abschnitt zaehlte zum aktuellen.
+          # The checksum block of a Release file. The entries are indented, the
+          # next section header and the signature block are not. Terminating on
+          # ^[A-Za-z-]+: would match neither "SHA512:" nor "SHA256:", because
+          # the character class excludes digits, and every following section
+          # would count towards the current one.
           cat > "$RUNNER_TEMP/index-sha.awk" <<'AWK'
           /^SHA512:/               { block = 1; next }
           block && /^[^[:space:]]/ { block = 0 }
           block && $3 == want      { print $1; exit }
           AWK
 
-          # Der Index ist gemeinsam: er traegt auch die Stanzas anderer
-          # Projekte. Gesucht wird strikt das eigene Paket, verglichen wird der
-          # Upstream-Teil als Zeichenkette, nicht als regulaerer Ausdruck.
-          # Der Debian-Versionsstring traegt eine Revision, build-deb.sh setzt
+          # The index is shared: it carries the stanzas of other projects too.
+          # The search is strictly for this package, and the upstream part is
+          # compared as a string, not as a regular expression. The Debian
+          # version string carries a revision; build-deb.sh sets
           # `${version}-1`.
           cat > "$RUNNER_TEMP/pick.awk" <<'AWK'
           BEGIN { prefix = version "-" }
@@ -1055,15 +1036,15 @@ jobs:
           $1 == "Version:"  { ver  = $2 }
           $1 == "Filename:" { name = $2 }
           function hit() { return pkg == package && substr(ver, 1, length(prefix)) == prefix }
-          # awk fuehrt END auch nach exit aus, deshalb die Marke.
+          # awk runs END after exit as well, hence the flag.
           /^[[:space:]]*$/ { if (hit()) { print name; done = 1; exit } pkg = ""; ver = ""; name = "" }
           END { if (!done && hit()) print name }
           AWK
 
-          # Gibt den Pool-Pfad zur eigenen Version einer Architektur aus, oder
-          # nichts. Still bei jedem Fehlschlag: der Aufruf steht in einer
-          # Warteschleife, in der "noch nicht da" die normale Antwort ist, und
-          # die Diagnose gehoert hinter die Frist.
+          # Prints the pool path of this version for one architecture, or
+          # nothing. Silent on every failure: the call sits in a wait loop where
+          # "not there yet" is the normal answer, and the diagnosis belongs
+          # after the deadline.
           cat > "$RUNNER_TEMP/resolve.sh" <<'SH'
           set -euo pipefail
           arch="$1"
@@ -1075,9 +1056,9 @@ jobs:
           curl --fail --silent --location \
             "${base}/main/binary-${arch}/by-hash/SHA512/${sum}" \
             --output "packages-${arch}.gz"
-          # Inhaltsadressiert, aber die Adresse bedeutet nur, was das Archiv
-          # dahinterlegt. Geprueft, damit eine Abweichung auffaellt statt
-          # geparst zu werden.
+          # Content-addressed, but the address only means whatever the archive
+          # puts behind it. Verified, so that a deviation is noticed rather than
+          # parsed.
           printf '%s  %s\n' "$sum" "packages-${arch}.gz" | sha512sum --check --status
           gzip -dc "packages-${arch}.gz" \
             | awk -v package="$DEB_PACKAGE" -v version="$VERSION" -f "$RUNNER_TEMP/pick.awk"
@@ -1088,22 +1069,22 @@ jobs:
             amd64=$(bash "$RUNNER_TEMP/resolve.sh" amd64 2>/dev/null || true)
             arm64=$(bash "$RUNNER_TEMP/resolve.sh" arm64 2>/dev/null || true)
             if [[ -n "$amd64" && -n "$arm64" ]]; then
-              echo "::notice::${BASE_URL} liefert ${VERSION} als ${amd64} und ${arm64}"
+              echo "::notice::${BASE_URL} serves ${VERSION} as ${amd64} and ${arm64}"
               printf 'PUBLISHED_AMD64=%s\nPUBLISHED_ARM64=%s\n' "$amd64" "$arm64" \
                 >> "$GITHUB_ENV"
               break
             fi
             if (( SECONDS > deadline )); then
-              echo "::error::UG7430 das Archiv liefert ${VERSION} nicht innerhalb der Frist; der Anstoss ging raus, die Ursache steht in den Laeufen von ${ARCHIVE_REPO}"
+              echo "::error::UG7430 the archive does not serve ${VERSION} within the deadline; the dispatch went out, the cause is in the runs of ${ARCHIVE_REPO}"
               exit 1
             fi
             sleep 30
           done
 
-      # Ein Index, der die Version nennt, ist noch keine ausgelieferte Datei.
-      # Die Pfade kommen aus dem Schritt darueber, damit der Vergleich nicht
-      # auf einer anderen Generation landen kann als das Warten.
-      - name: Das ausgelieferte Paket gegen das Release vergleichen
+      # An index that names the version is not yet a served file. The paths come
+      # from the step above, so the comparison cannot land on a different
+      # generation than the wait did.
+      - name: Compare the served package against the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag }}
@@ -1120,7 +1101,7 @@ jobs:
             gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
               --pattern "ugos-cli_${VERSION}_${arch}.deb" --dir ./release --clobber
             cmp "published-${arch}.deb" "./release/ugos-cli_${VERSION}_${arch}.deb"
-            echo "::notice::${arch} identisch mit dem Release-Asset"
+            echo "::notice::${arch} is identical to the release asset"
           done
 
   update-homebrew:
@@ -1128,9 +1109,9 @@ jobs:
     needs: [metadata, channel-preflight, stage]
     runs-on: ubuntu-latest
     environment: release
-    # Die Qualifikation im Tap fuehrt brew audit, install und test auf zwei
-    # macOS-Runnern aus. Der Job wartet darauf, gebunden, und praegt danach
-    # ein frisches Token.
+    # The qualification in the tap runs brew audit, install and test on two
+    # macOS runners. This job waits for it, bounded, and mints a fresh token
+    # afterwards.
     timeout-minutes: 90
     permissions:
       contents: read
@@ -1153,7 +1134,7 @@ jobs:
           permission-statuses: read
           permission-administration: read
 
-      - name: Installation und Bot messen
+      - name: Measure the installation and the bot
         id: identity
         env:
           GH_TOKEN: ${{ steps.tap-token.outputs.token }}
@@ -1161,27 +1142,27 @@ jobs:
           set -euo pipefail
           reached=$(gh api installation/repositories --jq '[.repositories[].full_name] | sort | join(",")')
           if [[ "$reached" != "$TAP_REPO" ]]; then
-            echo "::error::UG7510 die Installation erreicht '$reached' statt genau $TAP_REPO"
+            echo "::error::UG7510 the installation reaches '$reached' instead of exactly $TAP_REPO"
             exit 1
           fi
-          # Die Git-Autorschaft kommt aus der gemessenen Bot-Identitaet, nicht
-          # aus einem geratenen Namen. `/user` gilt fuer ein
-          # Installations-Token nicht, deshalb der oeffentliche Endpunkt.
+          # Git authorship comes from the measured bot identity, not from a
+          # guessed name. `/user` does not apply to an installation token, hence
+          # the public endpoint.
           read -r login id < <(gh api "users/metaneutrons-homebrew%5Bbot%5D" --jq '"\(.login) \(.id)"')
           {
             echo "bot_login=$login"
             echo "bot_email=${id}+${login}@users.noreply.github.com"
           } >> "$GITHUB_OUTPUT"
-          echo "::notice::Installation $reached, Bot $login"
+          echo "::notice::installation $reached, bot $login"
 
-      - name: Die Formel vom Release holen
+      - name: Fetch the formula from the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          # Das Repository-Token gilt nur dem eigenen Release, nie dem Tap.
-          # Die Formel wurde in Stufe 5 erzeugt, qualifiziert, signiert und
-          # attestiert; hier wird sie nicht noch einmal gebaut.
+          # The repository token applies only to this repository's release,
+          # never to the tap. The formula was produced, qualified, signed and
+          # attested in stage 5; it is not built again here.
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
             --pattern 'ugos-cli.rb' --dir . --clobber
           mv ugos-cli.rb formula.rb
@@ -1190,7 +1171,7 @@ jobs:
             exit 1
           fi
 
-      - name: Zweig, Commit und Pull Request im Tap
+      - name: Branch, commit and pull request in the tap
         id: pr
         env:
           GH_TOKEN: ${{ steps.tap-token.outputs.token }}
@@ -1203,9 +1184,9 @@ jobs:
           install -d tap/Formula
           install -m 0644 formula.rb tap/Formula/ugos-cli.rb
           cd tap
-          # Die Qualifikation im Tap prueft auch, dass README.md aus den
-          # Formeln erzeugt wurde. Ohne diesen Lauf scheitert der Pull Request
-          # an dieser Pruefung statt an der Formel.
+          # The qualification in the tap also checks that README.md was
+          # generated from the formulas. Without this run the pull request fails
+          # on that check rather than on the formula.
           scripts/generate-readme.sh README.md
           if [[ -z $(git status --porcelain) ]]; then
             echo "::notice::the tap already carries this formula"
@@ -1214,9 +1195,9 @@ jobs:
           fi
           echo "unchanged=false" >> "$GITHUB_OUTPUT"
 
-          # main des Taps ist geschuetzt: Pull Request und der Check
-          # "Formula qualification" sind Pflicht, ein Direkt-Push wird
-          # abgewiesen. Reviews verlangt der Tap keine.
+          # The tap's main is protected: a pull request and the check "Formula
+          # qualification" are required, a direct push is refused. The tap
+          # requires no reviews.
           branch="ugos-cli-${VERSION}"
           git config user.name "$BOT_LOGIN"
           git config user.email "$BOT_EMAIL"
@@ -1243,13 +1224,12 @@ jobs:
             echo "head=$head"
             echo "branch=$branch"
           } >> "$GITHUB_OUTPUT"
-          echo "::notice::tap pull request #$pr auf $head"
+          echo "::notice::tap pull request #$pr on $head"
 
-      # Gebunden auf 45 Minuten, damit die Wartezeit innerhalb der Lebensdauer
-      # des ersten Tokens bleibt. Ein Zeitueberlauf scheitert geschlossen: er
-      # rechtfertigt weder einen Merge noch einen zweiten Versuch mit einer
-      # breiteren Berechtigung.
-      - name: Auf die Qualifikation warten
+      # Bounded to 45 minutes, so that the wait stays inside the lifetime of the
+      # first token. A timeout fails closed: it justifies neither a merge nor a
+      # second attempt with a broader permission.
+      - name: Wait for the qualification
         if: steps.pr.outputs.unchanged == 'false'
         env:
           GH_TOKEN: ${{ steps.tap-token.outputs.token }}
@@ -1266,16 +1246,16 @@ jobs:
           rc=$?
           set -e
           case "$rc" in
-            0)   echo "::notice::Qualifikation bestanden" ;;
-            124) echo "::error::UG7504 die Qualifikation war nach 45 Minuten nicht fertig"; exit 1 ;;
-            *)   echo "::error::UG7503 die Qualifikation endete mit Exit $rc"; exit 1 ;;
+            0)   echo "::notice::qualification passed" ;;
+            124) echo "::error::UG7504 the qualification was not finished after 45 minutes"; exit 1 ;;
+            *)   echo "::error::UG7503 the qualification ended with exit $rc"; exit 1 ;;
           esac
 
-      # Nach der Wartezeit ein frisches Token. Das erste ist womoeglich schon
-      # abgelaufen, und ein Merge ist der letzte und teuerste Schreibzugriff.
-      # Gepraegt wird es auch dann, wenn nichts zu mergen war: so hat das
-      # Ruecklesen genau eine Herkunft statt eines Fallback-Ausdrucks, den
-      # weder ein Leser noch ein Pruefer aufloesen kann.
+      # A fresh token after the wait. The first may already have expired, and a
+      # merge is the last and most expensive write. It is minted even when there
+      # was nothing to merge: that way the read-back has exactly one origin
+      # instead of a fallback expression neither a reader nor a reviewer can
+      # resolve.
       - uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1 # v3.2.0
         id: merge-token
         with:
@@ -1290,7 +1270,7 @@ jobs:
           permission-statuses: read
           permission-administration: read
 
-      - name: Kopf, Pflichtchecks und Tap-Schutz erneut pruefen, dann mergen
+      - name: Re-check head, required checks and tap protection, then merge
         if: steps.pr.outputs.unchanged == 'false'
         env:
           GH_TOKEN: ${{ steps.merge-token.outputs.token }}
@@ -1300,20 +1280,20 @@ jobs:
           set -euo pipefail
           reached=$(gh api installation/repositories --jq '[.repositories[].full_name] | sort | join(",")')
           [[ "$reached" == "$TAP_REPO" ]] || {
-            echo "::error::UG7510 das zweite Token erreicht '$reached'"; exit 1; }
+            echo "::error::UG7510 the second token reaches '$reached'"; exit 1; }
 
           head=$(gh pr view "$PR" --repo "$TAP_REPO" --json headRefOid --jq .headRefOid)
           if [[ "$head" != "$EXPECTED_HEAD" ]]; then
-            echo "::error::UG7511 der Kopf der Pull Request ist $head, gepusht wurde $EXPECTED_HEAD"
+            echo "::error::UG7511 the pull request head is $head, what was pushed is $EXPECTED_HEAD"
             exit 1
           fi
 
-          # Der Schutz gilt weiterhin, und der Gate-Check ist weiterhin
-          # Pflicht. Sonst waere die Qualifikation nur noch Dekoration.
+          # The protection still applies, and the gate check is still required.
+          # Otherwise the qualification would be decoration.
           contexts=$(gh api "repos/${TAP_REPO}/branches/main/protection" \
             --jq '[.required_status_checks.contexts[]] | join(",")')
           if [[ ",$contexts," != *",Formula qualification,"* ]]; then
-            echo "::error::UG7512 'Formula qualification' ist auf $TAP_REPO nicht mehr Pflicht (jetzt: $contexts)"
+            echo "::error::UG7512 'Formula qualification' is no longer required on $TAP_REPO (now: $contexts)"
             exit 1
           fi
 
@@ -1322,24 +1302,24 @@ jobs:
                   | if . == null then "absent none"
                     else "\((.status // "absent") | ascii_downcase) \((.conclusion // "none") | ascii_downcase)" end')
           if [[ "$state" != "completed success" ]]; then
-            echo "::error::UG7513 'Formula qualification' steht auf '$state' statt auf completed success"
+            echo "::error::UG7513 'Formula qualification' stands at '$state' instead of completed success"
             exit 1
           fi
 
           gh pr merge "$PR" --repo "$TAP_REPO" --squash --delete-branch
 
-      - name: Die Formel auf main zuruecklesen
+      - name: Read the formula back from main
         env:
           GH_TOKEN: ${{ steps.merge-token.outputs.token }}
         run: |
           set -euo pipefail
           gh api "repos/${TAP_REPO}/contents/Formula/ugos-cli.rb?ref=main" \
             --jq .content | base64 --decode > published.rb
-          # Byteweise gegen das erzeugte Asset, nicht nur auf die Version
-          # geprueft: eine Formel kann die richtige Version nennen und trotzdem
-          # eine andere sein.
+          # Byte for byte against the produced asset, not merely checked for the
+          # version: a formula can name the right version and still be a
+          # different one.
           cmp published.rb formula.rb
-          echo "::notice::die Formel auf $TAP_REPO ist byteweise die erzeugte"
+          echo "::notice::the formula on $TAP_REPO is byte for byte the produced one"
 
   publish-aur:
     name: Publish AUR package
@@ -1353,40 +1333,40 @@ jobs:
       AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
       AUR_SSH_KNOWN_HOSTS: ${{ vars.AUR_SSH_KNOWN_HOSTS }}
     steps:
-      - name: PKGBUILD und .SRCINFO vom Release holen
+      - name: Fetch PKGBUILD and .SRCINFO from the release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          # Beide wurden in Stufe 5 erzeugt, dort im Arch-Container gebaut und
-          # gegen das Release-Archiv geprueft, signiert und attestiert. Hier
-          # wird nur noch gepusht.
+          # Both were produced in stage 5, built there in the Arch container and
+          # checked against the release archive, signed and attested. All that
+          # happens here is the push.
           gh release download "$TAG" --repo "$GITHUB_REPOSITORY" \
             --pattern 'PKGBUILD' --pattern 'ugos-cli.SRCINFO' --dir . --clobber
-          # Der Punkt kommt erst hier wieder davor; am Release traegt die
-          # Datei ihn nicht, weil GitHub sie sonst umbenennt.
+          # The dot goes back in front only here; on the release the file does
+          # not carry it, because GitHub would otherwise rename it.
           mv ugos-cli.SRCINFO .SRCINFO
           grep -qx "pkgver=${VERSION}" PKGBUILD || {
-            echo "::error::UG7601 PKGBUILD traegt nicht pkgver=${VERSION}"; exit 1; }
-          # Mit awk statt grep: .SRCINFO rueckt seine Felder mit einem
-          # Tabulator ein, und `\t` im Muster ist Dialektsache. BSD-grep liest
-          # es als Tabulator, GNU-grep als das Zeichen t. Lokal bestand die
-          # Pruefung deshalb und auf dem Runner nie.
+            echo "::error::UG7601 PKGBUILD does not carry pkgver=${VERSION}"; exit 1; }
+          # With awk rather than grep: .SRCINFO indents its fields with a tab,
+          # and `\t` in a pattern is a matter of dialect. BSD grep reads it as a
+          # tab, GNU grep as the character t. The check therefore passed locally
+          # and never on the runner.
           awk -v v="$VERSION" '$1 == "pkgver" && $2 == "=" && $3 == v { found = 1 }
                                END { exit !found }' .SRCINFO || {
-            echo "::error::UG7602 .SRCINFO traegt nicht pkgver = ${VERSION}"; exit 1; }
-      - name: Das Paket bauen und gegen das Release-Archiv pruefen
+            echo "::error::UG7602 .SRCINFO does not carry pkgver = ${VERSION}"; exit 1; }
+      - name: Build the package and check it against the release archive
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
-          # Erst hier moeglich: makepkg holt seine Quellen von der
-          # Release-URL, und das Release ist seit Stufe 7 sichtbar. Gebaut
-          # wird also gegen genau die Bytes, die auch die Nutzer bekommen.
-          # Eigenes Mount-Verzeichnis, siehe Stufe 6: das `chown -R builder`
-          # im Container wuerde sonst das Arbeitsverzeichnis mitnehmen.
+          # Only possible here: makepkg fetches its sources from the release
+          # URL, and the release has been visible since stage 7. So the build
+          # runs against exactly the bytes users get too. A mount directory of
+          # its own, see stage 6: the `chown -R builder` in the container would
+          # otherwise take the workspace with it.
           mkdir -p ./aurwork
           install -m 0644 PKGBUILD ./aurwork/PKGBUILD
           docker run --rm --user root \
@@ -1411,7 +1391,7 @@ jobs:
           for binary in ugos-cli ugos-mcp; do
             cmp "/tmp/from-archive/$binary" "/tmp/from-package/usr/bin/$binary"
           done
-          echo "::notice::das gebaute Arch-Paket entspricht dem Release-Archiv"
+          echo "::notice::the built Arch package matches the release archive"
       - name: Push to the AUR
         run: |
           set -euo pipefail
@@ -1434,10 +1414,9 @@ jobs:
           git add PKGBUILD .SRCINFO
           git commit -m "ugos-cli-bin ${VERSION}-1"
           git push origin HEAD:master
-      # Ein angenommener Push sagt nichts darueber, was das AUR ausliefert.
-      # Gelesen wird deshalb oeffentlich und anonym, nicht ueber denselben
-      # SSH-Zugang, mit dem geschrieben wurde.
-      - name: Das AUR zurueckholen und gegen die qualifizierten Dateien pruefen
+      # An accepted push says nothing about what the AUR serves. So the read is
+      # public and anonymous, not through the same SSH access that wrote.
+      - name: Fetch the AUR back and check it against the qualified files
         run: |
           set -euo pipefail
           rm -rf "$RUNNER_TEMP/aur-readback"
@@ -1445,25 +1424,25 @@ jobs:
             https://aur.archlinux.org/ugos-cli-bin.git "$RUNNER_TEMP/aur-readback"
           for file in PKGBUILD .SRCINFO; do
             if [[ ! -f "$RUNNER_TEMP/aur-readback/$file" ]]; then
-              echo "::error::UG7610 $file fehlt im oeffentlichen AUR-Repository"
+              echo "::error::UG7610 $file is missing from the public AUR repository"
               exit 1
             fi
             cmp "$file" "$RUNNER_TEMP/aur-readback/$file"
             echo "  ok $file"
           done
-          # Und die Paketdatenbank selbst, nicht nur das Git dahinter. Die RPC
-          # braucht einen Moment nach dem Push, deshalb mit Frist.
+          # And the package database itself, not only the git behind it. The RPC
+          # needs a moment after the push, hence the deadline.
           deadline=$(( SECONDS + 600 ))
           while :; do
             served=$(curl -sS --max-time 30 \
               "https://aur.archlinux.org/rpc/v5/info?arg[]=ugos-cli-bin" \
               | jq -r 'try (.results[0].Version) catch ""')
             if [[ "$served" == "${VERSION}-1" ]]; then
-              echo "::notice::das AUR fuehrt ugos-cli-bin ${served}"
+              echo "::notice::the AUR carries ugos-cli-bin ${served}"
               break
             fi
             if (( SECONDS > deadline )); then
-              echo "::error::UG7611 die AUR-RPC meldet '${served:-nichts}' statt ${VERSION}-1"
+              echo "::error::UG7611 the AUR RPC reports '${served:-nothing}' instead of ${VERSION}-1"
               exit 1
             fi
             sleep 20
@@ -1493,11 +1472,11 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
         run: |
           set -euo pipefail
-          # Nur ugos-client hat kein `publish = false`; cargo bestimmt die
-          # Reihenfolge selbst. Keine Wiederholschleife und kein `|| true`:
-          # ein gescheiterter Publish muss die Pipeline anhalten.
+          # Only ugos-client lacks `publish = false`; cargo works out the order
+          # itself. No retry loop and no `|| true`: a failed publish has to stop
+          # the pipeline.
           cargo publish --workspace --locked
-      - name: Nachsehen, ob crates.io die Version ausliefert
+      - name: Check whether crates.io serves the version
         run: |
           set -euo pipefail
           deadline=$(( SECONDS + 600 ))
@@ -1506,21 +1485,21 @@ jobs:
               "https://crates.io/api/v1/crates/ugos-client/${VERSION}" \
               | jq -r 'try .version.num catch ""')
             if [[ "$found" == "$VERSION" ]]; then
-              echo "::notice::crates.io liefert ugos-client ${VERSION}"
+              echo "::notice::crates.io serves ugos-client ${VERSION}"
               break
             fi
             if (( SECONDS > deadline )); then
-              echo "::error::UG7700 crates.io liefert ugos-client ${VERSION} nicht innerhalb der Frist"
+              echo "::error::UG7700 crates.io does not serve ugos-client ${VERSION} within the deadline"
               exit 1
             fi
             sleep 20
           done
 
-  # Stufe 9. Befoerdern. Erst wenn jeder konfigurierte Kanal durch ist, wird
-  # aus der Vorabversion `latest`. Die Assets werden dabei nicht angefasst.
-  # Ein uebersprungener Kanal blockiert nicht, ein gescheiterter schon.
+  # Stage 9. Promote. Only once every configured channel is through does the
+  # prerelease become `latest`. The assets are not touched in the process.
+  # A skipped channel does not block, a failed one does.
   promote:
-    name: Auf latest befoerdern
+    name: Promote to latest
     needs: [metadata, stage, update-homebrew, publish-aur, publish-crates]
     if: >-
       always()
@@ -1539,13 +1518,13 @@ jobs:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       TAG: ${{ inputs.tag }}
     steps:
-      - name: Vorabkennung entfernen und latest setzen
+      - name: Clear the prerelease flag and set latest
         run: |
           set -euo pipefail
           gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --prerelease=false --latest
           pre=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json isPrerelease --jq .isPrerelease)
           latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
           [[ "$pre" == false && "$latest" == "$TAG" ]] || {
-            echo "::error::UG7110 $TAG ist nicht befoerdert (prerelease=$pre latest=$latest)"
+            echo "::error::UG7110 $TAG is not promoted (prerelease=$pre latest=$latest)"
             exit 1; }
-          echo "::notice::$TAG ist jetzt latest"
+          echo "::notice::$TAG is now latest"

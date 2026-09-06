@@ -89,14 +89,14 @@ output="$output_dir/ugos-cli_${version}_${arch}.deb"
 # --root-owner-group keeps the package independent of the build user, and
 # SOURCE_DATE_EPOCH makes repeated builds byte-identical.
 #
-# --no-uniform-compression ist der Punkt: Ubuntus dpkg komprimiert beide
-# Mitglieder mit zstd, und ein `control.tar.zst` ist nicht ueberall lesbar.
-# Das APT-Archiv hat es rundheraus abgelehnt:
+# --no-uniform-compression is the point: Ubuntu's dpkg compresses both ar
+# members with zstd. dpkg itself reads that, Debian 12 included, but not every
+# consumer does. The APT archive refused it outright:
 #
 #   AR100 unsupported Debian control compression in 'control.tar.zst'
 #
-# Ohne uniform compression gilt -Z nur den Daten, das Control-Mitglied bleibt
-# gzip. Genau das erzeugt Debian selbst, und jedes Werkzeug liest es.
+# Without uniform compression -Z applies to the data only and the control member
+# stays gzip, which is what Debian itself produces and what every tool reads.
 SOURCE_DATE_EPOCH="$source_date_epoch" \
     dpkg-deb --root-owner-group --no-uniform-compression -Zxz \
     --build "$root" "$output" >/dev/null
@@ -106,8 +106,8 @@ SOURCE_DATE_EPOCH="$source_date_epoch" \
     fail UG7302 'built package carries the wrong version'
 [[ $(dpkg-deb --field "$output" Architecture) == "$arch" ]] || \
     fail UG7302 'built package carries the wrong architecture'
-# Und dass die Mitglieder heissen, was Verbraucher lesen koennen. Die
-# Kompression ist Teil der Schnittstelle, nicht nur eine Bauentscheidung.
+# And that the members are named what consumers can read. The compression is
+# part of the interface, not merely a build decision.
 members=$(ar t "$output")
 grep -qx 'control.tar.gz' <<< "$members" || \
     fail UG7303 "control member is not gzip: $(tr '\n' ' ' <<< "$members")"

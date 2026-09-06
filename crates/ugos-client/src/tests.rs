@@ -489,8 +489,8 @@ fn result_wrapper_string() {
 
 #[test]
 fn append_token_percent_encodes_the_token() {
-    // Ein `&` wuerde die Query aufspalten, ein `#` alles danach abschneiden,
-    // ein `+` als Leerzeichen ankommen.
+    // An `&` would split the query, a `#` would cut off everything after it,
+    // a `+` would arrive as a space.
     let url = UgosClient::append_token("https://nas/ugreen/v1/kvm/vm/list", "a&b#c+d/e");
     assert!(
         url.ends_with("?token=a%26b%23c%2Bd%2Fe"),

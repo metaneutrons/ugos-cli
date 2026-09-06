@@ -98,9 +98,9 @@ impl FilesApi for UgosClient {
             .get_bytes("filemgr/downloadFile", &[("paths", remote)])
             .await?;
 
-        // Erst neben das Ziel, dann darueber. `File::create` kuerzte die
-        // vorhandene Datei, bevor das erste Byte da war: ein Abbruch loeschte
-        // damit die Kopie, die er ersetzen sollte.
+        // Beside the target first, then over it. `File::create` truncated the
+        // existing file before the first byte had arrived, so an abort deleted
+        // the very copy it was meant to replace.
         let temp = local.with_file_name(format!(
             "{}.part",
             local

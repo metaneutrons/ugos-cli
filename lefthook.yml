@@ -1,13 +1,13 @@
-# lefthook für Rust-Repositories. Als `lefthook.yml` ins Wurzelverzeichnis.
+# lefthook for Rust repositories. Goes into the root as `lefthook.yml`.
 # Installation:
 #   brew install lefthook   (oder: mise use -g lefthook)
 #   lefthook install
-# Die Skripte liegen unter scripts/hooks/ und sind managerunabhängig.
+# The scripts live under scripts/hooks/ and are manager-independent.
 
 commit-msg:
   commands:
     conventional-commits:
-      # {1} ist der Pfad zur Commit-Nachricht.
+      # {1} is the path to the commit message.
       run: sh scripts/hooks/check-commit-message.sh {1}
 
 pre-commit:
@@ -17,7 +17,7 @@ pre-commit:
       run: sh scripts/hooks/check-staged.sh
     secrets:
       run: gitleaks git --pre-commit --redact --staged --verbose
-    # Nur Formatierung: clippy kompiliert und sprengt das pre-commit-Budget.
+    # Formatting only: clippy compiles and blows the pre-commit budget.
     format:
       glob: "*.rs"
       run: cargo fmt --all -- --check
@@ -31,16 +31,16 @@ pre-push:
   commands:
     secrets:
       run: sh scripts/hooks/check-push-secrets.sh
-    # VOR dem Aktivieren einmal messen:
+    # Measure once BEFORE enabling this:
     #   time cargo clippy --workspace --all-targets
-    # Über 30 Sekunden gehört der Schritt nicht in den Hook, sondern nur in
-    # die CI. Das Ergebnis ist je Repository zu messen.
+    # Past 30 seconds the step does not belong in the hook but only in CI. The
+    # result is to be measured per repository.
     clippy:
-      # --all-features bewusst weggelassen: erzwingt einen vollständigen
-      # Neubau. Die vollständige Matrix läuft in der CI.
+      # --all-features deliberately left out: it forces a full rebuild. The
+      # complete matrix runs in CI.
       run: cargo clippy --workspace --all-targets -- -D warnings
-    # Tests standardmäßig aus. Erst nach eigener Messung einschalten, weil die
-    # Laufzeit stärker streut als bei clippy.
+    # Tests off by default. Switch them on only after measuring, because the
+    # runtime varies more than clippy's does.
     tests:
-      # Gemessen 2026-09-03: clippy 5,1 s + Tests 5,0 s, zusammen rund 10 s.
+      # Measured 2026-09-03: clippy 5.1 s + tests 5.0 s, about 10 s together.
       run: cargo nextest run --workspace

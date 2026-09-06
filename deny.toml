@@ -1,6 +1,6 @@
-# cargo-deny. Prüft Advisories, Lizenzen, Duplikate und Registries.
-# Jeder Eintrag unter `ignore` braucht Begründung, betroffenes Crate und
-# die Bedingung, unter der er wieder entfernt wird.
+# cargo-deny. Checks advisories, licences, duplicates and registries.
+# Every entry under `ignore` needs a reason, the crate it concerns and the
+# condition under which it gets removed again.
 
 [graph]
 all-features = true
@@ -9,17 +9,17 @@ all-features = true
 version = 2
 yanked = "deny"
 ignore = [
-    { id = "RUSTSEC-2023-0071", reason = "Marvin-Attack; kein Patch verfuegbar; ueber rsa gezogen; betrifft die Entschluesselung mit privatem Schluessel, dieser Client verschluesselt nur mit dem oeffentlichen NAS-Schluessel; entfernen sobald rsa eine gefixte Version veroeffentlicht" },
+    { id = "RUSTSEC-2023-0071", reason = "Marvin attack; no patch available; pulled in through rsa; concerns decryption with a private key, and this client only encrypts with the NAS public key; remove as soon as rsa publishes a fixed version" },
 ]
 
 [licenses]
 version = 2
-# Anwendungen unter GPL-3.0 ergänzen die Liste um "GPL-3.0".
+# Applications under GPL-3.0 add "GPL-3.0" to this list.
 allow = [
-    "GPL-3.0-or-later",  # dieses Projekt selbst
-    "MPL-2.0",           # option-ext, ueber dirs; MPL 2.0 ist GPL-3.0-vertraeglich
-    # webpki-roots. Inhaltlich permissiv, aber es gibt keine FSF-Aussage zur
-    # GPL-Vertraeglichkeit. Der Inhalt ist eine Zertifikatsliste, kein Code.
+    "GPL-3.0-or-later",  # this project itself
+    "MPL-2.0",           # option-ext, through dirs; MPL 2.0 is GPL-3.0 compatible
+    # webpki-roots. Permissive in substance, but there is no FSF statement on
+    # GPL compatibility. Its content is a certificate list, not code.
     "CDLA-Permissive-2.0",
     "MIT",
     "Apache-2.0",

@@ -252,9 +252,9 @@ impl UgosClient {
         path: &str,
         form: reqwest::multipart::Form,
     ) -> Result<T> {
-        // Ein multipart::Form laesst sich nicht klonen, deshalb kein
-        // retrying() hier: bei Ablauf wird einmal neu angemeldet und der
-        // Aufrufer schickt das Formular erneut.
+        // A multipart::Form cannot be cloned, so no retrying() here: on
+        // expiry the client logs in once more and the caller sends the form
+        // again.
         let token = self.session.read().await.token.clone();
         let url = Self::append_token(&self.url_for(path), &token);
 
@@ -326,8 +326,8 @@ impl UgosClient {
                 }),
             };
         }
-        // Kein Fehlerumschlag: die Bytes sind der Inhalt. Sie wurden fuer die
-        // Pruefung gelesen und werden als neue Antwort zurueckgereicht.
+        // No error envelope: the bytes are the content. They were read for the
+        // check and are handed back as a new response.
         Ok(reqwest::Response::from(
             http::Response::builder()
                 .status(reqwest::StatusCode::OK)
@@ -375,9 +375,9 @@ impl UgosClient {
 
     /// Run an operation, and once more if the token expired in between.
     ///
-    /// Stand vorher viermal ausgeschrieben und fehlte in sechs weiteren
-    /// Methoden. Wer eine neue Anfrageart ergaenzt, bekommt das Verhalten
-    /// jetzt dadurch, dass er hier durchgeht.
+    /// Used to be spelled out four times and was missing from six further
+    /// methods. Anyone adding a new kind of request now gets the behaviour by
+    /// passing through here.
     async fn retrying<T, F, Fut>(&self, mut op: F) -> Result<T>
     where
         F: FnMut() -> Fut,
@@ -558,10 +558,10 @@ impl UgosClient {
 
     /// Re-authenticate and update the stored session.
     async fn re_auth(&self) -> Result<()> {
-        // Ein Ablauf trifft alle laufenden Anfragen gleichzeitig. Ohne diese
-        // Sperre meldet sich jede einzeln neu an, und jede Anmeldung kann das
-        // Token der vorigen entwerten. Wer die Sperre bekommt, meldet sich an;
-        // wer wartet, prueft danach, ob das noch noetig ist.
+        // An expiry hits every request in flight at once. Without this lock
+        // each of them logs in separately, and every login can invalidate the
+        // previous one's token. Whoever takes the lock logs in; whoever waits
+        // checks afterwards whether that is still necessary.
         let _guard = self.reauth.lock().await;
         let token_before = self.session.read().await.token.clone();
 
@@ -570,14 +570,14 @@ impl UgosClient {
         {
             let current = self.session.read().await;
             if current.token != token_before {
-                // Waehrend des Wartens hat schon jemand erneuert.
+                // Someone else renewed while this call was waiting.
                 return Ok(());
             }
         }
         *self.session.write().await = new_session;
-        // Der RSA-Schluessel gehoert zur Sitzung. Bliebe er stehen, wickelte
-        // jede spaetere verschluesselte Anfrage ihren AES-Schluessel mit dem
-        // Schluessel der vorigen Anmeldung ein.
+        // The RSA key belongs to the session. If it stayed, every later
+        // encrypted request would wrap its AES key with the key of the previous
+        // login.
         *self.public_key.write().await = None;
         Ok(())
     }

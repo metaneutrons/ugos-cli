@@ -5,8 +5,8 @@
 //! Requires env vars: `UGOS_HOST`, `UGOS_USER`, `UGOS_PASSWORD`
 
 #![cfg(feature = "integration")]
-// Diese Tests laufen nur gegen echte Hardware. Ein fehlender Zugang soll den
-// Test abbrechen; die No-Panic-Regel gilt Bibliothekscode, nicht hier.
+// These tests run against real hardware only. A missing credential should abort
+// the test; the no-panic rule applies to library code, not here.
 #![allow(clippy::expect_used)]
 
 use ugos_client::api::docker::DockerApi;

@@ -1362,10 +1362,11 @@ impl ServerHandler for UgosMcp {
                 target_names.join(", ")
             )
         };
-        // Ohne with_server_info meldet sich der Server als "rmcp" in dessen
-        // Version: ServerInfo::new setzt Implementation::from_build_env(),
-        // und das env!("CARGO_CRATE_NAME") darin steht in der Bibliothek, nicht
-        // hier. Ein Client saehe dann nicht, womit er spricht.
+        // Without with_server_info the server reports itself as "rmcp" in
+        // rmcp's version: ServerInfo::new calls
+        // Implementation::from_build_env(), and the env!("CARGO_CRATE_NAME")
+        // inside it stands in the library, not here. A client would then not
+        // see what it is talking to.
         ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new(
                 env!("CARGO_PKG_NAME"),
