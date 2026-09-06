@@ -28,4 +28,4 @@ tabled.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
-ugos-client = { path = "../ugos-client", version = "0.13.2" }
+ugos-client = { path = "../ugos-client", version = "0.14.0" }
