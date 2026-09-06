@@ -1,5 +1,23 @@
 # Changelog
 
+## [0.14.0](https://github.com/metaneutrons/ugos-cli/compare/v0.13.2...v0.14.0) (2026-09-06)
+
+
+### ⚠ BREAKING CHANGES
+
+* **client:** say that UgosError is non-exhaustive ([#64](https://github.com/metaneutrons/ugos-cli/issues/64))
+
+### Bug Fixes
+
+* **client:** the ten findings from the code audit ([#63](https://github.com/metaneutrons/ugos-cli/issues/63)) ([d2fc679](https://github.com/metaneutrons/ugos-cli/commit/d2fc679716261a693609db2ab0ae78d1b42822fd))
+* **release:** APT nach dem promote, und den Index wie ein Client lesen ([#60](https://github.com/metaneutrons/ugos-cli/issues/60)) ([17f9be2](https://github.com/metaneutrons/ugos-cli/commit/17f9be24d5d2bdf46a15714db0024e1fe198c472))
+* **release:** the APT job needs a status function, or it inherits a skip ([#62](https://github.com/metaneutrons/ugos-cli/issues/62)) ([cb06dd9](https://github.com/metaneutrons/ugos-cli/commit/cb06dd9ea9d65f12ad347279c263b33fe578743d))
+
+
+### Documentation
+
+* **client:** say that UgosError is non-exhaustive ([#64](https://github.com/metaneutrons/ugos-cli/issues/64)) ([158344c](https://github.com/metaneutrons/ugos-cli/commit/158344cd842e7cc682c72b60d7b194cacabcf13c))
+
 ## [0.13.2](https://github.com/metaneutrons/ugos-cli/compare/v0.13.1...v0.13.2) (2026-09-05)
 
 
