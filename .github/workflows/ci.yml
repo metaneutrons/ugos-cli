@@ -23,14 +23,14 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      # Kein dtolnay/rust-toolchain: die Version steht in rust-toolchain.toml
-      # und rustup installiert sie daraus. Zwei Quellen wären eine Fehlerquelle.
+      # No dtolnay/rust-toolchain: the version stands in rust-toolchain.toml and
+      # rustup installs it from there. Two sources would be one source of error.
       - run: rustup show
       - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
       - run: cargo fmt --all -- --check
-      # Das lefthook-Repo hat kein install.sh. Binary aus dem Release-Asset,
-      # Version gepinnt wie jede andere Abhängigkeit.
-      - name: Hook-Konfiguration prüfen
+      # The lefthook repository has no install.sh. The binary comes from the
+      # release asset, pinned like any other dependency.
+      - name: Check the hook configuration
         env:
           LEFTHOOK_VERSION: '2.1.12'
         run: |
@@ -65,11 +65,11 @@ jobs:
         with:
           tool: cargo-nextest,cargo-llvm-cov
       - run: cargo nextest run --workspace --all-features --locked
-      # Gemessen 2026-09-03: 31,5 % Zeilenabdeckung. Die Schwelle liegt knapp
-      # darunter, damit sie Rueckschritte faengt; sie behauptet keine gute
-      # Abdeckung. Der grosse ungedeckte Block ist ugos-mcp und alles, was
-      # eine echte NAS-Verbindung braucht.
-      - name: Coverage mit harter Untergrenze
+      # Measured 2026-09-03: 31.5 % line coverage. The threshold sits just below
+      # that so it catches regressions; it claims no good coverage. The large
+      # uncovered block is ugos-mcp and everything that needs a real NAS
+      # connection.
+      - name: Coverage with a hard floor
         if: matrix.name == 'linux-x86_64'
         run: cargo llvm-cov --workspace --all-features --locked --fail-under-lines 31
 
@@ -78,13 +78,13 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-      # Bewusst nicht rust-toolchain.toml: dieser Job prueft die Untergrenze
-      # aus Cargo.toml, nicht die Entwicklungs-Toolchain.
-      - name: Untergrenze aus Cargo.toml lesen und installieren
+      # Deliberately not rust-toolchain.toml: this job checks the floor declared
+      # in Cargo.toml, not the development toolchain.
+      - name: Read the floor from Cargo.toml and install it
         run: |
           set -euo pipefail
           msrv=$(grep -m1 '^rust-version' Cargo.toml | cut -d'"' -f2)
-          echo "MSRV laut Cargo.toml: $msrv"
+          echo "MSRV according to Cargo.toml: $msrv"
           rustup toolchain install "$msrv" --profile minimal
           rustup default "$msrv"
       - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
@@ -98,10 +98,10 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
-      - name: Titel, Body und alle Commits prüfen
-        # Titel und Body kommen ausschließlich über env in das Skript, nie
-        # per Interpolation in den Skripttext: sonst wäre der PR-Titel ein
-        # Shell-Injection-Vektor.
+      - name: Check the title, the body and every commit
+        # Title and body reach the script through env only, never by
+        # interpolation into the script text: otherwise the PR title would be a
+        # shell injection vector.
         env:
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
@@ -111,38 +111,38 @@ jobs:
           set -euo pipefail
           status=0
           cc='^((feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9._/-]+\))?!?: .+|Revert ".+")'
-          # grep arbeitet zeilenweise, deshalb .* statt [^\n]*: in ERE wäre [^\n]
-          # die Klasse "kein Backslash und kein n" und würde Namen mit 'n'
-          # ausschließen. In der RE2-Regel des Rulesets ist [^\n] dagegen richtig.
+          # grep works line by line, hence .* rather than [^\n]*: in ERE [^\n]
+          # would be the class "no backslash and no n" and would exclude names
+          # containing 'n'. In the ruleset's RE2 rule [^\n] is right instead.
           ban='co-authored-by:.*(claude|anthropic)|generated with.*claude code'
 
-          # Bei Squash-Merge wird der PR-Titel zur Betreffzeile auf main und
-          # bestimmt damit die nächste Version.
+          # On a squash merge the PR title becomes the subject line on main and
+          # therefore decides the next version.
           if ! printf '%s' "$PR_TITLE" | grep -Eq "$cc"; then
-            echo "::error::PR-Titel folgt nicht Conventional Commits: $PR_TITLE"
+            echo "::error::the PR title does not follow Conventional Commits: $PR_TITLE"
             status=1
           fi
 
-          # Mit squash_merge_commit_message=PR_BODY landet der Body im Commit.
+          # With squash_merge_commit_message=PR_BODY the body lands in the commit.
           if printf '%s' "$PR_BODY" | grep -Eiq "$ban"; then
-            echo "::error::Der PR-Body enthält einen KI-Attributions-Trailer."
+            echo "::error::the PR body carries an AI attribution trailer."
             status=1
           fi
 
           for sha in $(git rev-list "${BASE_SHA}..${HEAD_SHA}"); do
             if git log -1 --format=%B "$sha" | grep -Eiq "$ban"; then
-              echo "::error::Commit $sha enthält einen KI-Attributions-Trailer."
+              echo "::error::commit $sha carries an AI attribution trailer."
               status=1
             fi
             email=$(git log -1 --format='%ae%n%ce' "$sha")
             if printf '%s' "$email" | grep -Fq 'noreply@anthropic.com'; then
-              echo "::error::Commit $sha hat eine Anthropic-Adresse als Autor oder Committer."
+              echo "::error::commit $sha has an Anthropic address as author or committer."
               status=1
             fi
           done
 
           if [ "$status" -ne 0 ]; then
-            echo "::notice::Dauerhaft abstellen in ~/.claude/settings.json: {\"attribution\":{\"commit\":\"\",\"pr\":\"\"}}"
+            echo "::notice::turn this off for good in ~/.claude/settings.json: {\"attribution\":{\"commit\":\"\",\"pr\":\"\"}}"
             exit 1
           fi
 
@@ -153,26 +153,26 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0
-      # Der pre-push-Hook scannt nur die neuen Commits. Der Vollscan über die
-      # History gehört hierher, sonst ist die Begründung in commits.md hohl.
+      # The pre-push hook scans only the new commits. The full scan over the
+      # history belongs here, or the reasoning in commits.md is hollow.
       - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
-          # Seit dem Breaking Change der Action Pflicht, sonst bricht sie bei
-          # jedem Pull Request ab. Der automatisch erzeugte Token genuegt.
+          # Required since the action's breaking change, or it aborts on every
+          # pull request. The automatically issued token is enough.
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          # Falls fuer den Organisationseinsatz erforderlich: eng begrenztes
-          # CI-Werkzeugsecret, niemals aus einer Publish-Environment.
+          # If required for organisation use: a narrowly scoped CI tooling
+          # secret, never one from a publish environment.
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }}
 
-  # Einziger Required Check im Ruleset. Matrix-Änderungen brechen damit nicht
-  # die Repository-Konfiguration.
+  # The only required check in the ruleset. Matrix changes therefore do not
+  # break the repository configuration.
   ci-success:
     name: CI Success
     if: always()
     needs: [quality, test, msrv, secrets, commit-hygiene]
     runs-on: ubuntu-24.04
     steps:
-      - name: Jeder vorangehende Job muss erfolgreich oder übersprungen sein
+      - name: Every preceding job must have succeeded or been skipped
         run: |
           set -euo pipefail
           printf '%s\n' '${{ toJSON(needs) }}' |

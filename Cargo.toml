@@ -6,12 +6,12 @@ resolver = "3"
 version = "0.14.2"
 edition = "2024"
 rust-version = "1.98"
-# Bewusste Abweichung vom Repository-Standard, der fuer Bibliotheken
-# LGPL-3.0-or-later vorsieht. ugos-client bleibt wie die Binaerprogramme auf
-# GPL-3.0-or-later, entschieden vom Eigentuemer. Zwei Umstaende stuetzen das:
-# die Bibliothek bedient die Anwendungen dieses Projekts, wo das schwaechere
-# Copyleft nichts hinzufuegt, und vierzehn Releases stehen bereits unter GPL,
-# sodass ein Wechsel nur vorwaerts wirkte und die Historie teilte.
+# A deliberate departure from the repository standard, which prescribes
+# LGPL-3.0-or-later for libraries. ugos-client stays on GPL-3.0-or-later like
+# the binaries, decided by the owner. Two circumstances support that: the
+# library serves this project's own applications, where the weaker copyleft adds
+# nothing, and fourteen releases already stand under the GPL, so a switch would
+# take effect only going forward and would split the history.
 license = "GPL-3.0-or-later"
 authors = ["Fabian Schmieder <fabian@schmieder.eu>"]
 repository = "https://github.com/metaneutrons/ugos-cli"
@@ -26,9 +26,9 @@ unused_qualifications = "warn"
 [workspace.lints.clippy]
 all = { level = "deny", priority = -1 }
 cargo = { level = "warn", priority = -1 }
-# Mehrfach eingebundene Versionen entstehen ausschliesslich transitiv und sind
-# von hier nicht aufloesbar. cargo-deny fuehrt dieselbe Pruefung unter [bans]
-# und ist dort der richtige Ort, weil es den Verursacher im Baum benennt.
+# Versions pulled in more than once arise purely transitively and cannot be
+# resolved from here. cargo-deny runs the same check under [bans] and is the
+# right place for it, because it names the culprit in the tree.
 multiple_crate_versions = "allow"
 pedantic = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
@@ -43,9 +43,9 @@ print_stderr = "warn"
 [workspace.dependencies]
 anyhow = "1"
 clap = { version = "4", features = ["derive", "env"] }
-# Nur fuer den Rueckbau einer Antwort, deren Rumpf zur Pruefung gelesen
-# wurde. reqwest zieht http ohnehin; hier steht es, weil der Code den Typ
-# direkt benennt.
+# Only for rebuilding a response whose body was read for the check. reqwest
+# pulls http in anyway; it stands here because the code names the type
+# directly.
 http = "1"
 reqwest = { version = "0.12", features = ["rustls-tls", "json", "cookies", "multipart"], default-features = false }
 rustls = { version = "0.23", default-features = false, features = ["ring", "std", "tls12"] }

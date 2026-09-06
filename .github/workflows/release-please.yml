@@ -29,12 +29,12 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
-      # release-please schreibt die Version nach Cargo.toml, fasst Cargo.lock
-      # aber nicht an. Auf main laege das Lockfile dann eine Version zurueck und
-      # jedes --locked in der CI scheitert. Der Push geht ausschliesslich auf den
-      # PR-Branch, nie auf main, also entsteht keine Schleife. Mit dem App-Token
-      # werden die Required Checks auf dem neuen Kopf der PR neu bewertet.
-      - name: Cargo.lock in die Release-PR synchronisieren
+      # release-please writes the version into Cargo.toml but does not touch
+      # Cargo.lock. On main the lockfile would then be one version behind and
+      # every --locked in CI would fail. The push goes to the PR branch only,
+      # never to main, so no loop arises. With the App token the required checks
+      # are re-evaluated on the PR's new head.
+      - name: Sync Cargo.lock into the release PR
         if: ${{ steps.release.outputs.pr }}
         env:
           GH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -60,11 +60,11 @@ jobs:
     name: Publish release artifacts and package channels
     needs: release-please
     if: needs.release-please.outputs.release_created == 'true'
-    # Ein gerufener Workflow kann keine Berechtigung anfordern, die der
-    # Aufrufer nicht hat; der Lauf scheitert sonst als startup_failure, ohne
-    # Annotation und ohne Job. Die Signatur- und Attestierungsstufen brauchen
-    # `id-token` und `attestations`, also stehen sie hier. Am Job und nicht am
-    # Workflow, damit der release-please-Job selbst sie nicht bekommt.
+    # A called workflow cannot request a permission the caller lacks; the run
+    # otherwise fails as a startup_failure, without an annotation and without a
+    # job. The signing and attestation stages need `id-token` and
+    # `attestations`, so they stand here. On the job rather than on the
+    # workflow, so that the release-please job itself does not get them.
     permissions:
       contents: write
       id-token: write

@@ -11,8 +11,8 @@ keywords = ["ugreen", "nas", "ugos", "cli", "kvm"]
 categories = ["command-line-utilities"]
 readme = "../../README.md"
 
-# Nur ugos-client geht nach crates.io. Ohne diese Zeile wuerde ein
-# `cargo publish --workspace` die Binaerprogramme mitschicken.
+# Only ugos-client goes to crates.io. Without this line a
+# `cargo publish --workspace` would take the binaries along.
 publish = false
 
 [lints]

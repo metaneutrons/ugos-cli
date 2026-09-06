@@ -172,9 +172,9 @@ fn the_server_names_itself_not_the_library() {
     use rmcp::ServerHandler;
 
     let info = make_server().get_info();
-    // Ohne with_server_info setzt rmcp Implementation::from_build_env() und
-    // meldet damit sich selbst. Ein Client saehe dann "rmcp" statt des
-    // Servers, mit dem er spricht.
+    // Without with_server_info rmcp calls Implementation::from_build_env() and
+    // thereby reports itself. A client would then see "rmcp" instead of the
+    // server it is talking to.
     assert_eq!(info.server_info.name, "ugos-mcp");
     assert_eq!(info.server_info.version, env!("CARGO_PKG_VERSION"));
 }

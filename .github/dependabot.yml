@@ -1,16 +1,16 @@
-# Vorlage. Nach .github/dependabot.yml, Ökosysteme streichen, die es im
-# Projekt nicht gibt.
+# A template. Copy to .github/dependabot.yml and delete the ecosystems the
+# project does not have.
 #
-# Die Gruppierung ist bewusst nach Aktualisierungsart getrennt. Eine Gruppe
-# `patterns: ['*']` über alle Arten bündelt Breaking Changes mit harmlosen
-# Anhebungen, und eine kaputte Abhängigkeit blockiert dann den ganzen Stapel.
-# Minor und Patch bleiben gebündelt, weil eine Einzelprüfung dort nichts
-# bringt. Major bleibt ungruppiert, damit jeder Fall allein ankommt.
+# The grouping is deliberately split by update kind. A single group with
+# `patterns: ['*']` across every kind bundles breaking changes with harmless
+# bumps, and one broken dependency then blocks the whole stack. Minor and patch
+# stay bundled, because reviewing those one by one buys nothing. Major stays
+# ungrouped, so that every case arrives on its own.
 #
-# `cooldown` hält eine Version, die kurz nach Veröffentlichung zurückgezogen
-# wird, aus jedem Pull Request heraus.
-# Zeiten sind ohne `timezone` in UTC. Wer lokale Ausfuehrungszeiten braucht,
-# traegt eine passende IANA-Zeitzone projektspezifisch ein.
+# `cooldown` keeps a version that gets yanked shortly after publication out of
+# every pull request.
+# Without `timezone` the times are UTC. A project that needs local run times
+# enters a suitable IANA time zone of its own.
 
 version: 2
 
@@ -30,10 +30,10 @@ updates:
         patterns: ['*']
         update-types: [minor, patch]
 
-  # Eigener Eintrag, weil die Toolchain den gesamten Build betrifft und sich
-  # nie einen Pull Request teilen soll. `rust-toolchain` fehlt in der
-  # Ökosystem-Tabelle der GitHub-Doku, steht aber im veröffentlichten Schema
-  # json.schemastore.org/dependabot-2.0.json.
+  # An entry of its own, because the toolchain affects the entire build and
+  # should never share a pull request. `rust-toolchain` is absent from the
+  # ecosystem table in GitHub's documentation but stands in the published schema
+  # at json.schemastore.org/dependabot-2.0.json.
   - package-ecosystem: rust-toolchain
     directory: /
     schedule:
@@ -52,8 +52,8 @@ updates:
       time: '05:15'
     open-pull-requests-limit: 5
     cooldown:
-      # semver-major-days gilt fuer dieses Oekosystem nicht: Dependabot
-      # lehnt die gesamte Datei ab, wenn es hier steht.
+      # semver-major-days does not apply to this ecosystem: Dependabot rejects
+      # the whole file if it stands here.
       default-days: 3
     groups:
       github-actions-minor-patch:

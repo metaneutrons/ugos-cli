@@ -78,10 +78,10 @@ pub fn save(session: &CachedSession) -> Result<()> {
     }
     let json = serde_json::to_string_pretty(session).context("serializing session")?;
 
-    // Die Rechte gehoeren in den erzeugenden Aufruf. `write` gefolgt von
-    // `set_permissions` legte die Datei mit der Umask an, schrieb das Token
-    // hinein und engte erst danach ein; in diesem Fenster kann jeder lokale
-    // Nutzer das Token lesen.
+    // The permissions belong in the call that creates the file. `write`
+    // followed by `set_permissions` created it under the umask, wrote the token
+    // into it and only narrowed afterwards; in that window every local user can
+    // read the token.
     let mut opts = std::fs::OpenOptions::new();
     let _ = opts.write(true).create(true).truncate(true);
     #[cfg(unix)]
