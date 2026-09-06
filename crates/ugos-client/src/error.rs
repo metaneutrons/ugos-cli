@@ -1,7 +1,13 @@
 //! Error types for the UGOS client library.
 
 /// All errors returned by the UGOS client.
+///
+/// Non-exhaustive on purpose. This audit added [`UgosError::Io`], and without
+/// the attribute that alone would have broken every downstream `match` that
+/// listed the variants, making each future error kind a breaking release. A
+/// consumer matches the variants it handles and keeps a `_` arm for the rest.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum UgosError {
     /// Incorrect account or password (UGOS code 1003).
     #[error("incorrect account or password")]
