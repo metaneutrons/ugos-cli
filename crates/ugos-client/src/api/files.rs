@@ -98,15 +98,43 @@ impl FilesApi for UgosClient {
             .get_bytes("filemgr/downloadFile", &[("paths", remote)])
             .await?;
 
-        let mut out = std::fs::File::create(local)
-            .map_err(|e| UgosError::Encryption(format!("creating '{}': {e}", local.display())))?;
-        let mut written = 0u64;
-        while let Some(chunk) = resp.chunk().await? {
-            out.write_all(&chunk)
-                .map_err(|e| UgosError::Encryption(format!("writing download: {e}")))?;
-            written += chunk.len() as u64;
-            progress(written);
+        // Erst neben das Ziel, dann darueber. `File::create` kuerzte die
+        // vorhandene Datei, bevor das erste Byte da war: ein Abbruch loeschte
+        // damit die Kopie, die er ersetzen sollte.
+        let temp = local.with_file_name(format!(
+            "{}.part",
+            local
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("download")
+        ));
+
+        let transfer = async {
+            let mut out = std::fs::File::create(&temp)
+                .map_err(|e| UgosError::io(format!("creating '{}'", temp.display()), e))?;
+            let mut written = 0u64;
+            while let Some(chunk) = resp.chunk().await? {
+                out.write_all(&chunk)
+                    .map_err(|e| UgosError::io("writing download", e))?;
+                written += chunk.len() as u64;
+                progress(written);
+            }
+            out.sync_all()
+                .map_err(|e| UgosError::io(format!("flushing '{}'", temp.display()), e))?;
+            Ok::<u64, UgosError>(written)
         }
+        .await;
+
+        let written = match transfer {
+            Ok(written) => written,
+            Err(e) => {
+                let _ = std::fs::remove_file(&temp);
+                return Err(e);
+            }
+        };
+
+        std::fs::rename(&temp, local)
+            .map_err(|e| UgosError::io(format!("moving into '{}'", local.display()), e))?;
         Ok(written)
     }
 
@@ -117,7 +145,7 @@ impl FilesApi for UgosClient {
             .ok_or_else(|| UgosError::Encryption("source has no file name".into()))?;
 
         let meta = std::fs::metadata(local)
-            .map_err(|e| UgosError::Encryption(format!("reading '{}': {e}", local.display())))?;
+            .map_err(|e| UgosError::io(format!("reading '{}'", local.display()), e))?;
         let size = meta.len();
         let mtime = meta
             .modified()
@@ -146,7 +174,7 @@ impl FilesApi for UgosClient {
         // Step two sends the bytes, with the same metadata repeated in a
         // `ug-param` header. `dir` is URL-encoded in there, unlike in step one.
         let bytes = std::fs::read(local)
-            .map_err(|e| UgosError::Encryption(format!("reading '{}': {e}", local.display())))?;
+            .map_err(|e| UgosError::io(format!("reading '{}'", local.display()), e))?;
         let ug_param = serde_json::json!({
             "uuid": uuid,
             "file_name": name,

@@ -69,17 +69,28 @@ pub fn save(session: &CachedSession) -> Result<()> {
     let path = cache_path()?;
     if let Some(dir) = path.parent() {
         std::fs::create_dir_all(dir).context("creating config directory")?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700))
+                .context("restricting config directory")?;
+        }
     }
     let json = serde_json::to_string_pretty(session).context("serializing session")?;
-    std::fs::write(&path, &json).context("writing session cache")?;
 
-    // Restrict permissions to owner-only (token is sensitive).
+    // Die Rechte gehoeren in den erzeugenden Aufruf. `write` gefolgt von
+    // `set_permissions` legte die Datei mit der Umask an, schrieb das Token
+    // hinein und engte erst danach ein; in diesem Fenster kann jeder lokale
+    // Nutzer das Token lesen.
+    let mut opts = std::fs::OpenOptions::new();
+    let _ = opts.write(true).create(true).truncate(true);
     #[cfg(unix)]
     {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600))
-            .context("setting session file permissions")?;
+        use std::os::unix::fs::OpenOptionsExt;
+        let _ = opts.mode(0o600);
     }
+    let mut file = opts.open(&path).context("writing session cache")?;
+    std::io::Write::write_all(&mut file, json.as_bytes()).context("writing session cache")?;
 
     Ok(())
 }
