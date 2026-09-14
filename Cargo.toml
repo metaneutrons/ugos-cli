@@ -62,7 +62,7 @@ rsa = "0.9"
 base64 = "0.23"
 tabled = { version = "0.21", default-features = false, features = ["std"] }
 thiserror = "2"
-dirs = "6"
+dirs = "7"
 der = "0.7"
 
 [profile.release]
