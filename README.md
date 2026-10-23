@@ -30,6 +30,12 @@ export UGOS_HOST=192.168.1.10
 export UGOS_USER=admin          # UGOS_USERNAME works too
 export UGOS_PASSWORD=<password>
 
+# Accounts with 2FA: pass the authenticator code once. The device is then
+# trusted (like "trust this device" in the web UI) via a stable
+# UG-Client-Id stored in ~/.config/ugos-cli/client-id, so later logins
+# need no code. UGOS_TRUST=0 disables this; UGOS_CLIENT_ID overrides the id.
+UGOS_OTP=123456 ugos-cli info
+
 # List VMs
 ugos-cli vm list
 

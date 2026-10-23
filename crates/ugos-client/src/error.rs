@@ -27,6 +27,13 @@ pub enum UgosError {
     #[error("app service error: {0}")]
     AppServiceError(String),
 
+    /// The account has two-factor authentication enabled and no one-time
+    /// code was supplied (set `UGOS_OTP` to the current authenticator code).
+    #[error(
+        "two-factor authentication is enabled for this account; set UGOS_OTP to the current one-time code"
+    )]
+    OtpRequired,
+
     /// Unexpected API error code.
     #[error("API error {code}: {msg}")]
     Api {
