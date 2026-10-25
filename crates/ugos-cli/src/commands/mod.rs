@@ -51,6 +51,8 @@ pub async fn run(
         Resource::Download { action } => download(client, action, fmt, w).await,
         Resource::Fs { action } => fs(client, action, fmt, w).await,
         Resource::Snapshot { action } => fs_snapshot(client, action, fmt, w).await,
+        // Handled in `main` before any connection is made.
+        Resource::Skill(_) => Ok(()),
     }
 }
 

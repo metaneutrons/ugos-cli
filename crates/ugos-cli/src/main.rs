@@ -5,6 +5,7 @@ mod commands;
 
 mod output;
 mod session;
+mod skill;
 
 use std::io::{BufWriter, Write};
 
@@ -61,6 +62,11 @@ async fn main() -> Result<()> {
         bail!("{e:#}");
     }
 
+    // After the command, so it adds nothing to what the user waits for, and
+    // never able to fail it.
+    skill::update_quietly();
+    skill::hint_once(matches!(cli.output, cli::OutputFormat::Json));
+
     // Save session after command (re-auth may have refreshed it).
     if !cli.no_cache {
         let sess = client.session().await;
@@ -89,6 +95,22 @@ fn env_var(name: &str) -> Option<String> {
 ///
 /// Returns `true` when the command was handled and the process should exit.
 fn run_offline(cli: &cli::Cli) -> Result<bool> {
+    if let cli::Resource::Skill(args) = &cli.command {
+        let request = if args.install {
+            skill::Request::Install { ask: !args.yes }
+        } else if args.decline {
+            skill::Request::Decline
+        } else if args.remove {
+            skill::Request::Remove
+        } else {
+            skill::Request::Status
+        };
+        let mut stdout = BufWriter::new(std::io::stdout().lock());
+        skill::control(request, &mut stdout)?;
+        stdout.flush().context("flushing stdout")?;
+        return Ok(true);
+    }
+
     let cli::Resource::Vm {
         action: cli::VmAction::Create(args),
     } = &cli.command

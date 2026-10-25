@@ -190,6 +190,36 @@ Multiple NAS targets are supported:
 }
 ```
 
+### Agent skill
+
+An AI coding tool works better with `ugos-cli` when it knows the tool is there:
+when to reach for it instead of `virsh` or the web UI, how to pass credentials
+without typing a password into a chat, and which commands change or remove
+something and need your yes first. `ugos-cli` ships an
+[Agent Skill](https://agentskills.io/specification) for that. Its command
+reference is generated from the binary that installs it, so it matches the build.
+
+```bash
+ugos-cli skill             # where it is, and what would happen
+ugos-cli skill --install   # install where it is missing, after asking
+ugos-cli skill --decline   # stop offering it
+ugos-cli skill --remove    # take out the copies ugos-cli installed
+```
+
+The skill goes only into the skill folders of AI tools found on the machine,
+such as `~/.claude/skills` for Claude Code and `~/.agents/skills`, which Codex,
+Gemini CLI and GitHub Copilot read. Nothing is installed without your consent,
+and a place you declined is not offered again. A copy `ugos-cli` installed and
+nobody edited is brought up to the running version without asking, after any
+command that connects to a NAS. A copy you edited is left alone.
+
+`ugos-cli` never asks a question during a normal command, so scripts and CI are
+never blocked. At most it prints one line on stderr, once, when you run a
+command in a terminal and an AI tool without the skill is installed. Set
+`UGOS_NO_SKILL_HINT=1` to silence it. `skill --install` asks only on a terminal;
+without one it needs `--yes`. The packages (Homebrew, `.deb`, AUR) do not install
+the skill, and `ugos-mcp` does not touch any files.
+
 ## Creating and updating VMs
 
 `vm create` and `vm update` map directly onto the fields of the

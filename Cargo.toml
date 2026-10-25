@@ -42,6 +42,10 @@ print_stderr = "warn"
 
 [workspace.dependencies]
 anyhow = "1"
+# Installs the agent skill into the skill folders of AI tools, only after the
+# user agreed. LGPL-3.0-or-later, so it may sit under this GPL-3.0-or-later
+# project. Used by ugos-cli only, never by the published ugos-client.
+agent-skill-installer = "0.2.1"
 clap = { version = "4", features = ["derive", "env"] }
 # Only for rebuilding a response whose body was read for the check. reqwest
 # pulls http in anyway; it stands here because the code names the type

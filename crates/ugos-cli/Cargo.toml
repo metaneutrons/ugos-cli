@@ -19,6 +19,7 @@ publish = false
 workspace = true
 
 [dependencies]
+agent-skill-installer.workspace = true
 anyhow.workspace = true
 clap.workspace = true
 dirs.workspace = true
