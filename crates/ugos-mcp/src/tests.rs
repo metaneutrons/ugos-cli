@@ -178,3 +178,68 @@ fn the_server_names_itself_not_the_library() {
     assert_eq!(info.server_info.name, "ugos-mcp");
     assert_eq!(info.server_info.version, env!("CARGO_PKG_VERSION"));
 }
+
+/// The tool reference the agent skill of `ugos-cli` carries, from the router.
+fn skill_mcp_reference() -> String {
+    use std::fmt::Write as _;
+    let server = make_server();
+    let mut tools = server.tool_router.list_all();
+    tools.sort_by(|a, b| a.name.cmp(&b.name));
+    let mut out = String::from(
+        "# ugos-mcp tools\n\nGenerated from the build by a test in ugos-mcp. \
+         Started with `ugos-mcp`.\n\n",
+    );
+    for tool in tools {
+        let _ = writeln!(out, "## {}\n", tool.name);
+        if let Some(description) = &tool.description {
+            let _ = writeln!(out, "{description}\n");
+        }
+        let required: Vec<&str> = tool
+            .input_schema
+            .get("required")
+            .and_then(|value| value.as_array())
+            .map(|names| names.iter().filter_map(|name| name.as_str()).collect())
+            .unwrap_or_default();
+        if let Some(properties) = tool
+            .input_schema
+            .get("properties")
+            .and_then(|value| value.as_object())
+        {
+            for (name, schema) in properties {
+                let needed = if required.contains(&name.as_str()) {
+                    " (required)"
+                } else {
+                    ""
+                };
+                let what = schema
+                    .get("description")
+                    .and_then(|value| value.as_str())
+                    .unwrap_or_default();
+                let _ = writeln!(out, "- `{name}`{needed}: {what}");
+            }
+            out.push('\n');
+        }
+    }
+    out
+}
+
+/// `crates/ugos-cli/skill/references/mcp.md` is checked in, because ugos-cli
+/// cannot depend on ugos-mcp to generate it. This test is what keeps the two
+/// from drifting. After changing a tool, regenerate with
+/// `UGOS_SKILL_BLESS=1 cargo test -p ugos-mcp skill_mcp_reference`.
+#[test]
+fn skill_mcp_reference_is_current() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../ugos-cli/skill/references/mcp.md");
+    let expected = skill_mcp_reference();
+    if std::env::var_os("UGOS_SKILL_BLESS").is_some() {
+        std::fs::write(&path, &expected).unwrap();
+        return;
+    }
+    let found = std::fs::read_to_string(&path).unwrap();
+    assert!(
+        found == expected,
+        "the skill's MCP reference is out of date; run \
+         `UGOS_SKILL_BLESS=1 cargo test -p ugos-mcp skill_mcp_reference` and commit the result"
+    );
+}
