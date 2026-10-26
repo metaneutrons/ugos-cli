@@ -53,10 +53,64 @@ impl std::fmt::Debug for Session {
 /// Login response payload from `/verify/login`.
 #[derive(Debug, Deserialize)]
 struct LoginData {
+    /// Session token. Absent when two-factor authentication is on: UGOS
+    /// answers `200` with `enable_otp` and withholds the token.
+    #[serde(default)]
     token: String,
+    /// `true` when the account has two-factor authentication enabled.
+    #[serde(default)]
+    enable_otp: bool,
     /// Base64-encoded PEM, used for the request encryption scheme.
     #[serde(default)]
     public_key: String,
+}
+
+/// Body of `POST /verify/login`.
+///
+/// `otp: true` and `is_simple: false` match the UGOS 1.20 web client. With
+/// `otp: false`, an account that has two-factor authentication enabled is
+/// rejected with code 9406 ("client is not compatible with the firmware"),
+/// which names the firmware instead of the second factor. Accounts without
+/// two-factor authentication accept `otp: true` and still return a token.
+fn login_body(username: &str, encrypted_password: &str) -> serde_json::Value {
+    serde_json::json!({
+        "username": username,
+        "password": encrypted_password,
+        "keepalive": true,
+        "otp": true,
+        "is_simple": false,
+    })
+}
+
+/// Turn a decoded login payload into a session.
+///
+/// A payload with `enable_otp` and no token is a successful password check
+/// that still needs a second factor. That is reported on its own, rather
+/// than as a missing token or as API error 9406.
+fn session_from_login(data: LoginData) -> Result<Session> {
+    if data.enable_otp && data.token.is_empty() {
+        return Err(UgosError::TwoFactorUnsupported);
+    }
+    if data.token.is_empty() {
+        return Err(UgosError::Encryption(
+            "login response carried no token".into(),
+        ));
+    }
+
+    // The key arrives base64-encoded; decode it here so callers see PEM.
+    let public_key = if data.public_key.is_empty() {
+        String::new()
+    } else {
+        B64.decode(&data.public_key)
+            .ok()
+            .and_then(|bytes| String::from_utf8(bytes).ok())
+            .unwrap_or_default()
+    };
+
+    Ok(Session {
+        token: data.token,
+        public_key,
+    })
 }
 
 /// Fetch the RSA public key from the NAS.
@@ -130,6 +184,8 @@ pub fn encrypt_password(key: &RsaPublicKey, password: &str) -> Result<String> {
 /// # Errors
 ///
 /// Returns [`UgosError::AuthFailed`] on bad credentials.
+/// Returns [`UgosError::TwoFactorUnsupported`] when the response has
+/// `enable_otp` set and no token.
 /// Returns [`UgosError::Encryption`] on RSA failures.
 /// Returns [`UgosError::Http`] on network failures.
 pub async fn login(
@@ -145,12 +201,7 @@ pub async fn login(
 
     // Step 3: POST /verify/login
     let url = format!("{base_url}/v1/verify/login");
-    let body = serde_json::json!({
-        "username": creds.username,
-        "password": encrypted,
-        "keepalive": true,
-        "otp": false,
-    });
+    let body = login_body(&creds.username, &encrypted);
 
     let resp = client.post(&url).json(&body).send().await?;
 
@@ -159,19 +210,93 @@ pub async fn login(
     // of what actually went wrong.
     let api: crate::types::common::ApiResponse<serde_json::Value> = resp.json().await?;
     let data: LoginData = serde_json::from_value(api.into_result()?)?;
+    session_from_login(data)
+}
 
-    // The key arrives base64-encoded; decode it here so callers see PEM.
-    let public_key = if data.public_key.is_empty() {
-        String::new()
-    } else {
-        B64.decode(&data.public_key)
-            .ok()
-            .and_then(|b| String::from_utf8(b).ok())
-            .unwrap_or_default()
-    };
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::{LoginData, login_body, session_from_login};
+    use crate::error::UgosError;
+    use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
 
-    Ok(Session {
-        token: data.token,
-        public_key,
-    })
+    #[test]
+    fn login_body_matches_the_web_client() {
+        let body = login_body("admin", "ciphertext");
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "username": "admin",
+                "password": "ciphertext",
+                "keepalive": true,
+                "otp": true,
+                "is_simple": false,
+            })
+        );
+    }
+
+    #[test]
+    fn two_factor_without_a_token_is_a_clear_error() {
+        let data: LoginData = serde_json::from_value(serde_json::json!({
+            "enable_otp": true,
+            "token_id": "pending",
+        }))
+        .unwrap();
+        let err = session_from_login(data).unwrap_err();
+        assert!(matches!(err, UgosError::TwoFactorUnsupported));
+        assert_eq!(
+            err.to_string(),
+            "two-factor authentication is enabled; ugos-cli does not support it yet"
+        );
+    }
+
+    #[test]
+    fn an_empty_token_with_two_factor_is_the_same_error() {
+        let data: LoginData = serde_json::from_value(serde_json::json!({
+            "enable_otp": true,
+            "token": "",
+        }))
+        .unwrap();
+        let err = session_from_login(data).unwrap_err();
+        assert!(matches!(err, UgosError::TwoFactorUnsupported));
+    }
+
+    #[test]
+    fn a_missing_token_without_two_factor_is_not_that_error() {
+        let data: LoginData = serde_json::from_value(serde_json::json!({
+            "public_key": "",
+        }))
+        .unwrap();
+        let err = session_from_login(data).unwrap_err();
+        assert!(matches!(
+            err,
+            UgosError::Encryption(ref message) if message == "login response carried no token"
+        ));
+    }
+
+    #[test]
+    fn a_token_still_opens_a_session() {
+        let pem = "-----BEGIN PUBLIC KEY-----\nabc\n-----END PUBLIC KEY-----";
+        let data: LoginData = serde_json::from_value(serde_json::json!({
+            "token": "session-token",
+            "enable_otp": false,
+            "public_key": B64.encode(pem),
+        }))
+        .unwrap();
+        let session = session_from_login(data).unwrap();
+        assert_eq!(session.token, "session-token");
+        assert_eq!(session.public_key, pem);
+    }
+
+    #[test]
+    fn a_token_is_kept_when_enable_otp_is_also_set() {
+        let data: LoginData = serde_json::from_value(serde_json::json!({
+            "token": "session-token",
+            "enable_otp": true,
+        }))
+        .unwrap();
+        let session = session_from_login(data).unwrap();
+        assert_eq!(session.token, "session-token");
+        assert!(session.public_key.is_empty());
+    }
 }

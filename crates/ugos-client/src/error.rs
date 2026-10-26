@@ -7,6 +7,15 @@ pub enum UgosError {
     #[error("incorrect account or password")]
     AuthFailed,
 
+    /// Two-factor authentication is enabled, and this client cannot complete it.
+    ///
+    /// The password was accepted. UGOS answered with `enable_otp` set and no
+    /// session token. The same login used to fail with API error 9406
+    /// ("client is not compatible with the firmware") because the request
+    /// sent `otp: false`.
+    #[error("two-factor authentication is enabled; ugos-cli does not support it yet")]
+    TwoFactorUnsupported,
+
     /// Parameter error (UGOS code 1005).
     #[error("parameter error: {0}")]
     ParameterError(String),
