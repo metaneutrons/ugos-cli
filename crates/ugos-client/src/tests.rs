@@ -573,3 +573,25 @@ fn full_envelope_error() {
     let resp: ApiResponse<serde_json::Value> = serde_json::from_str(json).unwrap();
     assert!(matches!(resp.into_result(), Err(UgosError::LoginExpired)));
 }
+
+#[test]
+fn a_running_download_reports_its_progress_as_a_fraction() {
+    // A running task answered `"plan": 5.24`, which made `download list` fail with
+    // "invalid type: floating point `5.24`, expected i64".
+    let running = serde_json::json!({
+        "id": 1, "task_id": "t1", "download_file_name": "a.iso",
+        "total_size": 6_000_000_000_i64, "downloaded_size": 314_400_000_i64,
+        "download_speed": 48_234_496_i64, "plan": 5.24, "remaining_time": 118
+    });
+    let task: crate::types::download::DownloadTask = serde_json::from_value(running).unwrap();
+    assert!((task.plan - 5.24).abs() < f64::EPSILON);
+    assert_eq!(task.download_speed, 48_234_496);
+
+    // Finished tasks and older answers carry a whole number, or none.
+    let done: crate::types::download::DownloadTask =
+        serde_json::from_value(serde_json::json!({ "plan": 100 })).unwrap();
+    assert!((done.plan - 100.0).abs() < f64::EPSILON);
+    let bare: crate::types::download::DownloadTask =
+        serde_json::from_value(serde_json::json!({})).unwrap();
+    assert!(bare.plan.abs() < f64::EPSILON);
+}
