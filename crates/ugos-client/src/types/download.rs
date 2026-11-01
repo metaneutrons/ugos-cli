@@ -39,9 +39,10 @@ pub struct DownloadTask {
     /// Non-zero when the task failed; 9 appears for an unreachable URL.
     #[serde(default)]
     pub error_code: i64,
-    /// Progress in percent.
+    /// Progress in percent. UGOS reports a fraction while a task runs (`5.24`),
+    /// a whole number otherwise.
     #[serde(default)]
-    pub plan: i64,
+    pub plan: f64,
     /// Estimated seconds remaining.
     #[serde(default)]
     pub remaining_time: i64,
