@@ -137,6 +137,11 @@ pub enum Resource {
         #[command(subcommand)]
         action: PassthroughAction,
     },
+    /// Install the agent skill that teaches AI tools to use ugos-cli.
+    ///
+    /// Needs no NAS connection. Without an option it shows where the skill is
+    /// and what would happen.
+    Skill(SkillArgs),
 }
 
 /// Flags for the system log.
@@ -988,4 +993,27 @@ pub enum DockerAction {
         /// Proxy JSON (e.g. `{"http":"http://proxy:8080"}`).
         json: String,
     },
+}
+
+/// Options of `ugos-cli skill`.
+// Four switches on a command line, at most one action plus `--yes`; clap
+// enforces the exclusions, so an enum would only restate them.
+#[allow(clippy::struct_excessive_bools)]
+#[derive(Debug, Args)]
+pub struct SkillArgs {
+    /// Install where it is missing, after asking.
+    #[arg(long, conflicts_with_all = ["decline", "remove"])]
+    pub install: bool,
+
+    /// Stop offering it where it is missing.
+    #[arg(long, conflicts_with_all = ["install", "remove"])]
+    pub decline: bool,
+
+    /// Remove the copies ugos-cli installed and nobody changed.
+    #[arg(long, conflicts_with_all = ["install", "decline"])]
+    pub remove: bool,
+
+    /// Install without asking. Needed when there is no terminal to ask on.
+    #[arg(long, short = 'y', requires = "install")]
+    pub yes: bool,
 }
