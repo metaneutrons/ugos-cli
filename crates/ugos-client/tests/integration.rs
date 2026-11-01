@@ -45,8 +45,8 @@ async fn vm_list() {
     // the test NAS always has at least one VM
     assert!(!vms.is_empty(), "expected at least one VM");
     for vm in &vms {
-        assert!(!vm.vir_name.is_empty());
-        assert!(!vm.vir_display_name.is_empty());
+        assert_ne!(vm.vir_name, "");
+        assert_ne!(vm.vir_display_name, "");
         assert!(
             vm.status == "running" || vm.status == "shutoff",
             "unexpected status: {}",
