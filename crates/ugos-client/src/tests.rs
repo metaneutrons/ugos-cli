@@ -183,7 +183,7 @@ fn deserialize_snapshot() {
 fn deserialize_snapshot_tolerates_missing_fields() {
     let s: Snapshot = serde_json::from_str(r#"{"name": "snap-1234"}"#).unwrap();
     assert_eq!(s.name, "snap-1234");
-    assert!(s.create_time.is_empty());
+    assert_eq!(s.create_time, "");
 }
 
 #[test]
@@ -200,7 +200,7 @@ fn deserialize_usb_device() {
     let u: UsbDevice = serde_json::from_str(json).unwrap();
     assert_eq!(u.vendor_name, "Intel Corp.");
     assert_eq!(u.product_name, "AX211 Bluetooth");
-    assert!(u.used_by.is_empty());
+    assert_eq!(u.used_by, "");
 }
 
 #[test]
@@ -291,11 +291,11 @@ fn deserialize_container_detail_null_lists() {
         "containerRunCommand": null
     }"#;
     let detail: ContainerDetail = serde_json::from_str(json).unwrap();
-    assert!(detail.gpu_ids.is_empty());
+    assert_eq!(detail.gpu_ids, Vec::<String>::new());
     assert!(detail.subnet_settings.is_empty());
     assert!(detail.port_mapping.is_empty());
     assert!(detail.environment_variables.is_empty());
-    assert!(detail.container_run_command.is_empty());
+    assert_eq!(detail.container_run_command, Vec::<String>::new());
 }
 
 #[test]

@@ -297,6 +297,6 @@ mod tests {
         .unwrap();
         let session = session_from_login(data).unwrap();
         assert_eq!(session.token, "session-token");
-        assert!(session.public_key.is_empty());
+        assert_eq!(session.public_key, "");
     }
 }
