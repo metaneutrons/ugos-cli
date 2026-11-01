@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.15.0](https://github.com/metaneutrons/ugos-cli/compare/v0.14.3...v0.15.0) (2026-11-01)
+
+
+### Features
+
+* **cli:** an agent skill for AI tools, installed on request ([#96](https://github.com/metaneutrons/ugos-cli/issues/96)) ([a98011b](https://github.com/metaneutrons/ugos-cli/commit/a98011b302149eb67b22d39fec4d1a3ee04bdc56))
+
+
+### Bug Fixes
+
+* **auth:** send otp=true on login and report unsupported 2FA ([#98](https://github.com/metaneutrons/ugos-cli/issues/98)) ([d7ad125](https://github.com/metaneutrons/ugos-cli/commit/d7ad1257730796d88565e1a5e9ae6cbae0b50aa4))
+* **download:** accept a fractional progress in the download list ([467b24a](https://github.com/metaneutrons/ugos-cli/commit/467b24a71bb217b3aea4b212aee48e6db0a6db40))
+* **download:** accept a fractional progress in the download list ([#99](https://github.com/metaneutrons/ugos-cli/issues/99)) ([467b24a](https://github.com/metaneutrons/ugos-cli/commit/467b24a71bb217b3aea4b212aee48e6db0a6db40))
+
 ## [0.14.3](https://github.com/metaneutrons/ugos-cli/compare/v0.14.2...v0.14.3) (2026-09-08)
 
 
