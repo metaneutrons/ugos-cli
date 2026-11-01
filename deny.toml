@@ -17,6 +17,7 @@ version = 2
 # Applications under GPL-3.0 add "GPL-3.0" to this list.
 allow = [
     "GPL-3.0-or-later",  # this project itself
+    "LGPL-3.0-or-later", # agent-skill-installer; weaker copyleft, GPL-3.0 compatible
     "MPL-2.0",           # option-ext, through dirs; MPL 2.0 is GPL-3.0 compatible
     # webpki-roots. Permissive in substance, but there is no FSF statement on
     # GPL compatibility. Its content is a certificate list, not code.

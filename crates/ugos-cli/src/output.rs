@@ -990,8 +990,8 @@ impl From<&ugos_client::types::download::DownloadTask> for DownloadRow {
             format!("failed ({})", t.error_code)
         } else if t.download_completed_time > 0 {
             "done".into()
-        } else if t.plan > 0 {
-            format!("{}%", t.plan)
+        } else if t.plan > 0.0 {
+            format!("{:.0}%", t.plan)
         } else if t.total_size > 0 && t.downloaded_size > 0 {
             format!("{}%", t.downloaded_size * 100 / t.total_size)
         } else {
