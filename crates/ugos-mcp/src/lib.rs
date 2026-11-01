@@ -14,7 +14,7 @@ use std::sync::Arc;
 use rmcp::{
     ServerHandler,
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
-    model::{Implementation, ServerCapabilities, ServerInfo},
+    model::{Implementation, ServerCapabilities, ServerConfig},
     schemars, tool, tool_handler, tool_router,
 };
 use tokio::sync::OnceCell;
@@ -1344,7 +1344,7 @@ impl UgosMcp {
 #[allow(clippy::unused_async_trait_impl)]
 #[tool_handler]
 impl ServerHandler for UgosMcp {
-    fn get_info(&self) -> ServerInfo {
+    fn get_info(&self) -> ServerConfig {
         let target_names: Vec<&str> = self.targets.iter().map(|t| t.name.as_str()).collect();
         let instructions = if self.targets.len() == 1 {
             format!(
@@ -1367,7 +1367,7 @@ impl ServerHandler for UgosMcp {
         // Implementation::from_build_env(), and the env!("CARGO_CRATE_NAME")
         // inside it stands in the library, not here. A client would then not
         // see what it is talking to.
-        ServerInfo::new(ServerCapabilities::builder().enable_tools().build())
+        ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new(
                 env!("CARGO_PKG_NAME"),
                 env!("CARGO_PKG_VERSION"),
