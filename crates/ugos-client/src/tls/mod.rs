@@ -131,9 +131,9 @@ fn extract_spki(cert_der: &[u8]) -> Result<Vec<u8>> {
                 // it and starts at the serial number.
                 let version_tag = Tag::ContextSpecific {
                     constructed: true,
-                    number: TagNumber::N0,
+                    number: TagNumber(0),
                 };
-                if tbs.peek_tag()? == version_tag {
+                if Tag::peek(tbs)? == version_tag {
                     let _version = tbs.tlv_bytes()?;
                 }
                 let _serial = tbs.tlv_bytes()?;
@@ -147,7 +147,7 @@ fn extract_spki(cert_der: &[u8]) -> Result<Vec<u8>> {
                 while !tbs.is_finished() {
                     let _rest = tbs.tlv_bytes()?;
                 }
-                Ok(spki)
+                Ok::<_, der::Error>(spki)
             })?;
             // signatureAlgorithm and signatureValue follow the TBS block.
             while !certificate.is_finished() {
@@ -312,6 +312,9 @@ fn config_with(verifier: Arc<dyn ServerCertVerifier>) -> Result<rustls::ClientCo
 ///
 /// Returns [`UgosError::Encryption`] if the client cannot be built.
 pub fn http_client(policy: &TlsPolicy) -> Result<reqwest::Client> {
+    // reqwest without a bundled provider panics when none is installed, even
+    // for a preconfigured client. An Err only means one is already installed.
+    let _ = ring::default_provider().install_default();
     let builder = reqwest::Client::builder()
         .cookie_store(true)
         .timeout(std::time::Duration::from_secs(30));
