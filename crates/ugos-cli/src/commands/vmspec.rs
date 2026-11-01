@@ -852,7 +852,7 @@ mod tests {
         assert_eq!(spec.other_config.keyboard_language, "en-us");
         assert_eq!(spec.storage_name, "volume1");
         assert!(!spec.other_config.auto_matic_start_up);
-        assert!(spec.virtual_machine_name.is_empty());
+        assert_eq!(spec.virtual_machine_name, "");
     }
 
     #[test]
@@ -1154,7 +1154,7 @@ mod tests {
         assert_eq!(spec.virtual_machine_display_name, "Clone");
         assert_eq!(spec.memory.value, 16 * 1024 * 1024);
         // Never inherited.
-        assert!(spec.virtual_machine_name.is_empty());
+        assert_eq!(spec.virtual_machine_name, "");
 
         std::fs::remove_file(&file).unwrap();
     }
@@ -1243,7 +1243,7 @@ mod tests {
         assert_eq!(spec.dists[0].path, "/volume1/kvm/cachyos/disk0.qcow2");
         // UGOS rejects an update that names a new disk itself, so dev stays
         // empty and is left out of the request body.
-        assert!(spec.dists[1].dev.is_empty());
+        assert_eq!(spec.dists[1].dev, "");
         assert_eq!(spec.dists[1].order, 2);
         assert!(
             !serde_json::to_string(&spec.dists[1])
@@ -1308,7 +1308,7 @@ mod tests {
         assert_eq!(spec.dists.len(), 1);
         assert_eq!(spec.dists[0].dev, "vda");
         assert_eq!(spec.dists[0].size, 100 * 1024 * 1024);
-        assert!(spec.dists[0].path.is_empty());
+        assert_eq!(spec.dists[0].path, "");
     }
 
     #[test]
