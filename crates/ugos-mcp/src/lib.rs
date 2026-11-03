@@ -1158,7 +1158,7 @@ impl UgosMcp {
     #[tool(description = "Add a Docker registry mirror source")]
     async fn ugos_docker_mirror_add(&self, Parameters(p): Parameters<MirrorAddParam>) -> String {
         match self.client(&p.target).await {
-            Ok(c) => match c.mirror_add(&p.alias, &p.address).await {
+            Ok(c) => match c.mirror_add(&p.alias, &p.address, None).await {
                 Ok(()) => format!("Added mirror {}", p.alias),
                 Err(e) => format!("error: {e}"),
             },

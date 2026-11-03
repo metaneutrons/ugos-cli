@@ -340,3 +340,25 @@ pub struct Mirror {
     #[serde(default)]
     pub status: bool,
 }
+
+/// Login for a registry source added with `AddMirrorSource`.
+///
+/// Mirrors the `userName` and `password` fields of the web UI's "add image
+/// source" form. For GitHub Container Registry the password is a personal
+/// access token with `read:packages`.
+#[derive(Clone)]
+pub struct RegistryCredentials {
+    /// Registry user name.
+    pub user_name: String,
+    /// Registry password or access token.
+    pub password: String,
+}
+
+impl std::fmt::Debug for RegistryCredentials {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("RegistryCredentials")
+            .field("user_name", &self.user_name)
+            .field("password", &"[REDACTED]")
+            .finish()
+    }
+}
