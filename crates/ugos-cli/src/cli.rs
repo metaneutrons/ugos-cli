@@ -899,11 +899,23 @@ pub enum DockerAction {
     /// List registry mirror sources.
     Mirrors,
     /// Add a registry mirror source.
+    ///
+    /// For a private registry such as ghcr.io, pass `--registry-user` and the
+    /// password through `UGOS_REGISTRY_PASSWORD` or `--registry-password-stdin`.
+    /// There is deliberately no flag for the password itself: arguments show up
+    /// in the process list.
     MirrorAdd {
         /// Display name.
         alias: String,
         /// Mirror URL.
         address: String,
+        /// Registry user name, stored with the source.
+        #[arg(long)]
+        registry_user: Option<String>,
+        /// Read the registry password from stdin instead of
+        /// `UGOS_REGISTRY_PASSWORD`.
+        #[arg(long, requires = "registry_user")]
+        registry_password_stdin: bool,
     },
     /// Delete a registry mirror source.
     MirrorDelete {
