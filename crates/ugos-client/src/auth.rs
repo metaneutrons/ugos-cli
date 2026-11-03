@@ -1,9 +1,11 @@
 //! Authentication flow for the UGOS API.
 //!
-//! Implements the three-step auth handshake:
+//! Implements the auth handshake:
 //! 1. Fetch RSA public key via `POST /verify/check`
 //! 2. Encrypt password with PKCS1v1.5
-//! 3. Login via `POST /verify/login` → obtain session token + cookies
+//! 3. Login via `POST /verify/login` → session token, or a pending second factor
+//! 4. When two-factor authentication is on, `POST /verify/code/login` with an
+//!    authenticator code (type 1)
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
 use rsa::{Pkcs1v15Encrypt, RsaPublicKey, pkcs1::DecodeRsaPublicKey, pkcs8::DecodePublicKey};
@@ -11,14 +13,28 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::{Result, UgosError};
 
-/// Credentials needed to authenticate with a UGOS NAS.
 /// Login credentials for a UGOS NAS.
+///
+/// `otp` is one authenticator code, sent as-is. It is spent on the first
+/// login, so the re-authentication that follows session expiry (about 25
+/// minutes) cannot use it again.
+///
+/// `otp_secret` is a TOTP secret: base32, or an `otpauth://totp/` URI whose
+/// `digits` and `period` are honoured (HMAC-SHA1, 6 digits and 30 seconds
+/// when they are absent). A fresh code is generated on every login, which is
+/// what a long-running process needs. When both are set, the secret is used.
+///
+/// Only authenticator apps (UGOS `type` 1) are supported.
 #[derive(Clone)]
 pub struct Credentials {
     /// Username (e.g. "fabian").
     pub username: String,
     /// Plaintext password.
     pub password: String,
+    /// One-time authenticator code. `None` when the account has no second factor.
+    pub otp: Option<String>,
+    /// TOTP secret (base32 or an `otpauth://totp/` URI). A code is generated per login.
+    pub otp_secret: Option<String>,
 }
 
 impl std::fmt::Debug for Credentials {
@@ -26,6 +42,11 @@ impl std::fmt::Debug for Credentials {
         f.debug_struct("Credentials")
             .field("username", &self.username)
             .field("password", &"[REDACTED]")
+            .field("otp", &self.otp.as_ref().map(|_| "[REDACTED]"))
+            .field(
+                "otp_secret",
+                &self.otp_secret.as_ref().map(|_| "[REDACTED]"),
+            )
             .finish()
     }
 }
@@ -63,6 +84,10 @@ struct LoginData {
     /// Base64-encoded PEM, used for the request encryption scheme.
     #[serde(default)]
     public_key: String,
+    /// Handle for the pending second factor. Present when `enable_otp` is set
+    /// and the token is withheld.
+    #[serde(default)]
+    token_id: String,
 }
 
 /// Body of `POST /verify/login`.
@@ -184,8 +209,9 @@ pub fn encrypt_password(key: &RsaPublicKey, password: &str) -> Result<String> {
 /// # Errors
 ///
 /// Returns [`UgosError::AuthFailed`] on bad credentials.
-/// Returns [`UgosError::TwoFactorUnsupported`] when the response has
-/// `enable_otp` set and no token.
+/// Returns [`UgosError::OtpRequired`] when the account has a second factor
+/// and [`Credentials`] carries neither a code nor a secret.
+/// Returns [`UgosError::InvalidOtpSecret`] when the secret cannot be parsed.
 /// Returns [`UgosError::Encryption`] on RSA failures.
 /// Returns [`UgosError::Http`] on network failures.
 pub async fn login(
@@ -210,7 +236,83 @@ pub async fn login(
     // of what actually went wrong.
     let api: crate::types::common::ApiResponse<serde_json::Value> = resp.json().await?;
     let data: LoginData = serde_json::from_value(api.into_result()?)?;
+    if data.enable_otp && data.token.is_empty() {
+        return complete_second_factor(client, base_url, creds, &data).await;
+    }
     session_from_login(data)
+}
+
+/// Code to send for this login.
+///
+/// A secret wins over a one-shot code: the secret can be turned into a new
+/// code every time, and the one-shot code cannot.
+fn one_time_code(creds: &Credentials) -> Result<Option<String>> {
+    if let Some(secret) = nonempty(creds.otp_secret.as_deref()) {
+        let totp = crate::totp::parse_secret(secret).map_err(UgosError::InvalidOtpSecret)?;
+        return Ok(Some(crate::totp::code_at(&totp, crate::totp::unix_now()?)));
+    }
+    Ok(nonempty(creds.otp.as_deref()).map(ToOwned::to_owned))
+}
+
+fn nonempty(value: Option<&str>) -> Option<&str> {
+    value.map(str::trim).filter(|text| !text.is_empty())
+}
+
+/// Finish a login that came back with `enable_otp` and no token.
+///
+/// The encryption key often arrives on the password response and is absent
+/// from `/verify/code/login`. Dropping it would leave the session without a
+/// key, and the next encrypted call would log in again to fetch one. The
+/// first key is kept unless the second response has its own.
+async fn complete_second_factor(
+    client: &reqwest::Client,
+    base_url: &str,
+    creds: &Credentials,
+    first: &LoginData,
+) -> Result<Session> {
+    let code = one_time_code(creds)?.ok_or(UgosError::OtpRequired)?;
+    let second = submit_otp_code(client, base_url, &first.token_id, &code).await?;
+    let public_key = if second.public_key.is_empty() {
+        first.public_key.clone()
+    } else {
+        second.public_key
+    };
+    // `enable_otp: false` so an empty token is reported as a missing token,
+    // not as another request for a second factor we just submitted.
+    session_from_login(LoginData {
+        token: second.token,
+        enable_otp: false,
+        token_id: String::new(),
+        public_key,
+    })
+}
+
+/// `POST /v1/verify/code/login`.
+///
+/// The body follows the web client's `twoFAVerify` call: authenticator app
+/// (`type` 1), and `trust: false` so this process is not registered as a
+/// trusted device. It has not been confirmed against a live capture.
+async fn submit_otp_code(
+    client: &reqwest::Client,
+    base_url: &str,
+    token_id: &str,
+    code: &str,
+) -> Result<LoginData> {
+    let url = format!("{base_url}/v1/verify/code/login");
+    let body = serde_json::json!({
+        "code": code,
+        "type": 1,
+        "token_id": token_id,
+        "trust": false,
+        "trust_info": {
+            "client_type": "web",
+            "system": "ugos-cli",
+            "dev_name": "ugos-cli",
+        },
+    });
+    let resp = client.post(&url).json(&body).send().await?;
+    let api: crate::types::common::ApiResponse<serde_json::Value> = resp.json().await?;
+    Ok(serde_json::from_value(api.into_result()?)?)
 }
 
 #[cfg(test)]
@@ -298,5 +400,170 @@ mod tests {
         let session = session_from_login(data).unwrap();
         assert_eq!(session.token, "session-token");
         assert_eq!(session.public_key, "");
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod login_flow {
+    use super::login;
+    use crate::Credentials;
+    use crate::error::UgosError;
+    use crate::test_support::{Mock, Script, SecondKey, lock};
+    use crate::totp::{self, RFC6238_SHA1_SECRET_BASE32};
+
+    const FIRST_PEM: &str = "-----BEGIN PUBLIC KEY-----\nFIRST\n-----END PUBLIC KEY-----\n";
+    const SECOND_PEM: &str = "-----BEGIN PUBLIC KEY-----\nSECOND\n-----END PUBLIC KEY-----\n";
+
+    fn creds(otp: Option<&str>, secret: Option<&str>) -> Credentials {
+        Credentials {
+            username: "admin".into(),
+            password: "secret".into(),
+            otp: otp.map(str::to_owned),
+            otp_secret: secret.map(str::to_owned),
+        }
+    }
+
+    fn script(requires_otp: bool, second: SecondKey) -> Script {
+        Script {
+            requires_otp,
+            first_public_key: FIRST_PEM.into(),
+            second_public_key: second,
+            token_id: "pending".into(),
+            expire_once: false,
+            advance_clock_to: None,
+        }
+    }
+
+    fn code_was_expected(secret: &str, unix: u64, code: &str) -> bool {
+        let totp = totp::parse_secret(secret).unwrap();
+        let current = totp::code_at(&totp, unix);
+        let previous = unix
+            .checked_sub(totp.period())
+            .is_some_and(|earlier| totp::code_at(&totp, earlier) == code);
+        code == current || previous
+    }
+
+    #[tokio::test]
+    async fn a_login_without_two_factor_returns_the_token_and_the_key() {
+        let _guard = lock().await;
+        let mock = Mock::spawn(script(false, SecondKey::Omit));
+        let session = login(&http(), mock.base_url(), &creds(None, None))
+            .await
+            .unwrap();
+        assert_eq!(session.token, "token-0");
+        assert_eq!(session.public_key, FIRST_PEM);
+        assert!(mock.ending_with("/verify/code/login").is_empty());
+        let posted = &mock.ending_with("/verify/login")[0];
+        assert_eq!(posted.body["otp"], true);
+        assert_eq!(posted.body["is_simple"], false);
+        assert_eq!(posted.body["username"], "admin");
+    }
+
+    #[tokio::test]
+    async fn two_factor_without_a_code_or_secret_stops_before_the_second_call() {
+        let _guard = lock().await;
+        let mock = Mock::spawn(script(true, SecondKey::Omit));
+        let err = login(&http(), mock.base_url(), &creds(None, None))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, UgosError::OtpRequired));
+        assert_eq!(
+            err.to_string(),
+            "two-factor authentication is enabled for this account; pass the current authenticator code or a TOTP secret"
+        );
+        assert!(mock.ending_with("/verify/code/login").is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_one_shot_code_is_sent_with_type_1_and_without_trusting_the_device() {
+        let _guard = lock().await;
+        let mock = Mock::spawn(script(true, SecondKey::Omit));
+        let session = login(&http(), mock.base_url(), &creds(Some("123456"), None))
+            .await
+            .unwrap();
+        assert_eq!(session.token, "token-0");
+        let hits = mock.ending_with("/verify/code/login");
+        assert_eq!(hits.len(), 1);
+        let body = &hits[0].body;
+        assert_eq!(body["code"], "123456");
+        assert_eq!(body["type"], 1);
+        assert_eq!(body["token_id"], "pending");
+        assert_eq!(body["trust"], false);
+        assert_eq!(body["trust_info"]["dev_name"], "ugos-cli");
+        assert_eq!(body.as_object().unwrap().len(), 5);
+        assert!(
+            !hits[0]
+                .headers
+                .to_ascii_lowercase()
+                .contains("ug-client-id")
+        );
+    }
+
+    #[tokio::test]
+    async fn a_secret_generates_the_code_and_wins_over_a_one_shot_code() {
+        let _guard = lock().await;
+        let mock = Mock::spawn(script(true, SecondKey::Omit));
+        let session = login(
+            &http(),
+            mock.base_url(),
+            &creds(Some("111111"), Some(RFC6238_SHA1_SECRET_BASE32)),
+        )
+        .await
+        .unwrap();
+        assert_eq!(session.token, "token-0");
+        let hit = &mock.ending_with("/verify/code/login")[0];
+        let code = hit.body["code"].as_str().unwrap();
+        assert_ne!(code, "111111");
+        assert!(code_was_expected(
+            RFC6238_SHA1_SECRET_BASE32,
+            hit.unix,
+            code
+        ));
+    }
+
+    #[tokio::test]
+    async fn an_invalid_secret_is_rejected_before_the_second_call() {
+        let _guard = lock().await;
+        let mock = Mock::spawn(script(true, SecondKey::Omit));
+        let err = login(&http(), mock.base_url(), &creds(None, Some("!!!!!!!!")))
+            .await
+            .unwrap_err();
+        assert!(matches!(err, UgosError::InvalidOtpSecret(_)));
+        assert!(mock.ending_with("/verify/code/login").is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_missing_public_key_on_the_second_response_keeps_the_first() {
+        let _guard = lock().await;
+        let mock = Mock::spawn(script(true, SecondKey::Omit));
+        let session = login(&http(), mock.base_url(), &creds(Some("123456"), None))
+            .await
+            .unwrap();
+        assert_eq!(session.public_key, FIRST_PEM);
+    }
+
+    #[tokio::test]
+    async fn an_empty_public_key_on_the_second_response_keeps_the_first() {
+        let _guard = lock().await;
+        let mock = Mock::spawn(script(true, SecondKey::Empty));
+        let session = login(&http(), mock.base_url(), &creds(Some("123456"), None))
+            .await
+            .unwrap();
+        assert_eq!(session.public_key, FIRST_PEM);
+    }
+
+    #[tokio::test]
+    async fn a_public_key_on_the_second_response_replaces_the_first() {
+        let _guard = lock().await;
+        let mock = Mock::spawn(script(true, SecondKey::Pem(SECOND_PEM.into())));
+        let session = login(&http(), mock.base_url(), &creds(Some("123456"), None))
+            .await
+            .unwrap();
+        assert_eq!(session.public_key, SECOND_PEM);
+    }
+
+    fn http() -> reqwest::Client {
+        crate::tls::http_client(&crate::tls::TlsPolicy::Insecure).unwrap()
     }
 }

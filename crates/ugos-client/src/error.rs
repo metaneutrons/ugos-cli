@@ -7,14 +7,34 @@ pub enum UgosError {
     #[error("incorrect account or password")]
     AuthFailed,
 
-    /// Two-factor authentication is enabled, and this client cannot complete it.
+    /// A login payload still needs a second factor.
     ///
     /// The password was accepted. UGOS answered with `enable_otp` set and no
-    /// session token. The same login used to fail with API error 9406
-    /// ("client is not compatible with the firmware") because the request
-    /// sent `otp: false`.
+    /// session token. [`crate::auth::login`] does not return this: it finishes
+    /// the second step when [`crate::auth::Credentials`] carries a code or a
+    /// TOTP secret, and returns [`UgosError::OtpRequired`] when it carries
+    /// neither. The same login used to fail with API error 9406 ("client is
+    /// not compatible with the firmware") because the request sent `otp: false`.
     #[error("two-factor authentication is enabled; ugos-cli does not support it yet")]
     TwoFactorUnsupported,
+
+    /// Two-factor authentication is on, and no code or secret was provided.
+    ///
+    /// Only authenticator apps are supported. Set [`crate::auth::Credentials::otp`]
+    /// to the current code, or [`crate::auth::Credentials::otp_secret`] to the
+    /// TOTP secret so a fresh code can be generated on every login.
+    #[error(
+        "two-factor authentication is enabled for this account; pass the current authenticator code or a TOTP secret"
+    )]
+    OtpRequired,
+
+    /// [`crate::auth::Credentials::otp_secret`] is not a base32 secret or an
+    /// `otpauth://totp/` URI this client can use.
+    ///
+    /// HMAC-SHA1 is the only algorithm. The URI may set `digits` (6 to 8) and
+    /// `period` (seconds).
+    #[error("invalid TOTP secret: {0}")]
+    InvalidOtpSecret(String),
 
     /// Parameter error (UGOS code 1005).
     #[error("parameter error: {0}")]

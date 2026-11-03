@@ -22,6 +22,7 @@ rustls.workspace = true
 dirs.workspace = true
 der.workspace = true
 rsa.workspace = true
+ring.workspace = true
 sha2.workspace = true
 md-5.workspace = true
 aes-gcm.workspace = true

@@ -55,6 +55,8 @@ async fn main() -> Result<()> {
     let creds = Credentials {
         username: user.clone(),
         password,
+        otp: blank_to_none(cli.otp.clone()),
+        otp_secret: blank_to_none(cli.otp_secret.clone()),
     };
 
     let tls = resolve_tls(host, cli.port, cli.tls_insecure, cli.tls_trust_new).await?;
@@ -129,6 +131,13 @@ fn password_from_reader(reader: &mut impl std::io::BufRead) -> Result<String> {
 /// Read an environment variable, treating an empty value as unset.
 fn env_var(name: &str) -> Option<String> {
     std::env::var(name).ok().filter(|v| !v.is_empty())
+}
+
+/// Trim a flag or environment value, treating a blank one as unset.
+fn blank_to_none(value: Option<String>) -> Option<String> {
+    value
+        .map(|raw| raw.trim().to_owned())
+        .filter(|trimmed| !trimmed.is_empty())
 }
 
 /// Handle commands that need no NAS connection.

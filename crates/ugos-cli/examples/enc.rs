@@ -9,6 +9,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let creds = Credentials {
         username: std::env::var("UGOS_USER")?,
         password: std::env::var("UGOS_PASSWORD")?,
+        otp: env_nonempty("UGOS_OTP"),
+        otp_secret: env_nonempty("UGOS_OTP_SECRET"),
     };
     let client = UgosClient::connect(
         &std::env::var("UGOS_HOST")?,
@@ -30,4 +32,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     };
     println!("{}", serde_json::to_string_pretty(&value)?);
     Ok(())
+}
+
+fn env_nonempty(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
 }

@@ -14,6 +14,8 @@
 //! let creds = Credentials {
 //!     username: "admin".into(),
 //!     password: "secret".into(),
+//!     otp: None,
+//!     otp_secret: None,
 //! };
 //! let tls = ugos_client::TlsPolicy::Pinned(
 //!     ugos_client::tls::probe_fingerprint("192.168.1.10", 9443).await?,
@@ -30,7 +32,11 @@ pub mod client;
 pub mod crypto;
 pub mod error;
 pub mod tls;
+mod totp;
 pub mod types;
+
+#[cfg(test)]
+mod test_support;
 
 // Re-export the most commonly used items at the crate root.
 pub use auth::{Credentials, Session};

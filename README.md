@@ -33,6 +33,14 @@ export UGOS_PASSWORD=<password>
 # Or read the password from stdin, for example from a secret store
 pass show nas/admin | ugos-cli --password-stdin vm list
 
+# Authenticator-app two-factor (type 1, the only factor supported).
+# UGOS_OTP is one code and is spent on the first login, so it cannot renew a
+# session. UGOS_OTP_SECRET is the TOTP secret (base32, or an otpauth:// URI);
+# a fresh code is generated on every login, including after the session
+# expires. See Authentication below for what storing the secret costs.
+export UGOS_OTP_SECRET=<base32-secret-or-otpauth-uri>
+# UGOS_OTP=123456 ugos-cli info
+
 # List VMs
 ugos-cli vm list
 
@@ -144,6 +152,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let creds = Credentials {
         username: "admin".into(),
         password: "<password>".into(),
+        otp: None,
+        otp_secret: None,
     };
 
     let client = UgosClient::connect("192.168.1.10", 9443, creds).await?;
@@ -471,7 +481,7 @@ notes are kept because the reasoning is easy to lose and expensive to redo.
 | **Docker registry** | list/add/delete/switch mirror, HTTP proxy get/set |
 | **Docker overview** | engine status, resource usage |
 | **Docker compose** (`docker project-*`) | list, show, create, start, stop, restart, remove |
-| **Auth** | RSA key exchange, PKCS1v1.5 encryption, session tokens, auto re-auth |
+| **Auth** | RSA key exchange, PKCS1v1.5 encryption, session tokens, TOTP second factor, auto re-auth |
 | **Transport** | certificate pinning on first use, shared by CLI and MCP server |
 
 `Docker container create/update` were reverse-engineered against the real
@@ -511,10 +521,15 @@ UGOS uses a multi-step auth flow:
 
 1. **RSA key exchange** — `POST /verify/check` returns an RSA public key
 2. **Password encryption** — PKCS1v1.5 padding (not OAEP)
-3. **Login** — `POST /verify/login` returns a session token + cookies
-4. **Authenticated requests** — cookies + `?token=` query parameter
+3. **Login** — `POST /verify/login` returns a session token + cookies, or, when the account has a second factor, `enable_otp` and no token
+4. **Authenticator code** — `POST /verify/code/login` with a type-1 (authenticator app) code. Other second factors are not supported. The request follows the web client's `twoFAVerify` shape (`trust: false`, so ugos-cli is not registered as a trusted device) and has not been confirmed against a live capture of that endpoint
+5. **Authenticated requests** — cookies + `?token=` query parameter
 
-The client handles this automatically, including transparent re-authentication when tokens expire (UGOS error code 1024).
+The client handles this automatically, including transparent re-authentication when tokens expire (UGOS error code 1024, about 25 minutes).
+
+`UGOS_OTP` is a single code. It is spent on the first login, so the renewal after expiry fails unless you pass a new one. `UGOS_OTP_SECRET` is the TOTP secret, as base32 or as an `otpauth://totp/` URI (HMAC-SHA1, 6 digits and 30 seconds unless the URI says otherwise). A fresh code is generated on every login, including that renewal. When both are set, the secret is used. `ugos-mcp` reads the same variables, with `_N` on numbered targets (`UGOS_OTP_SECRET_1`). The library crate does not read the environment; put the code or the secret on `Credentials`.
+
+Storing the secret has a cost. With the password and the secret on one machine, the second factor no longer protects that machine against whoever controls it. It still protects against a leaked password, which is the usual case for a service account. It is also stronger than a trusted device, which can be revoked on the NAS. UGOS shows the secret only once, as a QR code when two-factor authentication is enabled.
 
 ## Transport security
 
