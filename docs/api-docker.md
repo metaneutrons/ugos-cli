@@ -549,15 +549,21 @@ and removed a real two-service project (`nginx`+`redis`) on nas1.
   removes the images pulled for the project (untested — only `false` was
   captured).
 
-### Start/Restart (not captured)
-The project action menu also has "Starten" and "Neu starten" entries; these
-were not exercised during this RE session. By analogy with `StopProject` and
-the container-level `StartContainer`/`RestartContainer` pattern, they are
-almost certainly:
+### StartProject / RestartProject
 - `GET docker/compose/StartProject?projectName=<name>`
 - `GET docker/compose/RestartProject?projectName=<name>`
-but this is an **unverified guess**, not a live capture — confirm before
-relying on it.
+
+Both calls appear in the web UI bundle of the Docker app with a `projectName`
+query parameter. A restart does not pick up a changed compose file or image;
+use `UpdateProject` for that.
+
+### UpdateProject
+- **Method**: POST
+- **Body**: `{"projectName": "<name>", "projectContent": "<compose yaml>",
+  "runProject": true, "cols": 60, "latestImages": false}`
+- This is the "recreate" action of the project detail view in the web UI
+  (read from its bundle). `latestImages: true` is the "pull the images again"
+  checkbox of its confirmation dialog.
 
 ### ContainerListV2 / ShowContainerDetailListV2 project filter
 Both container-listing endpoints accept a `projectName` field in their POST
