@@ -7,7 +7,7 @@ use crate::error::{Result, UgosError};
 use crate::types::common::ResultWrapper;
 use crate::types::docker::{
     ComposeProject, ComposeProjectPage, ContainerDetail, ContainerPage, DockerImage,
-    DockerOverview, ImagePage, Mirror,
+    DockerOverview, ImagePage, Mirror, RegistryCredentials,
 };
 
 /// How long to keep polling for a container that UGOS is still creating
@@ -118,7 +118,15 @@ pub trait DockerApi {
     fn mirror_list(&self) -> impl Future<Output = Result<Vec<Mirror>>> + Send;
 
     /// Add a mirror source.
-    fn mirror_add(&self, alias: &str, address: &str) -> impl Future<Output = Result<()>> + Send;
+    ///
+    /// `credentials` store a registry login with the source, which UGOS needs
+    /// to pull from a private registry such as `ghcr.io`.
+    fn mirror_add(
+        &self,
+        alias: &str,
+        address: &str,
+        credentials: Option<&RegistryCredentials>,
+    ) -> impl Future<Output = Result<()>> + Send;
 
     /// Delete a mirror source.
     fn mirror_delete(&self, id: i64) -> impl Future<Output = Result<()>> + Send;
@@ -328,7 +336,7 @@ impl DockerApi for UgosClient {
     }
 
     async fn docker_image_download(&self, image: &str, tag: &str) -> Result<()> {
-        let body = serde_json::json!({"name": image, "tag": tag});
+        let body = download_image_body(image, tag);
         let _: serde_json::Value = self.post("docker/image/DownloadImage", &body).await?;
         Ok(())
     }
@@ -364,8 +372,13 @@ impl DockerApi for UgosClient {
         Ok(resp.result)
     }
 
-    async fn mirror_add(&self, alias: &str, address: &str) -> Result<()> {
-        let body = serde_json::json!({"alias": alias, "address": address});
+    async fn mirror_add(
+        &self,
+        alias: &str,
+        address: &str,
+        credentials: Option<&RegistryCredentials>,
+    ) -> Result<()> {
+        let body = mirror_add_body(alias, address, credentials);
         let _: serde_json::Value = self.post("docker/view/AddMirrorSource", &body).await?;
         Ok(())
     }
@@ -534,6 +547,32 @@ fn update_project_body(
     })
 }
 
+/// Request body of `AddMirrorSource`. The login fields are only sent when
+/// credentials are given, so a plain source keeps the shape it always had.
+fn mirror_add_body(
+    alias: &str,
+    address: &str,
+    credentials: Option<&RegistryCredentials>,
+) -> serde_json::Value {
+    credentials.map_or_else(
+        || serde_json::json!({"alias": alias, "address": address}),
+        |credentials| {
+            serde_json::json!({
+                "alias": alias,
+                "address": address,
+                "userName": credentials.user_name,
+                "password": credentials.password,
+            })
+        },
+    )
+}
+
+/// Request body of `DownloadImage`. UGOS reads the tag from `version`; a `tag`
+/// field is ignored and the pull falls back to `latest`.
+fn download_image_body(image: &str, tag: &str) -> serde_json::Value {
+    serde_json::json!({"name": image, "version": tag})
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -550,6 +589,53 @@ mod tests {
                 "cols": 60,
                 "latestImages": false,
             })
+        );
+    }
+
+    #[test]
+    fn mirror_add_body_without_credentials_has_no_login_fields() {
+        let body = mirror_add_body("Mirror", "https://mirror.example/", None);
+        assert_eq!(
+            body,
+            serde_json::json!({"alias": "Mirror", "address": "https://mirror.example/"})
+        );
+    }
+
+    #[test]
+    fn mirror_add_body_carries_registry_login() {
+        let credentials = RegistryCredentials {
+            user_name: "metaneutrons".into(),
+            password: "token".into(),
+        };
+        let body = mirror_add_body("GHCR", "https://ghcr.io/", Some(&credentials));
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "alias": "GHCR",
+                "address": "https://ghcr.io/",
+                "userName": "metaneutrons",
+                "password": "token",
+            })
+        );
+    }
+
+    #[test]
+    fn registry_credentials_debug_hides_the_password() {
+        let credentials = RegistryCredentials {
+            user_name: "metaneutrons".into(),
+            password: "hunter2".into(),
+        };
+        let shown = format!("{credentials:?}");
+        assert!(shown.contains("metaneutrons"));
+        assert!(!shown.contains("hunter2"));
+    }
+
+    #[test]
+    fn download_image_body_names_the_tag_as_version() {
+        let body = download_image_body("ghcr.io/example/app", "1.2.3");
+        assert_eq!(
+            body,
+            serde_json::json!({"name": "ghcr.io/example/app", "version": "1.2.3"})
         );
     }
 }

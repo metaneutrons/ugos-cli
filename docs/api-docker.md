@@ -384,7 +384,13 @@ All endpoints require authentication (see api-auth.md).
 
 ### AddMirrorSource
 - **Method**: POST
-- **Body**: Mirror spec
+- **Body**: `{alias, address}`, plus `userName` and `password` for a registry
+  that needs a login. The web UI's "add image source" form posts exactly these
+  four fields (and `id` when it edits a source). `ugos-cli docker mirror-add`
+  sends the login fields only when `--registry-user` is given.
+- Whether UGOS applies the stored login when `DownloadImage` pulls from that
+  registry is not verified on hardware yet. `ShowMirrorList` returns the
+  `password` field, so a token stored here is readable by any NAS admin session.
 
 ### SwitchMirrorSource
 - **Method**: GET

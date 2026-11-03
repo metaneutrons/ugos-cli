@@ -4,7 +4,7 @@ pub mod vmspec;
 
 use std::io::Write;
 
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use ugos_client::UgosClient;
 use ugos_client::api::docker::DockerApi;
 use ugos_client::api::download::DownloadApi;
@@ -13,6 +13,7 @@ use ugos_client::api::kvm::KvmApi;
 use ugos_client::api::snapshot::SnapshotApi;
 use ugos_client::api::syslog::{LogFilter, SysLogApi};
 use ugos_client::api::system::SystemApi;
+use ugos_client::types::docker::RegistryCredentials;
 use ugos_client::types::snapshot::FolderType;
 
 use crate::cli::{
@@ -915,8 +916,30 @@ async fn docker(
             let rows: Vec<output::MirrorRow> = mirrors.iter().map(Into::into).collect();
             output::print_list(w, &rows, fmt)?;
         }
-        DockerAction::MirrorAdd { alias, address } => {
-            client.mirror_add(alias, address).await?;
+        DockerAction::MirrorAdd {
+            alias,
+            address,
+            registry_user,
+            registry_password_stdin,
+        } => {
+            let credentials = match registry_user {
+                Some(user) => {
+                    let password = if *registry_password_stdin {
+                        let mut line = String::new();
+                        let _ = std::io::stdin()
+                            .read_line(&mut line)
+                            .context("reading the registry password from stdin")?;
+                        Some(line)
+                    } else {
+                        std::env::var("UGOS_REGISTRY_PASSWORD").ok()
+                    };
+                    Some(registry_credentials(user, password)?)
+                }
+                None => None,
+            };
+            client
+                .mirror_add(alias, address, credentials.as_ref())
+                .await?;
             output::print_success(w, &format!("Added mirror {alias}"), fmt)?;
         }
         DockerAction::MirrorDelete { id } => {
@@ -1171,10 +1194,44 @@ fn default_iso_name(source: &str) -> String {
         .to_owned()
 }
 
+/// Build the registry login for `mirror-add`. The password arrives from the
+/// environment or stdin; a trailing newline is dropped and an empty value is
+/// refused rather than stored.
+fn registry_credentials(user: &str, password: Option<String>) -> Result<RegistryCredentials> {
+    let password = password
+        .map(|value| value.trim_end_matches(['\r', '\n']).to_owned())
+        .filter(|value| !value.is_empty());
+    let Some(password) = password else {
+        bail!(
+            "--registry-user needs a password: set UGOS_REGISTRY_PASSWORD or pass \
+             --registry-password-stdin"
+        );
+    };
+    Ok(RegistryCredentials {
+        user_name: user.to_owned(),
+        password,
+    })
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+
+    // ── registry_credentials ────────────────────────────────────────
+
+    #[test]
+    fn registry_credentials_trims_the_line_ending() {
+        let found = registry_credentials("me", Some("token\r\n".into())).unwrap();
+        assert_eq!(found.user_name, "me");
+        assert_eq!(found.password, "token");
+    }
+
+    #[test]
+    fn registry_credentials_refuse_a_missing_or_empty_password() {
+        assert!(registry_credentials("me", None).is_err());
+        assert!(registry_credentials("me", Some("\n".into())).is_err());
+    }
 
     // ── parse_mem_limit ─────────────────────────────────────────────
 
