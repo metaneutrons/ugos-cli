@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.16.0](https://github.com/metaneutrons/ugos-cli/compare/v0.15.0...v0.16.0) (2026-11-03)
+
+
+### Features
+
+* **docker:** add project-update to recreate a compose project ([#106](https://github.com/metaneutrons/ugos-cli/issues/106)) ([4e929e4](https://github.com/metaneutrons/ugos-cli/commit/4e929e43e1e03fee5727d664669ba465f4a89329))
+* **docker:** store registry credentials with mirror-add ([#104](https://github.com/metaneutrons/ugos-cli/issues/104)) ([f8fed83](https://github.com/metaneutrons/ugos-cli/commit/f8fed83b0b51a06410cee94cd67ae4fa989036ae))
+
+
+### Bug Fixes
+
+* **docker:** send the pull tag as version ([#105](https://github.com/metaneutrons/ugos-cli/issues/105)) ([729170b](https://github.com/metaneutrons/ugos-cli/commit/729170b0fd499830ebff26847f8cd019fcbc28d5))
+
 ## [0.15.0](https://github.com/metaneutrons/ugos-cli/compare/v0.14.3...v0.15.0) (2026-11-01)
 
 
