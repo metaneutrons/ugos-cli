@@ -969,6 +969,12 @@ async fn docker(
             client.project_create(name, &path, &content, *run).await?;
             output::print_success(w, &format!("Created project {name} at {path}"), fmt)?;
         }
+        DockerAction::ProjectUpdate { name, file, pull } => {
+            let content = std::fs::read_to_string(file)
+                .map_err(|e| anyhow::anyhow!("reading {file}: {e}"))?;
+            client.project_update(name, &content, *pull).await?;
+            output::print_success(w, &format!("Updated project {name}"), fmt)?;
+        }
         DockerAction::ProjectStart { name } => {
             client.project_start(name).await?;
             output::print_success(w, &format!("Started project {name}"), fmt)?;

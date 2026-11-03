@@ -148,6 +148,17 @@ pub trait DockerApi {
         run: bool,
     ) -> impl Future<Output = Result<()>> + Send;
 
+    /// Recreate a compose project with new `docker-compose.yml` content
+    /// (`docker compose up -d`): what the UGOS UI calls "recreate".
+    ///
+    /// `latest_images` makes UGOS pull the images again first.
+    fn project_update(
+        &self,
+        name: &str,
+        compose_content: &str,
+        latest_images: bool,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// List all compose projects.
     fn project_list(&self) -> impl Future<Output = Result<Vec<ComposeProject>>> + Send;
 
@@ -402,6 +413,17 @@ impl DockerApi for UgosClient {
         Ok(())
     }
 
+    async fn project_update(
+        &self,
+        name: &str,
+        compose_content: &str,
+        latest_images: bool,
+    ) -> Result<()> {
+        let body = update_project_body(name, compose_content, latest_images);
+        let _: serde_json::Value = self.post("docker/compose/UpdateProject", &body).await?;
+        Ok(())
+    }
+
     async fn project_list(&self) -> Result<Vec<ComposeProject>> {
         let body = serde_json::json!({
             "projectName": "",
@@ -493,5 +515,41 @@ impl UgosClient {
              progress; check `docker ps`",
             u64::from(CREATE_POLL_ATTEMPTS) * CREATE_POLL_INTERVAL.as_secs()
         )))
+    }
+}
+
+/// Request body of `UpdateProject`, as the web UI's "recreate" dialog sends it.
+/// `runProject` is always true: recreating without starting is not offered.
+fn update_project_body(
+    name: &str,
+    compose_content: &str,
+    latest_images: bool,
+) -> serde_json::Value {
+    serde_json::json!({
+        "projectName": name,
+        "projectContent": compose_content,
+        "runProject": true,
+        "cols": 60,
+        "latestImages": latest_images,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn update_project_body_matches_the_web_ui() {
+        let body = update_project_body("legal-mcp", "services: {}", false);
+        assert_eq!(
+            body,
+            serde_json::json!({
+                "projectName": "legal-mcp",
+                "projectContent": "services: {}",
+                "runProject": true,
+                "cols": 60,
+                "latestImages": false,
+            })
+        );
     }
 }

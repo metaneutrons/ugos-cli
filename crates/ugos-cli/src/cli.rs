@@ -963,6 +963,19 @@ pub enum DockerAction {
         #[arg(long)]
         run: bool,
     },
+    /// Recreate a compose project from a `docker-compose.yml` file
+    /// (`docker compose up -d` with the new content).
+    ProjectUpdate {
+        /// Project name.
+        name: String,
+        /// Path to a local `docker-compose.yml` file; its content replaces the
+        /// project's compose file.
+        #[arg(long)]
+        file: String,
+        /// Pull the images again before recreating.
+        #[arg(long)]
+        pull: bool,
+    },
     /// Start a compose project.
     ProjectStart {
         /// Project name.
