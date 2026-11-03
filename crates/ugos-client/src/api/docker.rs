@@ -325,7 +325,7 @@ impl DockerApi for UgosClient {
     }
 
     async fn docker_image_download(&self, image: &str, tag: &str) -> Result<()> {
-        let body = serde_json::json!({"name": image, "tag": tag});
+        let body = download_image_body(image, tag);
         let _: serde_json::Value = self.post("docker/image/DownloadImage", &body).await?;
         Ok(())
     }
@@ -529,6 +529,12 @@ fn mirror_add_body(
     )
 }
 
+/// Request body of `DownloadImage`. UGOS reads the tag from `version`; a `tag`
+/// field is ignored and the pull falls back to `latest`.
+fn download_image_body(image: &str, tag: &str) -> serde_json::Value {
+    serde_json::json!({"name": image, "version": tag})
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -569,5 +575,14 @@ mod tests {
         let shown = format!("{credentials:?}");
         assert!(shown.contains("metaneutrons"));
         assert!(!shown.contains("hunter2"));
+    }
+
+    #[test]
+    fn download_image_body_names_the_tag_as_version() {
+        let body = download_image_body("ghcr.io/example/app", "1.2.3");
+        assert_eq!(
+            body,
+            serde_json::json!({"name": "ghcr.io/example/app", "version": "1.2.3"})
+        );
     }
 }
