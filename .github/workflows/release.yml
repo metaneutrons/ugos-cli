@@ -1236,20 +1236,26 @@ jobs:
           PR: ${{ steps.pr.outputs.number }}
         run: |
           set -euo pipefail
-          for _ in $(seq 1 30); do
-            n=$(gh pr checks "$PR" --repo "$TAP_REPO" --json name --jq 'length' 2>/dev/null || echo 0)
-            [[ "${n:-0}" -gt 0 ]] && break
-            sleep 10
+          # Wait for the gate check itself. `gh pr checks --watch` returns as
+          # soon as every check that exists so far is done, and the tap creates
+          # "Formula qualification" only after its other jobs have started: on
+          # v0.16.0 the watch ended at once and the merge step then found no
+          # gate (UG7513).
+          deadline=$((SECONDS + 2700))
+          while :; do
+            state=$(gh pr view "$PR" --repo "$TAP_REPO" --json statusCheckRollup \
+              --jq '[.statusCheckRollup[] | select(.name == "Formula qualification")] | last
+                    | if . == null then "absent none"
+                      else "\((.status // "absent") | ascii_downcase) \((.conclusion // "none") | ascii_downcase)" end')
+            case "$state" in
+              "completed success") echo "::notice::qualification passed"; break ;;
+              "completed "*) echo "::error::UG7503 the qualification ended with '$state'"; exit 1 ;;
+            esac
+            if (( SECONDS >= deadline )); then
+              echo "::error::UG7504 the qualification stands at '$state' after 45 minutes"; exit 1
+            fi
+            sleep 30
           done
-          set +e
-          timeout 2700 gh pr checks "$PR" --repo "$TAP_REPO" --watch --fail-fast --interval 30
-          rc=$?
-          set -e
-          case "$rc" in
-            0)   echo "::notice::qualification passed" ;;
-            124) echo "::error::UG7504 the qualification was not finished after 45 minutes"; exit 1 ;;
-            *)   echo "::error::UG7503 the qualification ended with exit $rc"; exit 1 ;;
-          esac
 
       # A fresh token after the wait. The first may already have expired, and a
       # merge is the last and most expensive write. It is minted even when there
