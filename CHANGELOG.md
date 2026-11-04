@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.16.1](https://github.com/metaneutrons/ugos-cli/compare/v0.16.0...v0.16.1) (2026-11-04)
+
+
+### Bug Fixes
+
+* **release:** wait for the tap gate check ([#108](https://github.com/metaneutrons/ugos-cli/issues/108)) ([7ed74ec](https://github.com/metaneutrons/ugos-cli/commit/7ed74ecd491d5b9c6775b9f8087b7eed59fcd14f))
+
 ## [0.16.0](https://github.com/metaneutrons/ugos-cli/compare/v0.15.0...v0.16.0) (2026-11-03)
 
 
