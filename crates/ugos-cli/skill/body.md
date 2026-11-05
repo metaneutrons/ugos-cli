@@ -19,7 +19,7 @@ ugos-cli info
 Take credentials from the environment or from the user's secret store. Never
 ask the user to paste a password into the chat, never write it to a file in the
 project, and never pass it with `--password`, because that lands in the shell
-history and the process list.
+history and the process list. `--password-stdin` reads it from stdin instead.
 
 The NAS presents a self-signed certificate. The first contact records it and
 prints its fingerprint; every later connection must match. If the certificate

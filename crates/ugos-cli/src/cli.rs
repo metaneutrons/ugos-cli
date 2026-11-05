@@ -3,6 +3,9 @@
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
 /// UGOS NAS management CLI.
+// Global switches that stand alone (`--no-cache`, `--tls-insecure`,
+// `--tls-trust-new`, `--password-stdin`); an enum would not fit them.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Parser)]
 #[command(name = "ugos", version, about)]
 pub struct Cli {
@@ -14,9 +17,15 @@ pub struct Cli {
     #[arg(long, env = "UGOS_USER", global = true)]
     pub user: Option<String>,
 
-    /// Password.
+    /// Password. An argument shows up in the process list and the shell
+    /// history; prefer `UGOS_PASSWORD` or `--password-stdin`.
     #[arg(long, env = "UGOS_PASSWORD", global = true, hide_env_values = true)]
     pub password: Option<String>,
+
+    /// Read the password from the first line of stdin. Wins over
+    /// `UGOS_PASSWORD`; combining it with `--password` is an error.
+    #[arg(long, global = true)]
+    pub password_stdin: bool,
 
     /// HTTPS port.
     #[arg(long, env = "UGOS_PORT", default_value = "9443", global = true)]
@@ -1041,4 +1050,83 @@ pub struct SkillArgs {
     /// Install without asking. Needed when there is no terminal to ask on.
     #[arg(long, short = 'y', requires = "install")]
     pub yes: bool,
+}
+
+impl Cli {
+    /// `true` when `--password-stdin` and `--registry-password-stdin` would
+    /// both read the one stdin stream.
+    pub const fn reads_stdin_twice(&self) -> bool {
+        self.password_stdin
+            && matches!(
+                &self.command,
+                Resource::Docker {
+                    action: DockerAction::MirrorAdd {
+                        registry_password_stdin: true,
+                        ..
+                    }
+                }
+            )
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::Cli;
+    use clap::parser::ValueSource;
+    use clap::{CommandFactory as _, FromArgMatches as _};
+
+    fn parse(args: &[&str]) -> Result<(clap::ArgMatches, Cli), clap::Error> {
+        let matches = Cli::command().try_get_matches_from(args)?;
+        let cli = Cli::from_arg_matches(&matches)?;
+        Ok((matches, cli))
+    }
+
+    #[test]
+    fn password_stdin_is_a_global_flag() {
+        let (_, cli) = parse(&["ugos-cli", "vm", "list", "--password-stdin"]).unwrap();
+        assert!(cli.password_stdin);
+    }
+
+    #[test]
+    fn a_password_argument_is_seen_as_a_command_line_value() {
+        let (matches, _) = parse(&["ugos-cli", "--password", "x", "vm", "list"]).unwrap();
+        assert_eq!(
+            matches.value_source("password"),
+            Some(ValueSource::CommandLine)
+        );
+        let (matches, _) = parse(&["ugos-cli", "vm", "list", "--password", "x"]).unwrap();
+        assert_eq!(
+            matches.value_source("password"),
+            Some(ValueSource::CommandLine)
+        );
+    }
+
+    #[test]
+    fn no_password_argument_means_no_command_line_source() {
+        let (matches, _) = parse(&["ugos-cli", "--password-stdin", "vm", "list"]).unwrap();
+        assert_ne!(
+            matches.value_source("password"),
+            Some(ValueSource::CommandLine)
+        );
+    }
+
+    #[test]
+    fn both_stdin_flags_are_caught() {
+        let (_, cli) = parse(&[
+            "ugos-cli",
+            "--password-stdin",
+            "docker",
+            "mirror-add",
+            "alias",
+            "https://registry.example",
+            "--registry-user",
+            "me",
+            "--registry-password-stdin",
+        ])
+        .unwrap();
+        assert!(cli.reads_stdin_twice());
+        let (_, cli) = parse(&["ugos-cli", "--password-stdin", "vm", "list"]).unwrap();
+        assert!(!cli.reads_stdin_twice());
+    }
 }
