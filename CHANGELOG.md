@@ -9,7 +9,7 @@
 
 ### Features
 
-* **auth:** support two-factor (TOTP) login ([#90](https://github.com/metaneutrons/ugos-cli/issues/90)) ([b7f2ee4](https://github.com/metaneutrons/ugos-cli/commit/b7f2ee42b4518ddd08a2b509d3e02180dab44bcd)), closes [#89](https://github.com/metaneutrons/ugos-cli/issues/89)
+* **auth:** support two-factor (TOTP) login ([#90](https://github.com/metaneutrons/ugos-cli/issues/90)) ([b7f2ee4](https://github.com/metaneutrons/ugos-cli/commit/b7f2ee42b4518ddd08a2b509d3e02180dab44bcd)). Not yet confirmed against a live NAS with two-factor authentication, see [#89](https://github.com/metaneutrons/ugos-cli/issues/89)
 * **cli:** read the password from stdin, and warn about --password ([#111](https://github.com/metaneutrons/ugos-cli/issues/111)) ([15bb8fa](https://github.com/metaneutrons/ugos-cli/commit/15bb8fa2d3b5e1ae35b7d04d3cebaad4a798abe7))
 
 ## [0.16.1](https://github.com/metaneutrons/ugos-cli/compare/v0.16.0...v0.16.1) (2026-11-04)
