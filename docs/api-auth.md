@@ -80,7 +80,7 @@ Content-Type: application/json
 }
 ```
 
-`trust: false` is deliberate: the client does not register itself as a trusted device. This body follows the web client's `twoFAVerify` call and has **not** been confirmed against a live capture of `/v1/verify/code/login`. The code comes from `Credentials`, which the CLI fills from `UGOS_OTP` (one shot) or `UGOS_OTP_SECRET` (TOTP secret: base32, or an `otpauth://totp/` URI). HMAC-SHA1, 6 digits and a 30 second step are the defaults; the URI's `digits` and `period` are used when it has them. A fresh code is generated from the secret on every login, so re-authentication after the session expires still works. The one-shot code does not.
+`trust: false` is deliberate: the client does not register itself as a trusted device. This body follows the web client's `twoFAVerify` call and has **not** been confirmed against a live capture of `/v1/verify/code/login`. The code comes from `Credentials`. The CLI fills that from `UGOS_OTP` (or `--otp`, one shot) or from `UGOS_OTP_SECRET` (TOTP secret: base32, or an `otpauth://totp/` URI). The secret is an environment variable only, not a flag, because a flag would show up in `ps` and the shell history. HMAC-SHA1, 6 digits and a 30 second step are the defaults; the URI's `digits` and `period` are used when it has them. A fresh code is generated from the secret on every login, so re-authentication after the session expires still works. The one-shot code does not.
 
 If this response has no `public_key`, the key from the password login is kept. Losing it would make the next encrypted call log in again.
 

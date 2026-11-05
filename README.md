@@ -35,8 +35,9 @@ pass show nas/admin | ugos-cli --password-stdin vm list
 
 # Authenticator-app two-factor (type 1, the only factor supported).
 # UGOS_OTP is one code and is spent on the first login, so it cannot renew a
-# session. UGOS_OTP_SECRET is the TOTP secret (base32, or an otpauth:// URI);
-# a fresh code is generated on every login, including after the session
+# session. UGOS_OTP_SECRET is the TOTP secret (base32, or an otpauth:// URI)
+# and is not a flag: a flag would show up in ps and the shell history.
+# A fresh code is generated on every login, including after the session
 # expires. See Authentication below for what storing the secret costs.
 export UGOS_OTP_SECRET=<base32-secret-or-otpauth-uri>
 # UGOS_OTP=123456 ugos-cli info
@@ -527,7 +528,7 @@ UGOS uses a multi-step auth flow:
 
 The client handles this automatically, including transparent re-authentication when tokens expire (UGOS error code 1024, about 25 minutes).
 
-`UGOS_OTP` is a single code. It is spent on the first login, so the renewal after expiry fails unless you pass a new one. `UGOS_OTP_SECRET` is the TOTP secret, as base32 or as an `otpauth://totp/` URI (HMAC-SHA1, 6 digits and 30 seconds unless the URI says otherwise). A fresh code is generated on every login, including that renewal. When both are set, the secret is used. `ugos-mcp` reads the same variables, with `_N` on numbered targets (`UGOS_OTP_SECRET_1`). The library crate does not read the environment; put the code or the secret on `Credentials`.
+`UGOS_OTP` is a single code, also available as `--otp`. It is spent on the first login, so the renewal after expiry fails unless you pass a new one. `UGOS_OTP_SECRET` is the TOTP secret, as base32 or as an `otpauth://totp/` URI (HMAC-SHA1, 6 digits and 30 seconds unless the URI says otherwise). It is an environment variable only: a flag would show up in `ps` and the shell history, and the secret produces valid codes for as long as it is stored. A fresh code is generated on every login, including that renewal. When both are set, the secret is used. `ugos-mcp` reads the same variables, with `_N` on numbered targets (`UGOS_OTP_SECRET_1`). The library crate does not read the environment; put the code or the secret on `Credentials`.
 
 Storing the secret has a cost. With the password and the secret on one machine, the second factor no longer protects that machine against whoever controls it. It still protects against a leaked password, which is the usual case for a service account. It is also stronger than a trusted device, which can be revoked on the NAS. UGOS shows the secret only once, as a QR code when two-factor authentication is enabled.
 

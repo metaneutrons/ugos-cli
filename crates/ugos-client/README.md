@@ -33,7 +33,8 @@ code on every login, which is what re-authentication after the ~25 minute
 session needs. The one-shot code is spent on the first login.
 
 The library does not read environment variables. The CLI and `ugos-mcp` copy
-`UGOS_OTP` and `UGOS_OTP_SECRET` onto `Credentials`.
+`UGOS_OTP` and `UGOS_OTP_SECRET` onto `Credentials`. The secret is an
+environment variable only; the one-shot code is also `--otp`.
 
 With the password and the secret in one process, the second factor no longer
 protects that machine against whoever controls it. It still protects against a

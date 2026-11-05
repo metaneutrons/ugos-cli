@@ -7,17 +7,6 @@ pub enum UgosError {
     #[error("incorrect account or password")]
     AuthFailed,
 
-    /// A login payload still needs a second factor.
-    ///
-    /// The password was accepted. UGOS answered with `enable_otp` set and no
-    /// session token. [`crate::auth::login`] does not return this: it finishes
-    /// the second step when [`crate::auth::Credentials`] carries a code or a
-    /// TOTP secret, and returns [`UgosError::OtpRequired`] when it carries
-    /// neither. The same login used to fail with API error 9406 ("client is
-    /// not compatible with the firmware") because the request sent `otp: false`.
-    #[error("two-factor authentication is enabled; ugos-cli does not support it yet")]
-    TwoFactorUnsupported,
-
     /// Two-factor authentication is on, and no code or secret was provided.
     ///
     /// Only authenticator apps are supported. Set [`crate::auth::Credentials::otp`]

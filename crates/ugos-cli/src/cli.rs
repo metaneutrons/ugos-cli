@@ -29,17 +29,12 @@ pub struct Cli {
 
     /// One-time authenticator code.
     ///
-    /// Spent on the first login, so it cannot renew a session. Ignored when
-    /// `--otp-secret` is set. Only authenticator apps (type 1) are supported.
+    /// Spent on the first login, so it cannot renew a session. A TOTP secret
+    /// belongs in the `UGOS_OTP_SECRET` environment variable: a flag would
+    /// show up in `ps` and the shell history. Only authenticator apps (type 1)
+    /// are supported.
     #[arg(long, env = "UGOS_OTP", global = true, hide_env_values = true)]
     pub otp: Option<String>,
-
-    /// TOTP secret (base32, or an `otpauth://totp/` URI).
-    ///
-    /// A fresh code is generated on every login, including after the session
-    /// expires. Only authenticator apps (type 1) are supported.
-    #[arg(long, env = "UGOS_OTP_SECRET", global = true, hide_env_values = true)]
-    pub otp_secret: Option<String>,
 
     /// HTTPS port.
     #[arg(long, env = "UGOS_PORT", default_value = "9443", global = true)]
@@ -1142,5 +1137,16 @@ mod tests {
         assert!(cli.reads_stdin_twice());
         let (_, cli) = parse(&["ugos-cli", "--password-stdin", "vm", "list"]).unwrap();
         assert!(!cli.reads_stdin_twice());
+    }
+
+    #[test]
+    fn the_totp_secret_is_not_a_flag() {
+        let mut cmd = Cli::command();
+        let help = cmd.render_long_help().to_string();
+        assert!(help.contains("--otp"), "the one-shot code flag is missing");
+        assert!(
+            !help.contains("otp-secret"),
+            "UGOS_OTP_SECRET must not be a flag: {help}"
+        );
     }
 }

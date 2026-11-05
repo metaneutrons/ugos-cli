@@ -110,11 +110,11 @@ fn login_body(username: &str, encrypted_password: &str) -> serde_json::Value {
 /// Turn a decoded login payload into a session.
 ///
 /// A payload with `enable_otp` and no token is a successful password check
-/// that still needs a second factor. That is reported on its own, rather
-/// than as a missing token or as API error 9406.
+/// that still needs a second factor. That is [`UgosError::OtpRequired`],
+/// rather than a missing token or API error 9406.
 fn session_from_login(data: LoginData) -> Result<Session> {
     if data.enable_otp && data.token.is_empty() {
-        return Err(UgosError::TwoFactorUnsupported);
+        return Err(UgosError::OtpRequired);
     }
     if data.token.is_empty() {
         return Err(UgosError::Encryption(
@@ -345,10 +345,10 @@ mod tests {
         }))
         .unwrap();
         let err = session_from_login(data).unwrap_err();
-        assert!(matches!(err, UgosError::TwoFactorUnsupported));
+        assert!(matches!(err, UgosError::OtpRequired));
         assert_eq!(
             err.to_string(),
-            "two-factor authentication is enabled; ugos-cli does not support it yet"
+            "two-factor authentication is enabled for this account; pass the current authenticator code or a TOTP secret"
         );
     }
 
@@ -360,7 +360,7 @@ mod tests {
         }))
         .unwrap();
         let err = session_from_login(data).unwrap_err();
-        assert!(matches!(err, UgosError::TwoFactorUnsupported));
+        assert!(matches!(err, UgosError::OtpRequired));
     }
 
     #[test]

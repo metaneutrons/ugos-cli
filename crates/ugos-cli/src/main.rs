@@ -56,7 +56,9 @@ async fn main() -> Result<()> {
         username: user.clone(),
         password,
         otp: blank_to_none(cli.otp.clone()),
-        otp_secret: blank_to_none(cli.otp_secret.clone()),
+        // Not a flag: the secret produces codes indefinitely, so it must not
+        // land in `ps` or the shell history. `--password` is tracked separately.
+        otp_secret: blank_to_none(env_var("UGOS_OTP_SECRET")),
     };
 
     let tls = resolve_tls(host, cli.port, cli.tls_insecure, cli.tls_trust_new).await?;
