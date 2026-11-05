@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.17.0](https://github.com/metaneutrons/ugos-cli/compare/v0.16.1...v0.17.0) (2026-11-05)
+
+
+### ⚠ BREAKING CHANGES
+
+* **auth:** ugos_client::Credentials has the new fields otp and otp_secret, so struct literals need them; UgosError::TwoFactorUnsupported is removed in favour of UgosError::OtpRequired.
+
+### Features
+
+* **auth:** support two-factor (TOTP) login ([#90](https://github.com/metaneutrons/ugos-cli/issues/90)) ([b7f2ee4](https://github.com/metaneutrons/ugos-cli/commit/b7f2ee42b4518ddd08a2b509d3e02180dab44bcd)), closes [#89](https://github.com/metaneutrons/ugos-cli/issues/89)
+* **cli:** read the password from stdin, and warn about --password ([#111](https://github.com/metaneutrons/ugos-cli/issues/111)) ([15bb8fa](https://github.com/metaneutrons/ugos-cli/commit/15bb8fa2d3b5e1ae35b7d04d3cebaad4a798abe7))
+
 ## [0.16.1](https://github.com/metaneutrons/ugos-cli/compare/v0.16.0...v0.16.1) (2026-11-04)
 
 
