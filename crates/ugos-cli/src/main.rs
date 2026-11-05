@@ -10,7 +10,8 @@ mod skill;
 use std::io::{BufWriter, Write};
 
 use anyhow::{Context, Result, bail};
-use clap::Parser;
+use clap::parser::ValueSource;
+use clap::{CommandFactory as _, FromArgMatches as _};
 use ugos_client::tls::known_hosts;
 use ugos_client::{Credentials, Session, TlsPolicy, UgosClient, tls};
 
@@ -20,7 +21,8 @@ async fn main() -> Result<()> {
         .with_env_filter(tracing_subscriber::EnvFilter::from_default_env())
         .init();
 
-    let cli = cli::Cli::parse();
+    let matches = cli::Cli::command().get_matches();
+    let cli = cli::Cli::from_arg_matches(&matches).unwrap_or_else(|e| e.exit());
 
     if run_offline(&cli)? {
         return Ok(());
@@ -35,14 +37,24 @@ async fn main() -> Result<()> {
         .clone()
         .or_else(|| env_var("UGOS_USERNAME"))
         .context("--user, UGOS_USER or UGOS_USERNAME required")?;
-    let password = cli
-        .password
-        .as_deref()
-        .context("--password or UGOS_PASSWORD required")?;
+    check_password_sources(&matches, &cli)?;
+    if matches.value_source("password") == Some(ValueSource::CommandLine) {
+        notice(PASSWORD_FLAG_WARNING);
+    }
+    let password = if cli.password_stdin {
+        if cli.reads_stdin_twice() {
+            bail!("--password-stdin and --registry-password-stdin both read stdin");
+        }
+        password_from_reader(&mut std::io::stdin().lock())?
+    } else {
+        cli.password
+            .clone()
+            .context("--password, --password-stdin or UGOS_PASSWORD required")?
+    };
 
     let creds = Credentials {
         username: user.clone(),
-        password: password.to_owned(),
+        password,
     };
 
     let tls = resolve_tls(host, cli.port, cli.tls_insecure, cli.tls_trust_new).await?;
@@ -84,6 +96,34 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Shown when the password arrives as a command-line argument.
+const PASSWORD_FLAG_WARNING: &str = "warning: --password is visible in the process list and the \
+shell history; set UGOS_PASSWORD or use --password-stdin instead";
+
+/// `--password` and `--password-stdin` on one command line is a mistake worth
+/// naming. A password that merely comes from `UGOS_PASSWORD` is not: stdin
+/// then wins, so a shell with the variable set can still pipe another one in.
+fn check_password_sources(matches: &clap::ArgMatches, cli: &cli::Cli) -> Result<()> {
+    if cli.password_stdin && matches.value_source("password") == Some(ValueSource::CommandLine) {
+        bail!("--password and --password-stdin cannot be combined");
+    }
+    Ok(())
+}
+
+/// First line of `reader`, without its line ending. An empty line is refused
+/// rather than sent as a password.
+fn password_from_reader(reader: &mut impl std::io::BufRead) -> Result<String> {
+    let mut line = String::new();
+    let _ = reader
+        .read_line(&mut line)
+        .context("reading the password from stdin")?;
+    let password = line.trim_end_matches(['\r', '\n']);
+    if password.is_empty() {
+        bail!("--password-stdin read an empty line");
+    }
+    Ok(password.to_owned())
 }
 
 /// Read an environment variable, treating an empty value as unset.
@@ -233,5 +273,59 @@ fn is_broken_pipe_io(result: &std::io::Result<()>) -> bool {
     match result {
         Err(e) => e.kind() == std::io::ErrorKind::BrokenPipe,
         Ok(()) => false,
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use super::{check_password_sources, password_from_reader};
+    use crate::cli::Cli;
+    use clap::{CommandFactory as _, FromArgMatches as _};
+
+    fn sources_ok(args: &[&str]) -> bool {
+        let matches = Cli::command().try_get_matches_from(args).unwrap();
+        let cli = Cli::from_arg_matches(&matches).unwrap();
+        check_password_sources(&matches, &cli).is_ok()
+    }
+
+    #[test]
+    fn the_flag_and_stdin_together_are_refused() {
+        assert!(!sources_ok(&[
+            "ugos-cli",
+            "--password",
+            "x",
+            "--password-stdin",
+            "vm",
+            "list"
+        ]));
+    }
+
+    #[test]
+    fn stdin_alone_and_the_flag_alone_are_fine() {
+        assert!(sources_ok(&["ugos-cli", "--password-stdin", "vm", "list"]));
+        assert!(sources_ok(&["ugos-cli", "--password", "x", "vm", "list"]));
+    }
+
+    #[test]
+    fn reads_the_first_line_and_drops_the_line_ending() {
+        let mut input: &[u8] = b"hunter2\nsecond\n";
+        assert_eq!(password_from_reader(&mut input).unwrap(), "hunter2");
+        let mut input: &[u8] = b"hunter2\r\n";
+        assert_eq!(password_from_reader(&mut input).unwrap(), "hunter2");
+    }
+
+    #[test]
+    fn keeps_spaces_inside_the_password() {
+        let mut input: &[u8] = b" a b \n";
+        assert_eq!(password_from_reader(&mut input).unwrap(), " a b ");
+    }
+
+    #[test]
+    fn refuses_an_empty_line_and_an_empty_stream() {
+        let mut line: &[u8] = b"\n";
+        assert!(password_from_reader(&mut line).is_err());
+        let mut nothing: &[u8] = b"";
+        assert!(password_from_reader(&mut nothing).is_err());
     }
 }

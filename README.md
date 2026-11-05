@@ -25,10 +25,13 @@ Covers virtual machines, Docker, files, downloads, system monitoring, logs and u
 ### CLI
 
 ```bash
-# Set credentials (or use --host, --user, --password flags)
+# Set credentials (or use the --host and --user flags)
 export UGOS_HOST=192.168.1.10
 export UGOS_USER=admin          # UGOS_USERNAME works too
 export UGOS_PASSWORD=<password>
+
+# Or read the password from stdin, for example from a secret store
+pass show nas/admin | ugos-cli --password-stdin vm list
 
 # List VMs
 ugos-cli vm list
@@ -121,6 +124,11 @@ ugos-cli info
 # JSON output, for scripting
 ugos-cli -o json vm list
 ```
+
+`--password` still works, but an argument shows up in the process list and the
+shell history, so `ugos-cli` prints a warning when it is used. Prefer
+`UGOS_PASSWORD` or `--password-stdin`. When both `UGOS_PASSWORD` and
+`--password-stdin` are present, stdin wins.
 
 Every command group has more than is shown here; `ugos-cli <group> --help`
 lists the rest.
