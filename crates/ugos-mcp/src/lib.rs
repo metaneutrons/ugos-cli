@@ -7,6 +7,9 @@
 //! - `UGOS_HOST`, `UGOS_USER`, `UGOS_PASSWORD` — single target (or default)
 //! - `UGOS_HOST_1`, `UGOS_USER_1`, `UGOS_PASSWORD_1` — numbered targets
 //! - `UGOS_NAME_N` — optional friendly name for target N
+//! - `UGOS_OTP` / `UGOS_OTP_N` — one-time authenticator code (type 1)
+//! - `UGOS_OTP_SECRET` / `UGOS_OTP_SECRET_N` — TOTP secret; a fresh code is
+//!   generated on every login, which is what a long-running server needs
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -39,9 +42,10 @@ pub struct TargetConfig {
 
 /// Parse target configs from environment variables.
 ///
-/// Reads `UGOS_HOST`/`UGOS_USER`/`UGOS_PASSWORD`/`UGOS_PORT`/`UGOS_NAME`
-/// for the unnumbered default, then `UGOS_HOST_1` .. `UGOS_HOST_N` for
-/// numbered targets.
+/// Reads `UGOS_HOST`/`UGOS_USER`/`UGOS_PASSWORD`/`UGOS_PORT`/`UGOS_NAME` for
+/// the unnumbered default, then `UGOS_HOST_1` .. `UGOS_HOST_N` for numbered
+/// targets. `UGOS_OTP` and `UGOS_OTP_SECRET` are optional and take the same
+/// suffix.
 #[must_use]
 pub fn parse_targets_from_env() -> Vec<TargetConfig> {
     let mut targets = Vec::new();
@@ -64,6 +68,14 @@ pub fn parse_targets_from_env() -> Vec<TargetConfig> {
     targets
 }
 
+/// Read an environment variable, treating a missing or blank value as unset.
+fn env_nonempty(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+}
+
 /// Read a single target from env vars with the given suffix (e.g. "" or "_1").
 fn read_target(suffix: &str) -> Option<TargetConfig> {
     let host = std::env::var(format!("UGOS_HOST{suffix}")).ok()?;
@@ -82,6 +94,8 @@ fn read_target(suffix: &str) -> Option<TargetConfig> {
         creds: Credentials {
             username: user,
             password,
+            otp: env_nonempty(&format!("UGOS_OTP{suffix}")),
+            otp_secret: env_nonempty(&format!("UGOS_OTP_SECRET{suffix}")),
         },
     })
 }

@@ -59,8 +59,14 @@ NAS. Use it first.
 
 ## Things that go wrong
 
-- Two-factor authentication is not supported yet. An account with 2FA fails to
-  log in; use one without.
+- Authenticator-app two-factor (type 1) is supported. `UGOS_OTP` (or `--otp`)
+  is a single code and is spent on the first login. `UGOS_OTP_SECRET` is the
+  TOTP secret (base32, or an `otpauth://` URI) and has no flag: a flag would
+  land in the shell history and the process list. A fresh code is generated
+  on every login, including after the session expires. Storing the secret next
+  to the password means the second factor no longer protects that machine from
+  whoever controls it. It still protects against a leaked password. Do not ask
+  the user to paste the secret into the chat, and do not write it into the project.
 - A session token is valid for about 25 minutes and cached under
   `~/.config/ugos-cli/`. `--no-cache` skips the cache.
 - A VM has to be shut off before `vm update`.

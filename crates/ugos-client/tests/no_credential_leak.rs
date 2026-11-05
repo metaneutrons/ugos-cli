@@ -11,11 +11,15 @@ use ugos_client::{Credentials, Session, TlsPolicy, UgosClient};
 
 const TOKEN: &str = "TOKEN_c0ffee_SECRET";
 const PASSWORD: &str = "PASSWORD_hunter2_SECRET";
+const OTP_CODE: &str = "OTP_CODE_246810_SECRET";
+const OTP_SECRET: &str = "OTP_SECRET_GEZDGNBV_SECRET";
 
 fn client() -> UgosClient {
     let creds = Credentials {
         username: "someone".into(),
         password: PASSWORD.into(),
+        otp: Some(OTP_CODE.into()),
+        otp_secret: Some(OTP_SECRET.into()),
     };
     let session = Session {
         token: TOKEN.into(),
@@ -30,6 +34,8 @@ fn debug_output_hides_the_token_and_password() {
     let shown = format!("{:?}", client());
     assert!(!shown.contains(TOKEN), "token leaked: {shown}");
     assert!(!shown.contains(PASSWORD), "password leaked: {shown}");
+    assert!(!shown.contains(OTP_CODE), "one-time code leaked: {shown}");
+    assert!(!shown.contains(OTP_SECRET), "TOTP secret leaked: {shown}");
 }
 
 #[test]
@@ -39,6 +45,8 @@ fn a_failed_request_hides_the_token() {
     let creds = Credentials {
         username: "someone".into(),
         password: PASSWORD.into(),
+        otp: Some(OTP_CODE.into()),
+        otp_secret: Some(OTP_SECRET.into()),
     };
     let session = Session {
         token: TOKEN.into(),

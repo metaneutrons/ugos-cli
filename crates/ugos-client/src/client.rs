@@ -83,6 +83,24 @@ impl UgosClient {
         })
     }
 
+    /// Log in against a base URL that is already a full origin, for tests.
+    ///
+    /// [`Self::connect`] always speaks HTTPS. The login tests use a plain
+    /// HTTP stand-in.
+    #[cfg(test)]
+    pub(crate) async fn connect_for_test(base_url: &str, creds: Credentials) -> Result<Self> {
+        let http = crate::tls::http_client(&crate::tls::TlsPolicy::Insecure)?;
+        let session = auth::login(&http, base_url, &creds).await?;
+        Ok(Self {
+            http,
+            base_url: base_url.to_owned(),
+            creds,
+            session: Arc::new(RwLock::new(session)),
+            public_key: Arc::new(RwLock::new(None)),
+            reauth: Arc::new(tokio::sync::Mutex::new(())),
+        })
+    }
+
     /// The current session token.
     pub async fn session(&self) -> Session {
         self.session.read().await.clone()
@@ -580,5 +598,103 @@ impl UgosClient {
         // login.
         *self.public_key.write().await = None;
         Ok(())
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod flow_tests {
+    use super::UgosClient;
+    use crate::Credentials;
+    use crate::test_support::{Mock, Script, SecondKey, lock, rsa_pem};
+    use crate::totp::{self, RFC6238_SHA1_SECRET_BASE32};
+
+    /// On the 30-second grid, so `T0` and `T0 + 30` are different steps.
+    const T0: u64 = 1_700_000_010;
+
+    struct ResetClock;
+
+    impl Drop for ResetClock {
+        fn drop(&mut self) {
+            totp::force_unix_time(0);
+        }
+    }
+
+    fn secret_creds() -> Credentials {
+        Credentials {
+            username: "admin".into(),
+            password: "secret".into(),
+            otp: None,
+            otp_secret: Some(RFC6238_SHA1_SECRET_BASE32.into()),
+        }
+    }
+
+    #[tokio::test]
+    async fn public_key_does_not_log_in_again_when_code_login_omits_it() {
+        let _guard = lock().await;
+        let pem = rsa_pem().to_owned();
+        let mock = Mock::spawn(Script {
+            requires_otp: true,
+            first_public_key: pem.clone(),
+            second_public_key: SecondKey::Omit,
+            token_id: "pending".into(),
+            expire_once: false,
+            advance_clock_to: None,
+        });
+        let client = UgosClient::connect_for_test(
+            mock.base_url(),
+            Credentials {
+                username: "admin".into(),
+                password: "secret".into(),
+                otp: Some("123456".into()),
+                otp_secret: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(client.session().await.public_key, pem);
+        let _key = client.public_key().await.unwrap();
+        assert_eq!(mock.ending_with("/verify/login").len(), 1);
+        assert_eq!(mock.ending_with("/verify/code/login").len(), 1);
+    }
+
+    #[tokio::test]
+    async fn re_auth_generates_a_new_code_from_the_secret() {
+        let _guard = lock().await;
+        let _reset = ResetClock;
+        totp::force_unix_time(T0);
+        let pem = rsa_pem().to_owned();
+        let mock = Mock::spawn(Script {
+            requires_otp: true,
+            first_public_key: pem.clone(),
+            second_public_key: SecondKey::Omit,
+            token_id: "pending".into(),
+            expire_once: true,
+            advance_clock_to: Some(T0 + 30),
+        });
+        let client = UgosClient::connect_for_test(mock.base_url(), secret_creds())
+            .await
+            .unwrap();
+        assert_eq!(client.session().await.token, "token-0");
+
+        let body: serde_json::Value = client.get("probe").await.unwrap();
+        assert_eq!(body["ok"], true);
+        assert_eq!(client.session().await.token, "token-1");
+        // The second response had no key. Re-auth must not have wiped the first.
+        assert_eq!(client.session().await.public_key, pem);
+
+        let codes = mock.ending_with("/verify/code/login");
+        assert_eq!(codes.len(), 2);
+        let first = codes[0].body["code"].as_str().unwrap();
+        let second = codes[1].body["code"].as_str().unwrap();
+        let secret = totp::parse_secret(RFC6238_SHA1_SECRET_BASE32).unwrap();
+        assert_eq!(first, totp::code_at(&secret, T0));
+        assert_eq!(second, totp::code_at(&secret, T0 + 30));
+        assert_ne!(first, second);
+
+        let _key = client.public_key().await.unwrap();
+        assert_eq!(mock.ending_with("/verify/login").len(), 2);
+        assert_eq!(mock.ending_with("/verify/code/login").len(), 2);
     }
 }

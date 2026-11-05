@@ -13,6 +13,8 @@ fn make_server() -> UgosMcp {
         creds: Credentials {
             username: "test".into(),
             password: "test".into(),
+            otp: None,
+            otp_secret: None,
         },
     }])
 }

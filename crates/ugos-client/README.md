@@ -24,6 +24,24 @@ Part of [ugos-cli](https://github.com/metaneutrons/ugos-cli). See that
 repository for the command line tool, the MCP server and the full
 documentation.
 
+## Two-factor authentication
+
+Put an authenticator code on `Credentials::otp`, or a TOTP secret on
+`Credentials::otp_secret` (base32, or an `otpauth://totp/` URI). Only
+authenticator apps (type 1) are supported. The secret is turned into a fresh
+code on every login, which is what re-authentication after the ~25 minute
+session needs. The one-shot code is spent on the first login.
+
+The library does not read environment variables. The CLI and `ugos-mcp` copy
+`UGOS_OTP` and `UGOS_OTP_SECRET` onto `Credentials`. The secret is an
+environment variable only; the one-shot code is also `--otp`.
+
+With the password and the secret in one process, the second factor no longer
+protects that machine against whoever controls it. It still protects against a
+leaked password. UGOS shows the secret only once, as a QR code when
+two-factor authentication is enabled. The `/v1/verify/code/login` request
+follows the web client and has not been confirmed against a live capture.
+
 ## Errors
 
 `UgosError` is `#[non_exhaustive]`. Match the variants you handle and keep a

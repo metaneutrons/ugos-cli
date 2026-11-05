@@ -31,7 +31,8 @@ Content-Type: application/json
   "username": "<username>",
   "password": "<base64-rsa-encrypted-password>",
   "keepalive": true,
-  "otp": false
+  "otp": true,
+  "is_simple": false
 }
 ```
 
@@ -59,6 +60,31 @@ Content-Type: application/json
 ```
 
 **Set-Cookie**: `token=<url-encoded-token>; Path=/; HttpOnly; SameSite=Strict`
+
+When the account has two-factor authentication enabled, the same request returns `200` with `enable_otp: true`, a `token_id` and no `token`. The token is issued by the next step. `otp: false` on such an account is rejected with code 9406 ("client is not compatible with the firmware"), which names the firmware instead of the second factor.
+
+### Step 3b: Authenticator code
+
+Only authenticator apps (`type: 1`) are supported.
+
+```
+POST /ugreen/v1/verify/code/login
+Content-Type: application/json
+
+{
+  "code": "<6-digit code>",
+  "type": 1,
+  "token_id": "<token_id from the login response>",
+  "trust": false,
+  "trust_info": {"client_type": "web", "system": "ugos-cli", "dev_name": "ugos-cli"}
+}
+```
+
+`trust: false` is deliberate: the client does not register itself as a trusted device. This body follows the web client's `twoFAVerify` call and has **not** been confirmed against a live capture of `/v1/verify/code/login`. The code comes from `Credentials`. The CLI fills that from `UGOS_OTP` (or `--otp`, one shot) or from `UGOS_OTP_SECRET` (TOTP secret: base32, or an `otpauth://totp/` URI). The secret is an environment variable only, not a flag, because a flag would show up in `ps` and the shell history. HMAC-SHA1, 6 digits and a 30 second step are the defaults; the URI's `digits` and `period` are used when it has them. A fresh code is generated from the secret on every login, so re-authentication after the session expires still works. The one-shot code does not.
+
+If this response has no `public_key`, the key from the password login is kept. Losing it would make the next encrypted call log in again.
+
+With the password and the secret on one machine, the second factor no longer protects that machine against whoever controls it. It still protects against a leaked password, which is the usual case for a service account. It is also stronger than a trusted device, which can be revoked on the NAS. UGOS shows the secret only once, as a QR code when two-factor authentication is enabled.
 
 ### Step 4: Authenticated Requests
 
@@ -124,7 +150,8 @@ resp2 = opener.open(urllib.request.Request(
         "username": "fabian",
         "password": encrypted_password,
         "keepalive": True,
-        "otp": False
+        "otp": True,
+        "is_simple": False
     }).encode(),
     headers={"Content-Type": "application/json"}))
 login = json.loads(resp2.read())

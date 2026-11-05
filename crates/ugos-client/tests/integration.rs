@@ -2,7 +2,8 @@
 //!
 //! Run with: `cargo test -p ugos-client --features integration -- --ignored`
 //!
-//! Requires env vars: `UGOS_HOST`, `UGOS_USER`, `UGOS_PASSWORD`
+//! Requires env vars: `UGOS_HOST`, `UGOS_USER`, `UGOS_PASSWORD`.
+//! `UGOS_OTP` or `UGOS_OTP_SECRET` when the account has an authenticator app.
 
 #![cfg(feature = "integration")]
 // These tests run against real hardware only. A missing credential should abort
@@ -13,11 +14,20 @@ use ugos_client::api::docker::DockerApi;
 use ugos_client::api::kvm::KvmApi;
 use ugos_client::{Credentials, UgosClient};
 
+fn env_nonempty(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .map(|value| value.trim().to_owned())
+        .filter(|value| !value.is_empty())
+}
+
 fn creds() -> (String, Credentials) {
     let host = std::env::var("UGOS_HOST").expect("UGOS_HOST required");
     let creds = Credentials {
         username: std::env::var("UGOS_USER").expect("UGOS_USER required"),
         password: std::env::var("UGOS_PASSWORD").expect("UGOS_PASSWORD required"),
+        otp: env_nonempty("UGOS_OTP"),
+        otp_secret: env_nonempty("UGOS_OTP_SECRET"),
     };
     (host, creds)
 }
