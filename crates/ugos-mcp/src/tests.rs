@@ -20,7 +20,30 @@ fn make_server() -> UgosMcp {
 }
 
 /// Every tool the server registers.
-const EXPECTED_TOOLS: [&str; 164] = [
+const EXPECTED_TOOLS: [&str; 187] = [
+    "ugos_update_status",
+    "ugos_update_config",
+    "ugos_update_install",
+    "ugos_update_upload",
+    "ugos_update_progress",
+    "ugos_update_key",
+    "ugos_update_clean",
+    "ugos_backup_save",
+    "ugos_backup_info",
+    "ugos_backup_services",
+    "ugos_backup_restore",
+    "ugos_backup_progress",
+    "ugos_backup_reset_network",
+    "ugos_backup_reset_factory",
+    "ugos_index_status",
+    "ugos_index_ranges",
+    "ugos_index_pause",
+    "ugos_index_resume",
+    "ugos_index_regenerate",
+    "ugos_system_about",
+    "ugos_system_ports",
+    "ugos_system_reboot",
+    "ugos_system_poweroff",
     "ugos_fileservice_status",
     "ugos_fileservice_settings",
     "ugos_fileservice_start",

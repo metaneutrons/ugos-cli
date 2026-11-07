@@ -46,6 +46,7 @@ pub mod fileserver;
 pub mod hw;
 pub mod nas_storage;
 pub mod net;
+pub mod update;
 
 // ── Display row types ───────────────────────────────────────────────
 

@@ -1,49 +1,16 @@
 # Backup
 
-No backup commands are implemented, and this note records why, so the question
-does not have to be researched twice.
+UGOS has **no data backup app** in the control panel bundles: probing `backup`,
+`backupmgr` and `backupcenter` under `http://<nas>:9999/` returns 404, and the
+neighbouring `snapshot` app (`com.ugreen.snapshot`) manages filesystem
+snapshots, not backups.
 
-## There is no backup app
+An earlier version of this note said the three `backup_restore/*` paths had no
+caller in the web UI and that nothing could be said about them. That was wrong.
+They are called from the control panel page **Update & Restore**, and they back
+up and restore the **configuration of the NAS**, not its data. They are
+described in [api-update.md](api-update.md) and wired as `ugos-cli backup`.
 
-UGOS ships its apps as separate web bundles under `http://<nas>:9999/<app>/`.
-Probing the plausible names — `backup`, `backupmgr`, `backup_restore`,
-`backupcenter` — returns 404 for all of them. The only neighbouring app that
-exists is `snapshot` (`com.ugreen.snapshot`), which manages filesystem
-snapshots rather than backups.
-
-## The three `backup_restore` paths are not an API surface
-
-A search across the bundles turns up exactly three paths containing
-`backup_restore`:
-
-- `ugreen/v1/backup_restore/backupnow`
-- `ugreen/v1/backup_restore/import`
-- `ugreen/v1/backup_restore/restore`
-
-All three appear in a single place: the `WHITE_LIST_FORM_ENCRYPT` array in the
-desktop bundle (see [api-encryption.md](api-encryption.md)). They are listed
-there as paths exempt from request encryption, next to unrelated entries such
-as `music/songlist/share/download` and `security/ssl/import`. Nothing in the
-bundles calls them.
-
-That places their consumer outside the web UI — most likely UGREEN's desktop
-sync client, whose sync-and-backup strings do live in the same bundle. Their
-parameters, their semantics, and what they operate on are therefore unknown.
-
-## Why nothing was implemented
-
-There is no listing, status, or progress endpoint anywhere in this group. A
-`backup run` command would trigger a potentially long-running operation on a
-production NAS with no way to observe it, built from a path whose parameters
-would have to be guessed, and it could not be tested without risking the data
-it claims to protect. An untested backup command is worse than no command,
-and an untested restore command is worse still. The same reasoning kept
-`DeleteLogs` and `processes/stop` out of the CLI.
-
-## What would settle it
-
-A HAR capture from the snapshot app. Its endpoints sit in lazily loaded
-chunks that could not be resolved from the entry bundle alone, so the paths
-are not obtainable by reading `app-snapshot.js`. Snapshots are also the closer
-match to what a NAS user means by backup, and listing and creating them are
-operations that can be verified safely, unlike `backup_restore/restore`.
+What `ugos-cli` still does not cover is a backup of files. For that the
+nearest tools are snapshots (`snapshot`) and `rsync` against the NAS (`rsync`
+service, see [api-fileservices.md](api-fileservices.md)).

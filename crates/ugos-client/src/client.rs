@@ -111,7 +111,8 @@ impl UgosClient {
     /// A path may name its API version (`v2/filemgr/...`); anything else gets
     /// `v1/`, which is what the KVM and Docker apps use.
     fn url_for(&self, path: &str) -> String {
-        if path.starts_with("v1/") || path.starts_with("v2/") {
+        // The thumbnail service lives under `api/`, without a version.
+        if path.starts_with("v1/") || path.starts_with("v2/") || path.starts_with("api/") {
             format!("{}/{path}", self.base_url)
         } else {
             format!("{}/v1/{path}", self.base_url)
@@ -230,6 +231,33 @@ impl UgosClient {
                 .delete(&url)
                 .header("X-CurPass-Token", sealed)
                 .json(body)
+                .send()
+                .await?
+                .json()
+                .await?;
+            Self::decode(resp)
+        })
+        .await
+    }
+
+    /// Perform a GET request that is confirmed with the account's password,
+    /// as UGOS asks before a factory reset.
+    ///
+    /// The password goes in the `X-CurPass-Token` header, sealed the way
+    /// [`seal_password`](Self::seal_password) does it.
+    ///
+    /// # Errors
+    ///
+    /// Returns the appropriate [`UgosError`] on API, crypto or network failure.
+    pub async fn get_confirmed<T: DeserializeOwned + Send>(&self, path: &str) -> Result<T> {
+        self.retrying(|| async {
+            let token = self.session.read().await.token.clone();
+            let url = Self::append_token(&self.url_for(path), &token);
+            let sealed = self.seal_password(&self.creds.password).await?;
+            let resp: ApiResponse<serde_json::Value> = self
+                .http
+                .get(&url)
+                .header("X-CurPass-Token", sealed)
                 .send()
                 .await?
                 .json()

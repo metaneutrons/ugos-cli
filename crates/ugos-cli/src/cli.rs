@@ -3,6 +3,7 @@
 mod fileserver;
 mod hw;
 mod net;
+mod update;
 
 pub use self::fileserver::{
     ApplyArgs, DiscoveryArgs, RsyncAction, RsyncArgs, ServiceAction, SmbAction, StopArgs,
@@ -16,6 +17,9 @@ pub use self::hw::{
 pub use self::net::{
     BondAction, BridgeAction, DnsArgs, FlowAction, GatewayAction, Ipv6Arg, NetAction, ProxyAction,
     SetArgs, WifiCommand,
+};
+pub use self::update::{
+    AutoUpdate, BackupAction, ForceArgs, IndexAction, RestoreArgs, UpdateAction, UpdateConfigArgs,
 };
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
@@ -215,6 +219,21 @@ pub enum Resource {
     Smb {
         #[command(subcommand)]
         action: SmbAction,
+    },
+    /// Firmware updates.
+    Update {
+        #[command(subcommand)]
+        action: UpdateAction,
+    },
+    /// Configuration backup, restore and resets.
+    Backup {
+        #[command(subcommand)]
+        action: BackupAction,
+    },
+    /// The thumbnail (index) service.
+    Index {
+        #[command(subcommand)]
+        action: IndexAction,
     },
     /// The FTP and FTPS file service.
     Ftp {
@@ -736,6 +755,22 @@ pub enum SystemAction {
     Hostname {
         /// The new name.
         name: Option<String>,
+    },
+    /// Model, serial, version, run time, hardware and warranty.
+    About,
+    /// The services and applications and the ports they listen on.
+    Ports,
+    /// Restart the NAS.
+    Reboot {
+        /// Go on although this restarts the NAS.
+        #[arg(long)]
+        force: bool,
+    },
+    /// Power the NAS off. Only the power button starts it again.
+    Poweroff {
+        /// Go on although this powers the NAS off.
+        #[arg(long)]
+        force: bool,
     },
     /// Show or set the finder and improvement-plan switches.
     Finder {

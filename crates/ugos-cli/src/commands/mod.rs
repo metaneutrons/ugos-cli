@@ -9,6 +9,7 @@ mod net;
 mod net_links;
 mod secret;
 mod share;
+mod update;
 mod user;
 pub mod vmspec;
 
@@ -79,6 +80,9 @@ pub async fn run(
         Resource::Webdav { action } => {
             fileserver::service(client, Service::Webdav, action, fmt, w).await
         }
+        Resource::Update { action } => update::update(client, action, fmt, w).await,
+        Resource::Backup { action } => update::backup(client, action, fmt, w).await,
+        Resource::Index { action } => update::index(client, action, fmt, w).await,
         Resource::Rsync { action } => fileserver::rsync(client, action, fmt, w).await,
         // Handled in `main` before any connection is made.
         Resource::Skill(_) => Ok(()),
@@ -339,6 +343,10 @@ async fn system(
                 OutputFormat::Json => output::print_json(w, &svcs)?,
             }
         }
+        SystemAction::About => update::about_cmd(client, fmt, w).await?,
+        SystemAction::Ports => update::ports_cmd(client, fmt, w).await?,
+        SystemAction::Reboot { force } => update::power_cmd(client, false, *force, w).await?,
+        SystemAction::Poweroff { force } => update::power_cmd(client, true, *force, w).await?,
         SystemAction::Hostname { name } => {
             clock::hostname(client, name.as_deref(), fmt, w).await?;
         }
