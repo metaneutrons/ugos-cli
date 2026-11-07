@@ -1,6 +1,9 @@
 //! Command dispatch — maps CLI actions to API calls and output.
 
 mod nas_storage;
+mod net;
+mod net_links;
+mod secret;
 mod share;
 mod user;
 pub mod vmspec;
@@ -49,6 +52,7 @@ pub async fn run(
         Resource::Log(args) => syslog(client, args, fmt, w).await,
         Resource::User { action } => user::user(client, action, fmt, w).await,
         Resource::Group { action } => user::group(client, action, fmt, w).await,
+        Resource::Net { action } => net::net(client, action, fmt, w).await,
         Resource::Pool { action } => nas_storage::pool(client, action, fmt, w).await,
         Resource::Volume { action } => nas_storage::volume(client, action, fmt, w).await,
         Resource::Disk { action } => nas_storage::disk(client, action, fmt, w).await,

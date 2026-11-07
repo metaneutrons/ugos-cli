@@ -239,6 +239,31 @@ impl UgosClient {
         .await
     }
 
+    /// The addresses this client reaches the NAS at: the host itself when it
+    /// is an IP address, else what its name resolves to. A change that moves
+    /// one of them cuts this session off.
+    pub async fn session_addresses(&self) -> Vec<std::net::IpAddr> {
+        let authority = self
+            .base_url
+            .trim_start_matches("https://")
+            .split('/')
+            .next()
+            .unwrap_or_default()
+            .to_owned();
+        let host = authority
+            .rsplit_once(':')
+            .map_or(authority.as_str(), |(host, _)| host)
+            .trim_matches(['[', ']'])
+            .to_owned();
+        if let Ok(ip) = host.parse::<std::net::IpAddr>() {
+            return vec![ip];
+        }
+        tokio::net::lookup_host(authority)
+            .await
+            .map(|found| found.map(|socket| socket.ip()).collect())
+            .unwrap_or_default()
+    }
+
     /// Seal a password the way the login does: RSA with the login key that
     /// `verify/check` hands out, and not the session key of the encrypted
     /// transport. UGOS expects passwords in this form wherever the web UI

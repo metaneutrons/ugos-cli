@@ -1118,3 +1118,105 @@ mod storage {
         assert_eq!(plans[0].disks, ["/dev/nvme0n1"]);
     }
 }
+
+// ── Network settings of the NAS ─────────────────────────────────────
+
+mod net {
+    use crate::api::net::pick_iface;
+    use crate::error::UgosError;
+    use crate::types::net::{Gateways, IfaceList, Ipv6Nominee, NetSettings};
+
+    const IFACES: &str = r#"{"ifaces": [
+        {"interface": "bridge0", "label": "VBR-LAN1", "mac": "00:00:5e:00:53:01", "mtu": 1500,
+         "mtu_manual": 0, "speed": 10000, "duplex": "unknown", "connection": 1, "type": 5,
+         "bond_mode": "unknown", "ieee8021x": {"enable": false},
+         "ipv4": {"protocol": "static", "ipaddr": "192.0.2.5", "netmask": "255.255.240.0",
+                  "gateway": "192.0.2.1", "default_route": "192.0.2.1", "dns": ["192.0.2.1"],
+                  "ip6addr": null, "mask": "", "route": 0, "status": 0},
+         "ipv6": {"protocol": "dhcp", "ip6addr": ["2001:db8::5/64"], "dns": null, "status": 0},
+         "slaves": [{"interface": "eth0", "label": "LAN1", "connection": 1, "duplex": "full", "speed": 10000, "type": 0}]},
+        {"interface": "wlan0", "label": "WLAN1", "mac": "00:00:5e:00:53:02", "type": 2,
+         "ipv4": {"protocol": "dhcp", "status": 2}, "ipv6": {"protocol": "dhcp", "status": 2}, "slaves": null}
+    ]}"#;
+
+    #[test]
+    fn an_interface_keeps_addresses_and_ports() {
+        let list: IfaceList = serde_json::from_str(IFACES).unwrap();
+        let bridge = &list.ifaces[0];
+        assert_eq!(
+            (bridge.interface.as_str(), bridge.kind, bridge.speed),
+            ("bridge0", 5, 10000)
+        );
+        assert_eq!(bridge.ipv4.protocol, "static");
+        assert_eq!(bridge.ipv4.dns, ["192.0.2.1"]);
+        assert_eq!(bridge.ipv6.ip6addr, ["2001:db8::5/64"]);
+        assert_eq!(bridge.slaves[0].label, "LAN1");
+        assert!(!bridge.ieee8021x.enable);
+    }
+
+    #[test]
+    fn null_lists_are_empty_ones() {
+        let list: IfaceList = serde_json::from_str(IFACES).unwrap();
+        let wlan = &list.ifaces[1];
+        assert_eq!(wlan.slaves, Vec::new());
+        assert_eq!(wlan.ipv4.dns, Vec::<String>::new());
+        assert_eq!(wlan.ipv4.status, 2);
+    }
+
+    #[test]
+    fn an_interface_is_found_by_name_or_label() {
+        let list: IfaceList = serde_json::from_str(IFACES).unwrap();
+        assert_eq!(
+            pick_iface(&list.ifaces, "bridge0").unwrap().label,
+            "VBR-LAN1"
+        );
+        assert_eq!(
+            pick_iface(&list.ifaces, "wlan1").unwrap().interface,
+            "wlan0"
+        );
+        assert_eq!(
+            pick_iface(&list.ifaces, "vbr-lan1").unwrap().interface,
+            "bridge0"
+        );
+        assert!(matches!(
+            pick_iface(&list.ifaces, "eth9"),
+            Err(UgosError::NotFound {
+                kind: "interface",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn general_settings_keep_dns_gateways_and_proxy() {
+        let settings: NetSettings = serde_json::from_str(
+            r#"{"general": {"clash_check": 1, "dns": ["192.0.2.1"], "dns_mode": 0,
+                "ipv4_gateway": {"interface": "bridge0", "ipaddr": "192.0.2.1"},
+                "ipv6_gateway": {"interface": "", "ipaddr": ""},
+                "multiple_gateways": 0, "prior_ipv4": 1},
+              "proxy": {"auth": {"enable": 1, "password": "hunter2", "username": "u"},
+                        "enable": 1, "httpx_proxy": 0, "local_proxy": 0,
+                        "list": [{"host": "proxy.example", "port": 3128, "protocol": "http"}]}}"#,
+        )
+        .unwrap();
+        assert_eq!(settings.general.dns, ["192.0.2.1"]);
+        assert_eq!(settings.general.ipv4_gateway.interface, "bridge0");
+        assert_eq!(settings.proxy.list[0].port, 3128);
+        // The password is carried for a write, and kept out of `Debug`.
+        assert_eq!(settings.proxy.auth.password, "hunter2");
+        assert!(!format!("{settings:?}").contains("hunter2"));
+    }
+
+    #[test]
+    fn gateways_and_the_ipv6_nominee_parse() {
+        let gateways: Gateways = serde_json::from_str(
+            r#"{"ipv4": [{"gateway": "192.0.2.1", "interface": "bridge0", "label": "VBR-LAN1"}], "ipv6": []}"#,
+        )
+        .unwrap();
+        assert_eq!(gateways.ipv4[0].gateway, "192.0.2.1");
+        assert_eq!(gateways.ipv6, Vec::new());
+        let nominee: Ipv6Nominee =
+            serde_json::from_str(r#"{"enabled": true, "interface": "bridge0"}"#).unwrap();
+        assert!(nominee.enabled);
+    }
+}

@@ -1,5 +1,12 @@
 //! Command-line argument definitions.
 
+mod net;
+
+pub use self::net::{
+    BondAction, BridgeAction, DnsArgs, FlowAction, GatewayAction, Ipv6Arg, NetAction, ProxyAction,
+    SetArgs, WifiCommand,
+};
+
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
 /// UGOS NAS management CLI.
@@ -125,6 +132,12 @@ pub enum Resource {
     User {
         #[command(subcommand)]
         action: UserAction,
+    },
+    /// Network settings of the NAS: interfaces, DNS, gateways, bonds,
+    /// bridges, Wi-Fi and traffic control. `network` is the KVM network.
+    Net {
+        #[command(subcommand)]
+        action: NetAction,
     },
     /// Storage pools: the RAID sets that volumes live on.
     Pool {

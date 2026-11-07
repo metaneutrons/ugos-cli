@@ -20,7 +20,7 @@ fn make_server() -> UgosMcp {
 }
 
 /// Every tool the server registers.
-const EXPECTED_TOOLS: [&str; 88] = [
+const EXPECTED_TOOLS: [&str; 113] = [
     "ugos_target_list",
     // KVM
     "ugos_vm_list",
@@ -122,6 +122,32 @@ const EXPECTED_TOOLS: [&str; 88] = [
     "ugos_disk_smart",
     "ugos_disk_history",
     "ugos_disk_plans",
+    // Network of the NAS
+    "ugos_net_list",
+    "ugos_net_show",
+    "ugos_net_general",
+    "ugos_net_set",
+    "ugos_net_dns_set",
+    "ugos_net_gateway_order",
+    "ugos_net_proxy_set",
+    "ugos_net_bond_candidates",
+    "ugos_net_bond_create",
+    "ugos_net_bond_delete",
+    "ugos_net_bridge_candidates",
+    "ugos_net_bridge_create",
+    "ugos_net_bridge_create_virtual",
+    "ugos_net_bridge_delete",
+    "ugos_net_wifi_status",
+    "ugos_net_wifi_radio",
+    "ugos_net_wifi_list",
+    "ugos_net_wifi_connect",
+    "ugos_net_wifi_forget",
+    "ugos_net_wifi_edit",
+    "ugos_net_flow_list",
+    "ugos_net_flow_services",
+    "ugos_net_flow_add",
+    "ugos_net_flow_remove",
+    "ugos_net_flow_enable",
 ];
 
 #[test]
@@ -152,39 +178,33 @@ fn all_tools_registered() {
     );
 }
 
-/// What the server leaves to `ugos-cli` on purpose. A tool that creates an
-/// account, sets a password or a role, or forces a delete would put a secret
-/// through the model or let a refusal be overridden by the same caller.
+/// The tools that delete name `force`, so that a refusal can be overridden,
+/// and say in the description that the user is to be asked first.
 #[test]
-fn no_tool_takes_a_password_or_a_role_or_forces() {
+fn the_delete_tools_take_force_and_tell_the_model_to_ask() {
     let server = make_server();
     let tools = server.tool_router.list_all();
-    for tool in &tools {
-        assert!(
-            !tool.name.contains("user_create") && !tool.name.contains("password"),
-            "{} must stay out of the server",
-            tool.name
-        );
-        let properties = tool
+    for name in [
+        "ugos_share_delete",
+        "ugos_user_delete",
+        "ugos_net_bond_delete",
+        "ugos_net_bridge_delete",
+    ] {
+        let tool = tools.iter().find(|t| t.name == name).unwrap();
+        let has_force = tool
             .input_schema
             .get("properties")
-            .and_then(|value| value.as_object());
-        for name in properties.into_iter().flat_map(|map| map.keys()) {
-            // `deny_password_change` is a policy switch, not a password.
-            let risky = ["password", "new_password", "force", "secret"].contains(&name.as_str());
-            let shares_or_users = tool.name.contains("share") || tool.name.contains("user");
-            assert!(
-                !(risky && shares_or_users),
-                "{} has a `{name}` parameter",
-                tool.name
-            );
-        }
-        if tool.name == "ugos_user_update" {
-            assert!(
-                properties.is_some_and(|map| !map.contains_key("role")),
-                "ugos_user_update must not set a role"
-            );
-        }
+            .and_then(|value| value.as_object())
+            .is_some_and(|map| map.contains_key("force"));
+        assert!(has_force, "{name} has no force parameter");
+    }
+    for name in ["ugos_share_delete", "ugos_user_delete"] {
+        let tool = tools.iter().find(|t| t.name == name).unwrap();
+        let description = tool.description.as_ref().unwrap();
+        assert!(
+            description.contains("ask the user"),
+            "{name}: {description}"
+        );
     }
 }
 

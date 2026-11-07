@@ -257,6 +257,265 @@ Search KVM audit logs
 - `page_size`: Page size (default: 20).
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
+## ugos_net_bond_candidates
+
+List the ports that could join a bond
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_net_bond_create
+
+Create a bond (link aggregation) from two or more ports. Refused when a port carries this session or the ports are in different networks unless force is given
+
+- `default_route`: Make the bond the default route.
+- `dns`: DNS servers, up to two.
+- `force`: Go on although a port carries this session's address or the ports are
+in different networks.
+- `gateway`: Gateway of the static address.
+- `ip`: Static IPv4 address; DHCP when left out.
+- `mode`: Mode: `balance-alb` (default), `active-backup`, `balance-rr`,
+`balance-xor` or `802.3ad`.
+- `netmask`: Netmask of the static address.
+- `ports` (required): Two or more ports, e.g. `["eth0", "eth1"]`.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_net_bond_delete
+
+Delete a bond. Refused when firewall or traffic rules name it or it carries this session unless force is given
+
+- `force`: Go on although rules name it or it carries this session.
+- `name` (required): Interface name or label, e.g. `bond0`.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_net_bridge_candidates
+
+List the ports that could join a bridge
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_net_bridge_create
+
+Create a bridge from two or more ports. Refused when a port carries this session unless force is given
+
+- `force`: Go on although a port carries this session's address.
+- `ports` (required): The ports. Wi-Fi cannot be bridged.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_net_bridge_create_virtual
+
+Create a virtual bridge, which VMs attach to, from one or more ports
+
+- `force`: Go on although a port carries this session's address.
+- `ports` (required): The ports. Wi-Fi cannot be bridged.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_net_bridge_delete
+
+Delete a bridge. Refused when rules name it or it carries this session unless force is given
+
+- `force`: Go on although rules name it or it carries this session.
+- `name` (required): Interface name or label, e.g. `bond0`.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_net_dns_set
+
+Set the DNS servers (automatic, or one or two) and the general switches: several gateways, prefer IPv4, address clash check
+
+- `auto`: Take the DNS servers from DHCP.
+- `clash_check`: Check for an address clash when an address changes.
+- `multiple_gateways`: Allow several default gateways.
+- `prefer_ipv4`: Prefer IPv4 over IPv6.
+- `servers`: One or two DNS servers to use instead.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_net_flow_add
+
+Add a traffic control rule at the end of the list: all ports, custom ports, or built-in services, with a rate limit in KB/s
+
+- `all_ports`: A rule for every port.
+- `interface` (required): Interface name, or `all`.
+- `max_rate` (required): Limit in KB/s.
+- `min_rate`: Guaranteed rate in KB/s (default 0).
+- `ports`: Ports: a comma list of up to 15, or a range `a-b`.
+- `protocol`: `tcp`, `udp` or `all` (default `all`).
+- `services`: Built-in services by section id or name, see the services tool.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `target_port`: `src` or `dest` port of a custom rule (default `dest`).
+
+## ugos_net_flow_enable
+
+Switch the traffic control rule at a position on or off (on: true or false)
+
+- `on`: Switch the rule on (`true`) or off (`false`), for the enable tool.
+- `position` (required): Position in the list, counting from 1.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_net_flow_list
+
+List the traffic control rules in order of priority
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_net_flow_remove
+
+Remove the traffic control rule at a position (counting from 1)
+
+- `on`: Switch the rule on (`true`) or off (`false`), for the enable tool.
+- `position` (required): Position in the list, counting from 1.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_net_flow_services
+
+List the built-in services a traffic control rule can name
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_net_gateway_order
+
+Put the default gateways in an order of preference, by interface
+
+- `ifaces` (required): Interface names or labels, most preferred first.
+- `ipv6`: Order the IPv6 gateways instead of the IPv4 ones.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_net_general
+
+Show DNS, default gateways, the IPv6 interface and the proxy of the NAS
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_net_list
+
+List the network interfaces of the NAS with link, address and speed
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_net_proxy_set
+
+Set or switch off the HTTP proxy of the NAS. A password passes through the model; prefer ugos-cli for that
+
+- `all`: One proxy for every protocol, `IP:PORT`. Leave out with `off`.
+- `http`: HTTP proxy, `IP:PORT`.
+- `https`: HTTPS proxy, `IP:PORT`.
+- `local`: Use the proxy for local addresses too.
+- `off`: Switch the proxy off.
+- `password`: Password of the proxy. It passes through the model; prefer `ugos-cli`.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `user`: User name of the proxy.
+
+## ugos_net_set
+
+Change the setup of one network interface (IPv4, IPv6, MTU, bond mode). Refused for the interface this session talks through unless force is given: a changed address cuts it off
+
+- `bond_mode`: Bond mode, for a bond.
+- `default_route`: Make the interface the default route.
+- `dns`: DNS servers of the interface; an empty list clears them.
+- `force`: Go on although this is the interface this session talks through; a
+changed address cuts it off.
+- `gateway`: Gateway of the static address.
+- `ip`: Static IPv4 address.
+- `ipv4_protocol`: IPv4 protocol: `dhcp`, `static` or `ipv4ll` (Thunderbolt only).
+- `ipv6`: IPv6: `auto`, `off` or `static`.
+- `ipv6_address`: Static IPv6 address, without the prefix.
+- `ipv6_dns`: IPv6 DNS servers.
+- `ipv6_gateway`: IPv6 gateway.
+- `ipv6_prefix`: Static IPv6 prefix length.
+- `mtu`: MTU in bytes, or `auto`.
+- `name` (required): Interface name or label, e.g. `eth0`, `bridge0`, `LAN1`.
+- `netmask`: Netmask of the static address, e.g. `255.255.255.0`.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_net_show
+
+Show one network interface: addresses, DNS, gateway, MTU, ports of a bridge or bond
+
+- `name` (required): What to look at: a name, label or id, as the matching list tool shows it.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_net_wifi_connect
+
+Connect to a Wi-Fi network (ssid). A saved one is switched to. A password passes through the model; prefer ugos-cli for that
+
+- `auth`: Authentication of a hidden network: `wpa`, `wpa2`, `wpa-wpa2`, `wpa3`,
+`wpa2-wpa3` or `none`.
+- `auto_join`: Join the network by itself, for the edit tool.
+- `iface` (required): The Wi-Fi interface, e.g. `wlan0`.
+- `on`: Switch the radio on (`true`) or off (`false`), for the radio tool.
+- `password`: Password of the network. It passes through the model; prefer `ugos-cli`.
+- `rescan`: Scan again instead of using the last scan, for the list tool.
+- `ssid`: The network name, where the tool needs one.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_net_wifi_edit
+
+Change whether a saved Wi-Fi network joins by itself (ssid, auto_join)
+
+- `auth`: Authentication of a hidden network: `wpa`, `wpa2`, `wpa-wpa2`, `wpa3`,
+`wpa2-wpa3` or `none`.
+- `auto_join`: Join the network by itself, for the edit tool.
+- `iface` (required): The Wi-Fi interface, e.g. `wlan0`.
+- `on`: Switch the radio on (`true`) or off (`false`), for the radio tool.
+- `password`: Password of the network. It passes through the model; prefer `ugos-cli`.
+- `rescan`: Scan again instead of using the last scan, for the list tool.
+- `ssid`: The network name, where the tool needs one.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_net_wifi_forget
+
+Forget a saved Wi-Fi network (ssid)
+
+- `auth`: Authentication of a hidden network: `wpa`, `wpa2`, `wpa-wpa2`, `wpa3`,
+`wpa2-wpa3` or `none`.
+- `auto_join`: Join the network by itself, for the edit tool.
+- `iface` (required): The Wi-Fi interface, e.g. `wlan0`.
+- `on`: Switch the radio on (`true`) or off (`false`), for the radio tool.
+- `password`: Password of the network. It passes through the model; prefer `ugos-cli`.
+- `rescan`: Scan again instead of using the last scan, for the list tool.
+- `ssid`: The network name, where the tool needs one.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_net_wifi_list
+
+List the Wi-Fi networks in range and the saved ones
+
+- `auth`: Authentication of a hidden network: `wpa`, `wpa2`, `wpa-wpa2`, `wpa3`,
+`wpa2-wpa3` or `none`.
+- `auto_join`: Join the network by itself, for the edit tool.
+- `iface` (required): The Wi-Fi interface, e.g. `wlan0`.
+- `on`: Switch the radio on (`true`) or off (`false`), for the radio tool.
+- `password`: Password of the network. It passes through the model; prefer `ugos-cli`.
+- `rescan`: Scan again instead of using the last scan, for the list tool.
+- `ssid`: The network name, where the tool needs one.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_net_wifi_radio
+
+Switch the Wi-Fi radio on or off (on: true or false)
+
+- `auth`: Authentication of a hidden network: `wpa`, `wpa2`, `wpa-wpa2`, `wpa3`,
+`wpa2-wpa3` or `none`.
+- `auto_join`: Join the network by itself, for the edit tool.
+- `iface` (required): The Wi-Fi interface, e.g. `wlan0`.
+- `on`: Switch the radio on (`true`) or off (`false`), for the radio tool.
+- `password`: Password of the network. It passes through the model; prefer `ugos-cli`.
+- `rescan`: Scan again instead of using the last scan, for the list tool.
+- `ssid`: The network name, where the tool needs one.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_net_wifi_status
+
+Show whether the Wi-Fi radio is on and which network it is connected to
+
+- `auth`: Authentication of a hidden network: `wpa`, `wpa2`, `wpa-wpa2`, `wpa3`,
+`wpa2-wpa3` or `none`.
+- `auto_join`: Join the network by itself, for the edit tool.
+- `iface` (required): The Wi-Fi interface, e.g. `wlan0`.
+- `on`: Switch the radio on (`true`) or off (`false`), for the radio tool.
+- `password`: Password of the network. It passes through the model; prefer `ugos-cli`.
+- `rescan`: Scan again instead of using the last scan, for the list tool.
+- `ssid`: The network name, where the tool needs one.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
 ## ugos_network_create
 
 Create a KVM network
@@ -407,8 +666,9 @@ Create a shared folder. Only administrators can open it at first; set access wit
 
 ## ugos_share_delete
 
-Delete a shared folder and everything in it. Refused while the folder holds files; this server does not force it
+Delete a shared folder and everything in it. Refused while the folder holds files unless force is given; ask the user first
 
+- `force`: Delete although the share holds files, which go with it.
 - `share` (required): Share name or numeric id.
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
@@ -526,9 +786,11 @@ List USB devices available to a VM
 
 ## ugos_user_delete
 
-Delete a user account. Its home folder and the files in it go with it, so an account with files or snapshots is refused; this server does not force it
+Delete a user account. Its home folder and the files in it go with it, so an account with files or snapshots is refused unless force is given; ask the user first
 
 - `account` (required): Login name or numeric uid.
+- `force`: Delete although the account has snapshots or files in its home folder,
+which go with it.
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
 ## ugos_user_list
