@@ -21,7 +21,7 @@ Reconstructed from the lazily loaded bundle of the control panel
 | POST | `user/check/delete` | plain | `user delete` |
 | DELETE | `user/delete` | plain, **password header** | `user delete` |
 | GET, POST | `user/config/password` | plain | not wired (password rules) |
-| POST | `user/rule/password` | plain | not wired (checks a password against the rules) |
+| POST | `user/rule/password` | plain, **sealed password** | `UsersApi::user_check_password`, not used by the CLI (see below) |
 | GET, POST | `user/quota/{uid}` | plain | not wired (quota per volume) |
 | GET, POST | `user/permission/{uid}`, `user/authorized/{uid}` | plain | not wired |
 | | `user/search`, `user/import*`, `user/invite*`, `user/headpic/*`, `otp/disable` | plain | not wired |
@@ -147,8 +147,8 @@ and on every other call that changes an account.
 **The home folder goes with the account, and so do the files in it.** A
 throwaway account with one file in `/home/NAME` left nothing behind: the folder
 was gone (`1302, Path does not exist`) and so was its place in
-`/volume1/@home`. A recycle bin was not looked for. `ugos-cli user delete`
-reads the folder first and refuses a non-empty one unless `--force` is given,
+`/volume1/@home`. Whether a recycle bin keeps a copy could not be seen (see
+[The recycle bin](#the-recycle-bin)). `ugos-cli user delete` reads the folder first and refuses a non-empty one unless `--force` is given,
 as it does for snapshots.
 
 `ugos-cli user delete` also refuses the account it is logged in with, and the
@@ -179,10 +179,45 @@ group that was deleted again. Joining a group is a field of the account, not
 of the group: an account created with `groups: [{name}]` shows up in the
 group's `users` at once, and leaves it when the account is deleted.
 
+## Password rules
+
+### user/rule/password
+- **Body**: `{username, password}`, the password sealed as above. Plain text is
+  answered `1006, Password decryption failed`.
+- **Response**: `{}`, or one of `1028, Insufficient password length: 6`,
+  `1030, It cannot be a simple common password`, `1032, It must contain at
+  least one number`
+
+`user/create` and `user/edit` apply **the same rules** and answer with the same
+codes, so the check is a pre-check and not a stricter one. Passwords of three
+kinds (too short, common, without a number) were refused alike by all three
+calls, and one that passed the check was accepted by `create` and `edit`.
+`ugos-cli` does not pre-check: it would only move the same message forward, and
+the library offers `UsersApi::user_check_password` for a caller that wants to
+ask before it collects anything else.
+
+The settings in `user/config/password` (`enable`, `force_change`, `max_days`,
+`warn_age`) read `enable: false` on the NAS tested, and the three rules
+applied nevertheless. What a policy that is switched on adds was not tried,
+since that changes a setting of the NAS.
+
+## The recycle bin
+
+The file manager has the calls for one (`DELETE v1/filemgr/delHomeFolder?path=`,
+`POST v1/filemgr/restoreFiles` and `emptyRecycles`), and its recycle bin
+has the roots `personal`, `common` and `users` and a `#recycle` folder. Whether
+the home folder of a deleted account passes through it could not be seen. After
+a delete the folder and its file were gone from `/home` and `/volume1/@home`.
+`/volume1/@recycle` and `/volume1/@users` exist, but the file manager answers
+`1301, Access not allowed` for them and for everything below them, an
+administrator included, so a copy in there can be neither found nor ruled out.
+Treat the deletion as final.
+
 ## Not known
 
-- Whether a recycle bin keeps the files of a deleted home folder.
-- Whether `user/rule/password` rejects a password that `user/create` accepts.
-  The web UI asks first, `ugos-cli` does not.
+- What the web UI's delete dialog says about the account's data, and what
+  `delHomeFolder` does. The text of the dialog is not in the bundle that was
+  read.
 - What `group/edit` and the per-user permissions do. They are read from the
   bundle only.
+- What a password policy that is switched on adds to the three rules.
