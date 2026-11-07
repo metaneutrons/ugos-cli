@@ -56,45 +56,8 @@ pub async fn user(
             };
             create(client, &options, *new_password_stdin, *dry_run, fmt, w).await
         }
-        UserAction::Update {
-            account,
-            email,
-            description,
-            role,
-            add_groups,
-            remove_groups,
-            home_dir,
-            no_home_dir,
-            deny_password_change,
-            allow_password_change,
-            disable,
-            enable,
-            no_expiry,
-            new_password_stdin,
-            new_password,
-        } => {
-            let password = if *new_password_stdin || *new_password {
-                Some(new_password_from(*new_password_stdin)?)
-            } else {
-                None
-            };
-            let change = UserChanges {
-                email: email.clone(),
-                description: description.clone(),
-                role: role.map(role_name),
-                add_groups: add_groups.clone(),
-                remove_groups: remove_groups.clone(),
-                home_dir: flag_pair(*home_dir, *no_home_dir),
-                deny_password_change: flag_pair(*deny_password_change, *allow_password_change),
-                expiry: if *disable {
-                    Some(DISABLED)
-                } else if *enable || *no_expiry {
-                    Some(EXPIRES_NEVER)
-                } else {
-                    None
-                },
-                password,
-            };
+        UserAction::Update { account, .. } => {
+            let change = UserChanges::from_action(action)?;
             update(client, account, &change, fmt, w).await
         }
         UserAction::Delete { account, force } => delete(client, account, *force, fmt, w).await,
@@ -276,6 +239,15 @@ fn check_name(name: &str) -> Result<()> {
 
 // ── Update ──────────────────────────────────────────────────────────
 
+/// The `expire_time` that `--disable` or `--enable` and `--no-expiry` ask for.
+const fn expiry_change(disable: bool, lift: bool) -> Option<i64> {
+    match (disable, lift) {
+        (true, _) => Some(DISABLED),
+        (false, true) => Some(EXPIRES_NEVER),
+        (false, false) => None,
+    }
+}
+
 /// What `user update` was asked to change.
 #[derive(Debug, Default, PartialEq, Eq)]
 struct UserChanges {
@@ -292,19 +264,53 @@ struct UserChanges {
 }
 
 impl UserChanges {
+    /// What an `update` command line asks for. Reads the password here, so
+    /// that a missing one stops the command before anything is sent.
+    fn from_action(action: &UserAction) -> Result<Self> {
+        let UserAction::Update {
+            email,
+            description,
+            role,
+            add_groups,
+            remove_groups,
+            home_dir,
+            no_home_dir,
+            deny_password_change,
+            allow_password_change,
+            disable,
+            enable,
+            no_expiry,
+            new_password_stdin,
+            new_password,
+            ..
+        } = action
+        else {
+            bail!("not an update command");
+        };
+        let password = if *new_password_stdin || *new_password {
+            Some(new_password_from(*new_password_stdin)?)
+        } else {
+            None
+        };
+        Ok(Self {
+            email: email.clone(),
+            description: description.clone(),
+            role: role.map(role_name),
+            add_groups: add_groups.clone(),
+            remove_groups: remove_groups.clone(),
+            home_dir: flag_pair(*home_dir, *no_home_dir),
+            deny_password_change: flag_pair(*deny_password_change, *allow_password_change),
+            expiry: expiry_change(*disable, *enable || *no_expiry),
+            password,
+        })
+    }
+
     fn is_empty(&self) -> bool {
         *self == Self::default()
     }
 
     /// The account as it should be after the change.
     fn apply(&self, user: &User) -> Result<UserEdit> {
-        let mut groups = group_names(user);
-        groups.retain(|group| !self.remove_groups.contains(group));
-        for group in &self.add_groups {
-            if !groups.contains(group) {
-                groups.push(group.clone());
-            }
-        }
         let (expire_time, expire_date) = self.expiry.map_or_else(
             || (user.expire_time, user.expire_date.clone()),
             |time| (time, String::new()),
@@ -321,7 +327,7 @@ impl UserChanges {
                 .clone()
                 .unwrap_or_else(|| user.description.clone()),
             role: self.role.map_or_else(|| user.role.clone(), str::to_owned),
-            groups,
+            groups: self.next_groups(user),
             enable_home_dir: self.home_dir.unwrap_or(user.enable_home_dir),
             deny_change_pwd: self.deny_password_change.unwrap_or(user.deny_change_pwd),
             dir_quota: user.dir_quota,
@@ -330,6 +336,18 @@ impl UserChanges {
             expire_time,
             expire_date,
         })
+    }
+
+    /// The groups of `user` with the named ones added and removed.
+    fn next_groups(&self, user: &User) -> Vec<String> {
+        let mut groups = group_names(user);
+        groups.retain(|group| !self.remove_groups.contains(group));
+        for group in &self.add_groups {
+            if !groups.contains(group) {
+                groups.push(group.clone());
+            }
+        }
+        groups
     }
 
     /// The first change that `now` does not show, as a sentence.
