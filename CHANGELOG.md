@@ -5,7 +5,8 @@
 
 ### ⚠ BREAKING CHANGES
 
-* **client:** mark UgosError non_exhaustive, and add a sealed password check ([#122](https://github.com/metaneutrons/ugos-cli/issues/122))
+* **client:** mark UgosError non_exhaustive, and add a sealed password check ([#122](https://github.com/metaneutrons/ugos-cli/issues/122)).
+  `UgosError` is `#[non_exhaustive]` now: a `match` on it needs a wildcard arm. Later variants will not break anyone.
 
 ### Features
 
