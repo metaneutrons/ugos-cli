@@ -21,6 +21,7 @@ Base URL: `https://<nas-ip>:9443/ugreen/v1/`
 | **User accounts** | core | Reading, creating, changing, deleting; no groups, quota or permissions | [api-users.md](api-users.md) |
 | **Storage Manager** | com.ugreen.storagemgr | Pools, volumes, disks and SMART data, read only | [api-storage.md](api-storage.md) |
 | **Network** | com.ugreen.ctlmgr | Interfaces, DNS, gateways, bonds, bridges, Wi-Fi, traffic control; untested parts marked | [api-network.md](api-network.md) |
+| **Hardware** | com.ugreen.ctlmgr | Buzzer, CPU, fans, LEDs, display, power, UPS, GPU, time, language, SSH/Telnet; untested parts marked | [api-hardware.md](api-hardware.md) |
 | **Backup** | — | No API exists | [api-backup.md](api-backup.md) |
 
 ### Known but Undocumented (endpoints found in main JS bundle)
