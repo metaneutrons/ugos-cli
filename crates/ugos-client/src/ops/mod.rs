@@ -12,6 +12,7 @@ macro_rules! refuse {
     };
 }
 
+pub mod hw;
 pub mod net;
 pub mod shares;
 pub mod users;
