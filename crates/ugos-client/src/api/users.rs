@@ -35,6 +35,18 @@ pub trait UsersApi {
     /// Returns the appropriate [`UgosError`] on failure other than a taken name.
     fn user_name_free(&self, name: &str) -> impl Future<Output = Result<bool>> + Send;
 
+    /// Ask UGOS whether it would accept this password for this account, under
+    /// the password rules of the NAS. The password is sent sealed.
+    ///
+    /// # Errors
+    ///
+    /// Returns the appropriate [`UgosError`] when UGOS refuses the password.
+    fn user_check_password(
+        &self,
+        username: &str,
+        password: &str,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// Create an account and return its uid, when UGOS says which.
     ///
     /// # Errors
@@ -159,6 +171,17 @@ impl UsersApi for UgosClient {
             Err(UgosError::Api { code, .. }) if code == NAME_TAKEN => Ok(false),
             Err(e) => Err(e),
         }
+    }
+
+    async fn user_check_password(&self, username: &str, password: &str) -> Result<()> {
+        let sealed = self.seal_password(password).await?;
+        let _: Value = self
+            .post(
+                "user/rule/password",
+                &json!({ "username": username, "password": sealed }),
+            )
+            .await?;
+        Ok(())
     }
 
     async fn user_create(&self, new: &NewUser) -> Result<Option<i64>> {

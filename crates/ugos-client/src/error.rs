@@ -1,7 +1,11 @@
 //! Error types for the UGOS client library.
 
 /// All errors returned by the UGOS client.
+///
+/// New variants are added as UGOS gets more endpoints and the client more
+/// checks, so a `match` on this type needs a wildcard arm.
 #[derive(Debug, thiserror::Error)]
+#[non_exhaustive]
 pub enum UgosError {
     /// Incorrect account or password (UGOS code 1003).
     #[error("incorrect account or password")]
