@@ -4,15 +4,10 @@
 //! `ugos-cli` does: the same checks, the same refusals, and a read-back that
 //! catches UGOS answering success to a request it did not carry out.
 //!
-//! Three things are left out on purpose, and `ugos-cli` does them.
-//! - **Passwords.** A tool parameter passes through the model, its context
-//!   and its logs. So there is no tool that creates an account or sets a
-//!   password.
-//! - **Roles.** A tool that makes an account an administrator is a way to
-//!   escalate.
-//! - **Forcing.** `--force` on `ugos-cli` deletes a share or an account
-//!   although files would go with it. Here a refusal stays one, and the
-//!   message names what the user would have to run.
+//! The tools that delete take `force`, as `--force` does on the command line.
+//! A refusal that `force` overrides says what would be lost, and the model is
+//! told to ask the user before it repeats the call with `force`. Whether a
+//! model may call a tool at all is for the MCP client to gate.
 
 use rmcp::schemars;
 use serde::Serialize;
@@ -104,6 +99,31 @@ pub struct ShareAclSetParam {
 }
 
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct ShareDeleteParam {
+    /// Share name or numeric id.
+    pub share: String,
+    /// Delete although the share holds files, which go with it.
+    #[serde(default)]
+    pub force: bool,
+    /// Target NAS name or host. Required when multiple targets are configured.
+    #[serde(default)]
+    pub target: String,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct AccountDeleteParam {
+    /// Login name or numeric uid.
+    pub account: String,
+    /// Delete although the account has snapshots or files in its home folder,
+    /// which go with it.
+    #[serde(default)]
+    pub force: bool,
+    /// Target NAS name or host. Required when multiple targets are configured.
+    #[serde(default)]
+    pub target: String,
+}
+
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 pub struct AccountParam {
     /// Login name or numeric uid.
     pub account: String,
@@ -165,8 +185,7 @@ fn json<T: Serialize>(result: Result<T, UgosError>) -> String {
 pub fn failure(error: &UgosError) -> String {
     match error {
         UgosError::NeedsForce(message) => format!(
-            "refused: {message}. This server never goes on from here; if the user means it, \
-             they can run the same command with `--force` in ugos-cli."
+            "refused: {message}. Ask the user; repeat the call with force set only if they agree."
         ),
         other => format!("error: {other}"),
     }
@@ -253,8 +272,8 @@ pub async fn share_acl_set(client: &UgosClient, p: &ShareAclSetParam) -> String 
     )
 }
 
-pub async fn share_delete(client: &UgosClient, share: &str) -> String {
-    match delete_share(client, share, false).await {
+pub async fn share_delete(client: &UgosClient, p: &ShareDeleteParam) -> String {
+    match delete_share(client, &p.share, p.force).await {
         Ok(found) => format!("Deleted share {}", found.name),
         Err(e) => failure(&e),
     }
@@ -289,8 +308,8 @@ pub async fn user_update(client: &UgosClient, p: &UserUpdateParam) -> String {
     json(update_user(client, &p.account, &change).await)
 }
 
-pub async fn user_delete(client: &UgosClient, account: &str) -> String {
-    match delete_user(client, account, false).await {
+pub async fn user_delete(client: &UgosClient, p: &AccountDeleteParam) -> String {
+    match delete_user(client, &p.account, p.force).await {
         Ok(found) => format!("Deleted account {}", found.username),
         Err(e) => failure(&e),
     }
@@ -301,13 +320,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn a_refusal_that_force_would_override_names_the_cli() {
+    fn a_refusal_that_force_would_override_tells_the_model_to_ask() {
         let said = failure(&UgosError::NeedsForce("share 'x' holds 3 entries".into()));
         assert!(
             said.starts_with("refused: share 'x' holds 3 entries"),
             "{said}"
         );
-        assert!(said.contains("--force"), "{said}");
+        assert!(said.contains("force"), "{said}");
+        assert!(said.contains("Ask the user"), "{said}");
     }
 
     #[test]

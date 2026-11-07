@@ -22,6 +22,7 @@ use rmcp::{
 };
 mod manage;
 mod nas;
+mod nas_net;
 
 use tokio::sync::OnceCell;
 use ugos_client::api::docker::DockerApi;
@@ -29,9 +30,14 @@ use ugos_client::api::kvm::KvmApi;
 use ugos_client::{Credentials, TlsPolicy, UgosClient, tls};
 
 use crate::manage::{
-    AccountParam, ShareAclSetParam, ShareCreateParam, ShareParam, ShareUpdateParam, UserUpdateParam,
+    AccountDeleteParam, AccountParam, ShareAclSetParam, ShareCreateParam, ShareDeleteParam,
+    ShareParam, ShareUpdateParam, UserUpdateParam,
 };
 use crate::nas::NameParam;
+use crate::nas_net::{
+    BondCreateParam, FlowAddParam, FlowPositionParam, GatewayOrderParam, IfaceForceParam,
+    NetDnsParam, NetProxyParam, NetSetParam, PortsParam, WifiParam,
+};
 
 // ── Target config ───────────────────────────────────────────────────
 
@@ -1414,11 +1420,11 @@ impl UgosMcp {
     }
 
     #[tool(
-        description = "Delete a shared folder and everything in it. Refused while the folder holds files; this server does not force it"
+        description = "Delete a shared folder and everything in it. Refused while the folder holds files unless force is given; ask the user first"
     )]
-    async fn ugos_share_delete(&self, Parameters(p): Parameters<ShareParam>) -> String {
+    async fn ugos_share_delete(&self, Parameters(p): Parameters<ShareDeleteParam>) -> String {
         match self.client(&p.target).await {
-            Ok(c) => manage::share_delete(c, &p.share).await,
+            Ok(c) => manage::share_delete(c, &p).await,
             Err(e) => e,
         }
     }
@@ -1460,11 +1466,11 @@ impl UgosMcp {
     }
 
     #[tool(
-        description = "Delete a user account. Its home folder and the files in it go with it, so an account with files or snapshots is refused; this server does not force it"
+        description = "Delete a user account. Its home folder and the files in it go with it, so an account with files or snapshots is refused unless force is given; ask the user first"
     )]
-    async fn ugos_user_delete(&self, Parameters(p): Parameters<AccountParam>) -> String {
+    async fn ugos_user_delete(&self, Parameters(p): Parameters<AccountDeleteParam>) -> String {
         match self.client(&p.target).await {
-            Ok(c) => manage::user_delete(c, &p.account).await,
+            Ok(c) => manage::user_delete(c, &p).await,
             Err(e) => e,
         }
     }
@@ -1545,6 +1551,235 @@ impl UgosMcp {
     async fn ugos_disk_plans(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
         match self.client(&p.target).await {
             Ok(c) => nas::disk_plans(c).await,
+            Err(e) => e,
+        }
+    }
+
+    // ── Network settings of the NAS ─────────────────────────────────
+    #[tool(description = "List the network interfaces of the NAS with link, address and speed")]
+    async fn ugos_net_list(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_net::list(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Show one network interface: addresses, DNS, gateway, MTU, ports of a bridge or bond"
+    )]
+    async fn ugos_net_show(&self, Parameters(p): Parameters<NameParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_net::show(c, &p.name).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show DNS, default gateways, the IPv6 interface and the proxy of the NAS")]
+    async fn ugos_net_general(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_net::general(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Change the setup of one network interface (IPv4, IPv6, MTU, bond mode). Refused for the interface this session talks through unless force is given: a changed address cuts it off"
+    )]
+    async fn ugos_net_set(&self, Parameters(p): Parameters<NetSetParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_net::set(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Set the DNS servers (automatic, or one or two) and the general switches: several gateways, prefer IPv4, address clash check"
+    )]
+    async fn ugos_net_dns_set(&self, Parameters(p): Parameters<NetDnsParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_net::dns(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Put the default gateways in an order of preference, by interface")]
+    async fn ugos_net_gateway_order(&self, Parameters(p): Parameters<GatewayOrderParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_net::gateway_order(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Set or switch off the HTTP proxy of the NAS. A password passes through the model; prefer ugos-cli for that"
+    )]
+    async fn ugos_net_proxy_set(&self, Parameters(p): Parameters<NetProxyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_net::proxy(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the ports that could join a bond")]
+    async fn ugos_net_bond_candidates(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_net::candidates(c, true).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Create a bond (link aggregation) from two or more ports. Refused when a port carries this session or the ports are in different networks unless force is given"
+    )]
+    async fn ugos_net_bond_create(&self, Parameters(p): Parameters<BondCreateParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_net::bond_create(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Delete a bond. Refused when firewall or traffic rules name it or it carries this session unless force is given"
+    )]
+    async fn ugos_net_bond_delete(&self, Parameters(p): Parameters<IfaceForceParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_net::bond_delete(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the ports that could join a bridge")]
+    async fn ugos_net_bridge_candidates(
+        &self,
+        Parameters(p): Parameters<TargetOnlyParam>,
+    ) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_net::candidates(c, false).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Create a bridge from two or more ports. Refused when a port carries this session unless force is given"
+    )]
+    async fn ugos_net_bridge_create(&self, Parameters(p): Parameters<PortsParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_net::bridge_create(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Create a virtual bridge, which VMs attach to, from one or more ports")]
+    async fn ugos_net_bridge_create_virtual(
+        &self,
+        Parameters(p): Parameters<PortsParam>,
+    ) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_net::bridge_create_virtual(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Delete a bridge. Refused when rules name it or it carries this session unless force is given"
+    )]
+    async fn ugos_net_bridge_delete(&self, Parameters(p): Parameters<IfaceForceParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_net::bridge_delete(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show whether the Wi-Fi radio is on and which network it is connected to")]
+    async fn ugos_net_wifi_status(&self, Parameters(p): Parameters<WifiParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_net::wifi_status(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Switch the Wi-Fi radio on or off (on: true or false)")]
+    async fn ugos_net_wifi_radio(&self, Parameters(p): Parameters<WifiParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_net::wifi_radio(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the Wi-Fi networks in range and the saved ones")]
+    async fn ugos_net_wifi_list(&self, Parameters(p): Parameters<WifiParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_net::wifi_list(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Connect to a Wi-Fi network (ssid). A saved one is switched to. A password passes through the model; prefer ugos-cli for that"
+    )]
+    async fn ugos_net_wifi_connect(&self, Parameters(p): Parameters<WifiParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_net::wifi_connect(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Forget a saved Wi-Fi network (ssid)")]
+    async fn ugos_net_wifi_forget(&self, Parameters(p): Parameters<WifiParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_net::wifi_forget(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Change whether a saved Wi-Fi network joins by itself (ssid, auto_join)")]
+    async fn ugos_net_wifi_edit(&self, Parameters(p): Parameters<WifiParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_net::wifi_edit(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the traffic control rules in order of priority")]
+    async fn ugos_net_flow_list(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_net::flow_list(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the built-in services a traffic control rule can name")]
+    async fn ugos_net_flow_services(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_net::flow_services(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Add a traffic control rule at the end of the list: all ports, custom ports, or built-in services, with a rate limit in KB/s"
+    )]
+    async fn ugos_net_flow_add(&self, Parameters(p): Parameters<FlowAddParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_net::flow_add(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Remove the traffic control rule at a position (counting from 1)")]
+    async fn ugos_net_flow_remove(&self, Parameters(p): Parameters<FlowPositionParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_net::flow_remove(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Switch the traffic control rule at a position on or off (on: true or false)"
+    )]
+    async fn ugos_net_flow_enable(&self, Parameters(p): Parameters<FlowPositionParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_net::flow_enable(c, &p).await,
             Err(e) => e,
         }
     }
