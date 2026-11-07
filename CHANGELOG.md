@@ -5,7 +5,8 @@
 
 ### ⚠ BREAKING CHANGES
 
-* **mcp:** tools for shared folders, user accounts and groups ([#120](https://github.com/metaneutrons/ugos-cli/issues/120))
+* **mcp:** tools for shared folders, user accounts and groups ([#120](https://github.com/metaneutrons/ugos-cli/issues/120)).
+  `UgosError` has two new variants, `Refused` and `NeedsForce`. Code that matches it exhaustively needs a wildcard arm.
 
 ### Features
 
