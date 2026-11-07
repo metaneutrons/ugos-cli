@@ -12,7 +12,7 @@ use ugos_client::ops::shares::{
     set_share_acl, share_settings, update_share,
 };
 
-use crate::cli::{OutputFormat, ShareAclAction, ShareAction, SmbAction};
+use crate::cli::{OutputFormat, ShareAclAction, ShareAction};
 use crate::output;
 
 /// Run a `share` subcommand.
@@ -221,33 +221,6 @@ async fn acl_set(
         }
         OutputFormat::Json => output::print_json(w, &after),
     }
-}
-
-/// Run an `smb` subcommand.
-pub async fn smb(
-    client: &UgosClient,
-    action: &SmbAction,
-    fmt: OutputFormat,
-    w: &mut impl Write,
-) -> Result<()> {
-    match action {
-        SmbAction::Status => {
-            let config = client.smb_config().await?;
-            let advanced = client.smb_advanced().await?;
-            match fmt {
-                OutputFormat::Table => {
-                    output::print_list(w, &output::smb_rows(&config, &advanced), fmt)?;
-                }
-                OutputFormat::Json => {
-                    output::print_json(
-                        w,
-                        &serde_json::json!({ "config": config, "advanced": advanced }),
-                    )?;
-                }
-            }
-        }
-    }
-    Ok(())
 }
 
 /// The settings of a share, found by name or id.

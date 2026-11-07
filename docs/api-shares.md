@@ -23,9 +23,9 @@ and deleted again. `docs/api-files.md` covers the rest of the file manager and
 | DELETE | `v2/filemgr/delSharedFolder?path=` | encrypted, **password** | `share delete` |
 | GET | `file/smb/config` | plain | `smb status` |
 | GET | `file/advanced/config` | plain | `smb status` |
-| POST | `file/smb/start`, `file/smb/stop` | plain | not wired |
-| POST | `file/advanced/start` | plain | not wired |
-| DELETE | `file/smb/cache` | plain | not wired |
+| POST | `file/smb/start`, `file/smb/stop` | plain | `smb start`, `smb set`, `smb stop` |
+| POST | `file/advanced/start` | plain | `smb discovery` |
+| DELETE | `file/smb/cache` | plain | `smb clear-cache` |
 | GET | `filemgr/getSharedFolderList` | plain | not wired |
 
 ## Listing and settings
@@ -179,19 +179,11 @@ that UGOS does not name; `smb status` shows them as they come.
 
 Bonjour is how Macs find the NAS, WS-Discovery how Windows does.
 
-### What is not wired
+### Starting, stopping, the cache
 
-`file/smb/start` takes the whole configuration back, `file/smb/stop` ends the
-service, and `file/advanced/start` restarts the discovery services. Each
-interrupts every client that is connected, which cannot be tried safely on a
-NAS in use, so, as with `backup_restore/*` (see [api-backup.md](api-backup.md)),
-they are listed here and left out.
-
-The same control panel page holds NFS, FTP, WebDAV and rsync under
-`file/nfs/…`, `file/ftp/…`, `file/webdav/…` and `file/rsync/…`, with the same
-`start`, `stop` and `config` shape. None of them is wired.
-
-`DELETE file/smb/cache` clears a cache that UGOS does not describe.
+These are wired now, with the other file services. See
+[api-fileservices.md](api-fileservices.md) for how they work, what was tried
+live and what needs `--force`.
 
 ## Not known
 
@@ -200,4 +192,4 @@ The same control panel page holds NFS, FTP, WebDAV and rsync under
   deletion returns.
 - Which of login name and display name the ACL reads for a user.
 - Whether `data_check` can be changed after creation.
-- What the numeric SMB codes stand for.
+- What `min_protocol` and `max_protocol` stand for. The web UI never touches them; `smb_protocols` (`1` SMB1, `2` SMB2 and 3) is what it edits. Transport encryption and signing are `0` by client, `1` forbidden, `2` forced.

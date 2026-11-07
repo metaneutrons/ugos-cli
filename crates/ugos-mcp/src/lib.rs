@@ -22,6 +22,7 @@ use rmcp::{
 };
 mod manage;
 mod nas;
+mod nas_files;
 mod nas_hw;
 mod nas_net;
 
@@ -35,6 +36,9 @@ use crate::manage::{
     ShareParam, ShareUpdateParam, UserUpdateParam,
 };
 use crate::nas::NameParam;
+use crate::nas_files::{
+    DiscoveryParam, ForceOnlyParam, ServiceChangeParam, ServiceParam, ServiceStopParam,
+};
 use crate::nas_hw::{
     BuzzerParam, FanCurveParam, FinderParam, ForceParam, GpuParam, LedParam, ModeParam,
     PositionParam, PowerParam, ScheduleParam, ScreenParam, TerminalParam, TimeParam, UpsParam,
@@ -2157,6 +2161,75 @@ impl UgosMcp {
     async fn ugos_system_finder_set(&self, Parameters(p): Parameters<FinderParam>) -> String {
         match self.client(&p.target).await {
             Ok(c) => nas_hw::finder_set(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    // ── File services ───────────────────────────────────────────────
+    #[tool(
+        description = "Show a file service (smb, ftp, nfs, rsync or webdav): whether it runs and its settings. For smb, also the discovery services"
+    )]
+    async fn ugos_fileservice_status(&self, Parameters(p): Parameters<ServiceParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_files::status(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the settings of a file service by alias, what they take and mean")]
+    async fn ugos_fileservice_settings(&self, Parameters(p): Parameters<ServiceParam>) -> String {
+        nas_files::settings(&p)
+    }
+
+    #[tool(
+        description = "Switch a file service on, with settings. Plain FTP, SMB1, NTLMv1 and NFS are refused unless force is given: ask the user first. rsync needs an account, and a password for a new one"
+    )]
+    async fn ugos_fileservice_start(
+        &self,
+        Parameters(p): Parameters<ServiceChangeParam>,
+    ) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_files::change(c, &p, true).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Change the settings of a file service that runs. Refused if it is off: start it with the settings instead"
+    )]
+    async fn ugos_fileservice_set(&self, Parameters(p): Parameters<ServiceChangeParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_files::change(c, &p, false).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Switch a file service off. SMB is refused while Bonjour or WS-Discovery announce it unless force is given: ask the user first"
+    )]
+    async fn ugos_fileservice_stop(&self, Parameters(p): Parameters<ServiceStopParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_files::stop(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Show or change the SMB discovery services (WS-Discovery, Bonjour, UPnP) and the Time Machine targets. Without arguments it only reads"
+    )]
+    async fn ugos_smb_discovery(&self, Parameters(p): Parameters<DiscoveryParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_files::discovery(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Clear the SMB cache. The network service restarts, so this is refused unless force is given: ask the user first"
+    )]
+    async fn ugos_smb_cache_clear(&self, Parameters(p): Parameters<ForceOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_files::clear_cache(c, &p).await,
             Err(e) => e,
         }
     }

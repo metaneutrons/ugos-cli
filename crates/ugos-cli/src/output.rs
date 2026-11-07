@@ -42,6 +42,7 @@ macro_rules! table_row {
 
 // Row types of the NAS administration commands. They use `table_row!`, so they
 // come after it.
+pub mod fileserver;
 pub mod hw;
 pub mod nas_storage;
 pub mod net;
@@ -1347,50 +1348,6 @@ pub fn acl_rows(acl: &ugos_client::types::shares::PathAcl) -> Vec<AclRow> {
         }
     }
     rows
-}
-
-/// The SMB service as field and value rows.
-///
-/// Protocol, encryption and signing are numeric codes whose meaning UGOS does
-/// not document, so they are shown as codes.
-pub fn smb_rows(
-    config: &ugos_client::types::shares::SmbConfig,
-    advanced: &ugos_client::types::shares::SmbAdvanced,
-) -> Vec<FieldRow> {
-    let protocols = config
-        .smb_protocols
-        .iter()
-        .map(ToString::to_string)
-        .collect::<Vec<_>>()
-        .join(", ");
-    vec![
-        field("Service", if config.status { "running" } else { "stopped" }),
-        field("Server name", config.nas_name.clone()),
-        field("Workgroup", config.work_group.clone()),
-        field(
-            "WINS server",
-            if config.wins_server.is_empty() {
-                "none".to_owned()
-            } else {
-                config.wins_server.clone()
-            },
-        ),
-        field("Joined to a domain", yes_no(config.is_joined_domain)),
-        field(
-            "Hide shares without access",
-            yes_no(config.hide_share_dir_for_no_permission),
-        ),
-        field("Protocol selection (code)", protocols),
-        field("Minimum protocol (code)", config.min_protocol.to_string()),
-        field("Maximum protocol (code)", config.max_protocol.to_string()),
-        field("Encryption mode (code)", config.encrypt_mode.to_string()),
-        field("Signing mode (code)", config.server_sign_mode.to_string()),
-        field("NTLMv1 allowed", yes_no(config.enable_ntlmv1)),
-        field("Bonjour (Mac discovery)", yes_no(advanced.bonjour)),
-        field("WS-Discovery (Windows discovery)", yes_no(advanced.wsdd2)),
-        field("UPnP", yes_no(advanced.upnp)),
-        field("Time Machine", yes_no(advanced.time_machine)),
-    ]
 }
 
 // ── Docker ──────────────────────────────────────────────────────────
