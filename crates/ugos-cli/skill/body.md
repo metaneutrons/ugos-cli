@@ -44,7 +44,8 @@ Ask the user before running any command that changes or removes something:
 - `share create`, `share update`, `share acl set`, and `share delete` (it
   deletes the folder and everything in it)
 - `user create`, `user update` (it can disable an account, change its role or
-  set a new password), and `user delete`
+  set a new password), and `user delete` (it deletes the home folder and the
+  files in it)
 - `download add`, `download rm`
 
 State what will change and on which NAS, and wait for a clear yes. A refusal or

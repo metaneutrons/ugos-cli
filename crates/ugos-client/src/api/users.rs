@@ -11,7 +11,7 @@ use crate::api::syslog::SysLogApi;
 use crate::client::UgosClient;
 use crate::error::{Result, UgosError};
 use crate::types::syslog::User;
-use crate::types::users::{DeleteCheck, GroupName, NewUser, UserEdit};
+use crate::types::users::{DeleteCheck, Group, GroupName, NewUser, UserEdit};
 
 /// `Api` code for a login name that is taken.
 const NAME_TAKEN: i32 = 1007;
@@ -63,6 +63,20 @@ pub trait UsersApi {
     ///
     /// Returns the appropriate [`UgosError`] on failure.
     fn user_delete(&self, uids: &[i64]) -> impl Future<Output = Result<()>> + Send;
+
+    /// The groups an administrator made. The built-in ones are not listed.
+    ///
+    /// # Errors
+    ///
+    /// Returns the appropriate [`UgosError`] on failure.
+    fn group_list(&self) -> impl Future<Output = Result<Vec<Group>>> + Send;
+}
+
+/// Wrapper for the group listing, which nests under `list`.
+#[derive(serde::Deserialize)]
+struct GroupList {
+    #[serde(default, deserialize_with = "crate::types::common::null_vec_as_empty")]
+    list: Vec<Group>,
 }
 
 fn group_names(groups: &[String]) -> Vec<GroupName> {
@@ -173,5 +187,10 @@ impl UsersApi for UgosClient {
             .delete_with_body_confirmed("user/delete", &uids)
             .await?;
         Ok(())
+    }
+
+    async fn group_list(&self) -> Result<Vec<Group>> {
+        let reply: GroupList = self.get("group/list").await?;
+        Ok(reply.list)
     }
 }

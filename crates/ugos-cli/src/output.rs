@@ -844,6 +844,40 @@ impl From<&ugos_client::types::syslog::User> for UserRow {
     }
 }
 
+/// Table row for a group.
+#[derive(Serialize)]
+pub struct GroupRow {
+    pub name: String,
+    pub gid: String,
+    pub members: String,
+    pub description: String,
+}
+
+table_row! {
+  GroupRow {
+    name => "Group",
+    gid => "GID",
+    members => "Members",
+    description => "Description",
+  }
+}
+
+impl From<&ugos_client::types::users::Group> for GroupRow {
+    fn from(group: &ugos_client::types::users::Group) -> Self {
+        Self {
+            name: group.groupname.clone(),
+            gid: group.gid.to_string(),
+            members: group
+                .users
+                .iter()
+                .map(|member| member.name.as_str())
+                .collect::<Vec<_>>()
+                .join(", "),
+            description: group.description.clone(),
+        }
+    }
+}
+
 /// The detail view of one account.
 pub fn user_rows(user: &ugos_client::types::syslog::User) -> Vec<FieldRow> {
     vec![

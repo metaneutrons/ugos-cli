@@ -47,6 +47,7 @@ pub async fn run(
         Resource::Docker { action } => docker(client, action, fmt, w).await,
         Resource::Log(args) => syslog(client, args, fmt, w).await,
         Resource::User { action } => user::user(client, action, fmt, w).await,
+        Resource::Group { action } => user::group(client, action, fmt, w).await,
         Resource::Info => info(client, fmt, w).await,
         Resource::Overview => overview(client, fmt, w).await,
         Resource::Passthrough { action } => passthrough(client, action, fmt, w).await,

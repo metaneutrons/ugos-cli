@@ -111,3 +111,35 @@ pub struct DeleteCheck {
     #[serde(default)]
     pub safespace: bool,
 }
+
+/// A group from `group/list`. Only the groups an administrator made are
+/// listed; `admin`, `users` and `ughomeusers` are not.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+pub struct Group {
+    /// Numeric group id, from 1000.
+    #[serde(default)]
+    pub gid: i64,
+    /// Group name.
+    #[serde(default)]
+    pub groupname: String,
+    /// Free-text description.
+    #[serde(default)]
+    pub description: String,
+    /// The members, or `null` for none.
+    #[serde(default, deserialize_with = "crate::types::common::null_vec_as_empty")]
+    pub users: Vec<GroupMember>,
+    /// When the group was last changed, in Unix seconds.
+    #[serde(default)]
+    pub utime: i64,
+}
+
+/// A member of a group.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+pub struct GroupMember {
+    /// Login name.
+    #[serde(default)]
+    pub name: String,
+    /// Numeric user id.
+    #[serde(default)]
+    pub uid: i64,
+}

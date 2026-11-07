@@ -972,4 +972,26 @@ mod users {
         let none: DeleteCheck = serde_json::from_str("{}").unwrap();
         assert_eq!(none, DeleteCheck::default());
     }
+
+    #[test]
+    fn a_group_with_and_without_members_parses() {
+        use crate::types::users::Group;
+        #[derive(serde::Deserialize)]
+        struct List {
+            list: Vec<Group>,
+        }
+        let groups = serde_json::from_str::<List>(
+            r#"{"list": [
+                {"description": "family", "gid": 1000, "groupname": "family",
+                 "users": [{"name": "anna", "uid": 1001}], "utime": 1794076280},
+                {"description": "", "gid": 1001, "groupname": "empty", "users": null, "utime": 0}
+            ]}"#,
+        )
+        .unwrap()
+        .list;
+        assert_eq!(groups[0].groupname, "family");
+        assert_eq!(groups[0].users[0].name, "anna");
+        assert_eq!(groups[0].users[0].uid, 1001);
+        assert_eq!(groups[1].users, Vec::new());
+    }
 }

@@ -19,7 +19,7 @@ fn account() -> User {
                 name: "family".into(),
             },
         ],
-        expire_time: EXPIRES_NEVER,
+        expire_time: ugos_client::types::users::EXPIRES_NEVER,
         enable_home_dir: true,
         ..User::default()
     }
@@ -111,7 +111,7 @@ fn an_edit_keeps_everything_that_was_not_asked_for() {
     assert_eq!(edit.description, "Anna B.");
     assert_eq!(edit.role, ROLE_USER);
     assert_eq!(edit.groups, ["users", "family"]);
-    assert_eq!(edit.expire_time, EXPIRES_NEVER);
+    assert_eq!(edit.expire_time, ugos_client::types::users::EXPIRES_NEVER);
     assert_eq!(edit.email, "");
     assert_eq!(edit.password, None);
 }
@@ -152,12 +152,35 @@ fn groups_are_added_once_and_removed_by_name() {
 #[test]
 fn disabling_sets_the_expiry_and_drops_the_date() {
     let change = UserChanges {
-        expiry: Some(DISABLED),
+        expiry: Some(Expiry::DISABLED),
         ..UserChanges::default()
     };
     let edit = change.apply(&account()).unwrap();
-    assert_eq!(edit.expire_time, DISABLED);
+    assert_eq!(edit.expire_time, ugos_client::types::users::DISABLED);
     assert_eq!(edit.expire_date, "");
+}
+
+#[test]
+fn a_date_is_checked_as_text_since_ugos_moves_the_time() {
+    let expiry = parse_date("2027-01-31", 0).unwrap();
+    let change = UserChanges {
+        expiry: Some(expiry),
+        ..UserChanges::default()
+    };
+    let edit = change.apply(&account()).unwrap();
+    assert!(edit.expire_time > 1);
+    assert_eq!(edit.expire_date, "2027-01-31");
+    // UGOS keeps the date and stores midnight of its own time zone.
+    let mut now = account();
+    now.expire_time = edit.expire_time - 3600;
+    now.expire_date = "2027-01-31".into();
+    assert!(!change.expiry_differs(&edit, &now));
+    now.expire_date = "2027-02-01".into();
+    assert!(change.expiry_differs(&edit, &now));
+    // Neither a missing date nor a switched-off account is an expiry.
+    now.expire_date = "2027-01-31".into();
+    now.expire_time = 1;
+    assert!(change.expiry_differs(&edit, &now));
 }
 
 #[test]

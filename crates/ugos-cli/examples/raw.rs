@@ -1,6 +1,7 @@
 //! Temporary debug helper: dump a raw endpoint response.
 //!
-//! `raw <path>` does a GET, `raw <path> <json-body>` does a POST.
+//! `raw <path>` does a GET, `raw <path> <json-body>` does a POST, and
+//! `raw DELETE <path> <json-body>` does a DELETE with a JSON body.
 //!
 //! Kept as a reverse-engineering aid: the CLI never shows an unmodelled
 //! response field, this does.
@@ -22,7 +23,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         &ugos_client::TlsPolicy::Insecure,
     )
     .await?;
-    let mut args = std::env::args().skip(1);
+    let mut args = std::env::args().skip(1).peekable();
+    if args.peek().map(String::as_str) == Some("DELETE") {
+        let _ = args.next();
+        let path = args.next().ok_or("DELETE needs a path")?;
+        let body: serde_json::Value =
+            serde_json::from_str(&args.next().ok_or("DELETE needs a body")?)?;
+        let value: serde_json::Value = client.delete_with_body(&path, &body).await?;
+        println!("{}", serde_json::to_string_pretty(&value)?);
+        return Ok(());
+    }
     let path = args
         .next()
         .unwrap_or_else(|| "kvm/manager/ShowLocalVirtualList".to_owned());

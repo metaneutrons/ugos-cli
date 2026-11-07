@@ -126,6 +126,11 @@ pub enum Resource {
         #[command(subcommand)]
         action: UserAction,
     },
+    /// Groups that an administrator made.
+    Group {
+        #[command(subcommand)]
+        action: GroupAction,
+    },
     /// Show NAS host info.
     Info,
     /// Show host load and every VM at once.
@@ -198,6 +203,13 @@ pub struct LogArgs {
     /// Entries per page.
     #[arg(long, default_value = "20")]
     pub size: u32,
+}
+
+/// Group subcommands.
+#[derive(Debug, Subcommand)]
+pub enum GroupAction {
+    /// List the groups, with their members. Built-in groups are not listed.
+    List,
 }
 
 /// Role of an account.
@@ -295,8 +307,11 @@ pub enum UserAction {
         #[arg(long, conflicts_with = "no_expiry")]
         enable: bool,
         /// Remove the expiry date.
-        #[arg(long)]
+        #[arg(long, conflicts_with = "expires")]
         no_expiry: bool,
+        /// Let the account expire on a date, `YYYY-MM-DD`.
+        #[arg(long, value_name = "DATE", conflicts_with_all = ["disable", "enable"])]
+        expires: Option<String>,
         /// Set a new password, read from stdin.
         #[arg(long)]
         new_password_stdin: bool,
@@ -309,7 +324,8 @@ pub enum UserAction {
     Delete {
         /// Login name or numeric uid.
         account: String,
-        /// Delete although the account has snapshots.
+        /// Delete although the account has snapshots or files in its home
+        /// folder, which go with it.
         #[arg(long)]
         force: bool,
     },

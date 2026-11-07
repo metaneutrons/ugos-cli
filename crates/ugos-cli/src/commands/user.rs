@@ -1,20 +1,22 @@
-//! `user`: the accounts on the NAS.
+//! `user` and `group`: the accounts on the NAS, and their groups.
+
+mod expiry;
 
 use std::io::{IsTerminal, Write};
 
 use anyhow::{Context, Result, anyhow, bail};
 use ugos_client::UgosClient;
+use ugos_client::api::files::FilesApi;
 use ugos_client::api::syslog::SysLogApi;
 use ugos_client::api::users::{UsersApi, create_body};
 use ugos_client::crypto::decrypt_email;
 use ugos_client::error::UgosError;
 use ugos_client::types::syslog::User;
-use ugos_client::types::users::{
-    DISABLED, EXPIRES_NEVER, NewUser, ROLE_ADMIN, ROLE_USER, UserEdit,
-};
+use ugos_client::types::users::{NewUser, ROLE_ADMIN, ROLE_USER, UserEdit};
 
+use self::expiry::{Expiry, parse_date, today};
 use super::share::flag_pair;
-use crate::cli::{OutputFormat, RoleArg, UserAction};
+use crate::cli::{GroupAction, OutputFormat, RoleArg, UserAction};
 use crate::output;
 
 /// Names the web UI refuses, whatever the case.
@@ -239,11 +241,11 @@ fn check_name(name: &str) -> Result<()> {
 
 // ── Update ──────────────────────────────────────────────────────────
 
-/// The `expire_time` that `--disable` or `--enable` and `--no-expiry` ask for.
-const fn expiry_change(disable: bool, lift: bool) -> Option<i64> {
+/// The expiry that `--disable` or `--enable` and `--no-expiry` ask for.
+const fn expiry_change(disable: bool, lift: bool) -> Option<Expiry> {
     match (disable, lift) {
-        (true, _) => Some(DISABLED),
-        (false, true) => Some(EXPIRES_NEVER),
+        (true, _) => Some(Expiry::DISABLED),
+        (false, true) => Some(Expiry::NEVER),
         (false, false) => None,
     }
 }
@@ -258,8 +260,8 @@ struct UserChanges {
     remove_groups: Vec<String>,
     home_dir: Option<bool>,
     deny_password_change: Option<bool>,
-    /// New `expire_time`: never or disabled.
-    expiry: Option<i64>,
+    /// New expiry: never, disabled, or a date.
+    expiry: Option<Expiry>,
     password: Option<String>,
 }
 
@@ -280,6 +282,7 @@ impl UserChanges {
             disable,
             enable,
             no_expiry,
+            expires,
             new_password_stdin,
             new_password,
             ..
@@ -300,7 +303,10 @@ impl UserChanges {
             remove_groups: remove_groups.clone(),
             home_dir: flag_pair(*home_dir, *no_home_dir),
             deny_password_change: flag_pair(*deny_password_change, *allow_password_change),
-            expiry: expiry_change(*disable, *enable || *no_expiry),
+            expiry: match expires {
+                Some(text) => Some(parse_date(text, today())?),
+                None => expiry_change(*disable, *enable || *no_expiry),
+            },
             password,
         })
     }
@@ -311,9 +317,9 @@ impl UserChanges {
 
     /// The account as it should be after the change.
     fn apply(&self, user: &User) -> Result<UserEdit> {
-        let (expire_time, expire_date) = self.expiry.map_or_else(
+        let (expire_time, expire_date) = self.expiry.as_ref().map_or_else(
             || (user.expire_time, user.expire_date.clone()),
-            |time| (time, String::new()),
+            |expiry| (expiry.time, expiry.date.clone()),
         );
         Ok(UserEdit {
             uid: user.uid,
@@ -336,6 +342,19 @@ impl UserChanges {
             expire_time,
             expire_date,
         })
+    }
+
+    /// Whether `now` shows another expiry than the one asked for. A date is
+    /// compared as text: UGOS moves the time to midnight of its own time zone.
+    fn expiry_differs(&self, edit: &UserEdit, now: &User) -> bool {
+        let Some(asked) = &self.expiry else {
+            return false;
+        };
+        if asked.date.is_empty() {
+            now.expire_time != edit.expire_time
+        } else {
+            now.expire_date != asked.date || now.expire_time <= 1
+        }
     }
 
     /// The groups of `user` with the named ones added and removed.
@@ -368,10 +387,7 @@ impl UserChanges {
                 now.deny_change_pwd != edit.deny_change_pwd,
                 "the password change rule",
             ),
-            (
-                now.expire_time != edit.expire_time && self.expiry.is_some(),
-                "the expiry",
-            ),
+            (self.expiry_differs(edit, now), "the expiry"),
             (
                 now.email.is_empty() != edit.email.is_empty(),
                 "the email address",
@@ -468,7 +484,7 @@ async fn update(
 /// Refuse a change that would lock the administrator out.
 async fn refuse_lockout(client: &UgosClient, target: &User, change: &UserChanges) -> Result<()> {
     let demotes = change.role.is_some_and(|role| role != ROLE_ADMIN) && target.role == ROLE_ADMIN;
-    let disables = change.expiry == Some(DISABLED);
+    let disables = change.expiry.as_ref().is_some_and(Expiry::is_disabled);
     if !demotes && !disables {
         return Ok(());
     }
@@ -495,25 +511,8 @@ async fn delete(
     w: &mut impl Write,
 ) -> Result<()> {
     let found = client.user_find(user).await?;
-    if client.current_user().await?.uid == found.uid {
-        bail!("this is the account the CLI is logged in with");
-    }
-    if found.role == ROLE_ADMIN && admins(&client.users().await?) <= 1 {
-        bail!("'{}' is the only administrator", found.username);
-    }
-    let check = client.user_check_delete(&[found.uid]).await?;
-    if check.safespace {
-        bail!(
-            "'{}' has a safe space; delete that first in the web UI",
-            found.username
-        );
-    }
-    if check.snapshot && !force {
-        bail!(
-            "'{}' has snapshots that would be deleted with the account; pass --force to go on",
-            found.username
-        );
-    }
+    refuse_lockout_by_delete(client, &found).await?;
+    refuse_losses(client, &found, force).await?;
     client.user_delete(&[found.uid]).await?;
     let left = client.users().await?;
     if left.iter().any(|remaining| remaining.uid == found.uid) {
@@ -523,6 +522,86 @@ async fn delete(
         );
     }
     output::print_success(w, &format!("Deleted account '{}'", found.username), fmt)
+}
+
+/// Refuse to delete the account the CLI is logged in with, or the only
+/// administrator.
+async fn refuse_lockout_by_delete(client: &UgosClient, found: &User) -> Result<()> {
+    if client.current_user().await?.uid == found.uid {
+        bail!("this is the account the CLI is logged in with");
+    }
+    if found.role == ROLE_ADMIN && admins(&client.users().await?) <= 1 {
+        bail!("'{}' is the only administrator", found.username);
+    }
+    Ok(())
+}
+
+/// Refuse a delete that would take data with it, unless `--force` says so.
+/// A safe space is refused whatever `--force` says.
+async fn refuse_losses(client: &UgosClient, found: &User, force: bool) -> Result<()> {
+    let check = client.user_check_delete(&[found.uid]).await?;
+    if check.safespace {
+        bail!(
+            "'{}' has a safe space; delete that first in the web UI",
+            found.username
+        );
+    }
+    if force {
+        return Ok(());
+    }
+    if check.snapshot {
+        bail!(
+            "'{}' has snapshots that would be deleted with the account; pass --force to go on",
+            found.username
+        );
+    }
+    if found.enable_home_dir {
+        match home_entries(client, found).await {
+            Ok(0) => {}
+            Ok(count) => bail!(
+                "the home folder of '{}' holds {count} {}, which are deleted with the \
+                 account; pass --force to go on",
+                found.username,
+                if count == 1 { "entry" } else { "entries" }
+            ),
+            Err(e) => bail!(
+                "cannot tell whether the home folder of '{}' is empty ({e}); pass --force to go on",
+                found.username
+            ),
+        }
+    }
+    Ok(())
+}
+
+/// How many entries the home folder of an account holds. A folder that does
+/// not exist holds none.
+async fn home_entries(client: &UgosClient, user: &User) -> Result<usize> {
+    match client.fs_list(&format!("/home/{}", user.username)).await {
+        Ok(files) => Ok(files.len()),
+        Err(UgosError::Api { code: 1302, .. }) => Ok(0),
+        Err(e) => Err(e.into()),
+    }
+}
+
+/// `group list`.
+pub async fn group(
+    client: &UgosClient,
+    action: &GroupAction,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
+    match action {
+        GroupAction::List => {
+            let groups = client.group_list().await?;
+            match fmt {
+                OutputFormat::Table => {
+                    let rows: Vec<output::GroupRow> = groups.iter().map(Into::into).collect();
+                    output::print_list(w, &rows, fmt)
+                }
+                OutputFormat::Json => output::print_json(w, &groups),
+            }
+        }
+    }
 }
 
 #[cfg(test)]
