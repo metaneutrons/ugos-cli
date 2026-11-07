@@ -61,8 +61,13 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 sha2 = "0.11"
 md-5 = "0.11"
 aes-gcm = "0.11"
+# Only to read `email_encrypted` back (AES-128-ECB, see crypto::decrypt_email).
+# Already in the tree through aes-gcm.
+aes = "0.9"
 hex = "0.4"
 rsa = "0.9"
+# Hidden password prompt for `user create` and `user update`.
+rpassword = "7"
 ring = "0.17"
 base64 = "0.23"
 tabled = { version = "0.22", default-features = false, features = ["std"] }

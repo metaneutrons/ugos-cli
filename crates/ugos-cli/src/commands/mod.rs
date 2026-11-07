@@ -1,6 +1,7 @@
 //! Command dispatch — maps CLI actions to API calls and output.
 
 mod share;
+mod user;
 pub mod vmspec;
 
 use std::io::Write;
@@ -20,7 +21,7 @@ use ugos_client::types::snapshot::FolderType;
 use crate::cli::{
     DockerAction, DownloadAction, FsAction, FsSnapshotAction, ImageAction, LogAction, LogArgs,
     NetworkAction, OutputFormat, OvaAction, PassthroughAction, Resource, SnapshotAction,
-    StorageAction, SystemAction, UsbAction, UserAction, VmAction, VncAction,
+    StorageAction, SystemAction, UsbAction, VmAction, VncAction,
 };
 use crate::output;
 
@@ -45,7 +46,7 @@ pub async fn run(
         Resource::Ova { action } => ova(client, action, fmt, w).await,
         Resource::Docker { action } => docker(client, action, fmt, w).await,
         Resource::Log(args) => syslog(client, args, fmt, w).await,
-        Resource::User { action } => user(client, action, fmt, w).await,
+        Resource::User { action } => user::user(client, action, fmt, w).await,
         Resource::Info => info(client, fmt, w).await,
         Resource::Overview => overview(client, fmt, w).await,
         Resource::Passthrough { action } => passthrough(client, action, fmt, w).await,
@@ -339,37 +340,6 @@ async fn syslog(
             output::print_list(w, &rows, fmt)?;
         }
         OutputFormat::Json => output::print_json(w, &page)?,
-    }
-    Ok(())
-}
-
-async fn user(
-    client: &UgosClient,
-    action: &UserAction,
-    fmt: OutputFormat,
-    w: &mut impl Write,
-) -> Result<()> {
-    match action {
-        UserAction::List => {
-            let users = client.users().await?;
-            match fmt {
-                OutputFormat::Table => {
-                    let rows: Vec<output::UserRow> = users.iter().map(Into::into).collect();
-                    output::print_list(w, &rows, fmt)?;
-                }
-                OutputFormat::Json => output::print_json(w, &users)?,
-            }
-        }
-        UserAction::Me => {
-            let me = client.current_user().await?;
-            match fmt {
-                OutputFormat::Table => {
-                    let rows = vec![output::UserRow::from(&me)];
-                    output::print_list(w, &rows, fmt)?;
-                }
-                OutputFormat::Json => output::print_json(w, &me)?,
-            }
-        }
     }
     Ok(())
 }

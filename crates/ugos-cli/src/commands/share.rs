@@ -376,7 +376,7 @@ fn pick_volume(volumes: &[Volume], wanted: Option<&str>) -> Result<String> {
 }
 
 /// A quota such as `500m`, `100g` or `2t`: the value and the unit code.
-fn parse_quota(text: &str) -> Result<(i64, i64)> {
+pub(super) fn parse_quota(text: &str) -> Result<(i64, i64)> {
     let lower = text.trim().to_ascii_lowercase();
     let lower = lower.strip_suffix('b').unwrap_or(&lower);
     let split = lower
@@ -402,7 +402,7 @@ fn parse_quota(text: &str) -> Result<(i64, i64)> {
 }
 
 /// `Some(true)` for the first flag, `Some(false)` for the second, else `None`.
-const fn flag_pair(on: bool, off: bool) -> Option<bool> {
+pub(super) const fn flag_pair(on: bool, off: bool) -> Option<bool> {
     match (on, off) {
         (true, _) => Some(true),
         (false, true) => Some(false),

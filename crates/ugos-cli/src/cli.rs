@@ -200,13 +200,119 @@ pub struct LogArgs {
     pub size: u32,
 }
 
+/// Role of an account.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+pub enum RoleArg {
+    /// A standard user.
+    User,
+    /// An administrator.
+    Admin,
+}
+
 /// User subcommands.
+///
+/// The password of a new or changed account is never a flag, since a flag
+/// shows in the process list and the shell history. It is asked for on the
+/// terminal, read from stdin with `--new-password-stdin`, or taken from
+/// `UGOS_NEW_PASSWORD`.
 #[derive(Debug, Subcommand)]
+#[allow(clippy::large_enum_variant)]
 pub enum UserAction {
     /// List accounts.
     List,
     /// Show the account this session belongs to.
     Me,
+    /// Show one account in full.
+    Show {
+        /// Login name or numeric uid. Not called `user`: that is the id of
+        /// the global `--user` option, and clap would fill both.
+        account: String,
+    },
+    /// Create an account.
+    Create {
+        /// Login name.
+        name: String,
+        /// Email address.
+        #[arg(long)]
+        email: Option<String>,
+        /// Free-text description.
+        #[arg(long)]
+        description: Option<String>,
+        /// Role of the account.
+        #[arg(long, value_enum, default_value = "user")]
+        role: RoleArg,
+        /// Group to join; repeat for several.
+        #[arg(long = "group")]
+        groups: Vec<String>,
+        /// Do not give the account a home folder.
+        #[arg(long)]
+        no_home_dir: bool,
+        /// Forbid the account to change its own password.
+        #[arg(long)]
+        deny_password_change: bool,
+        /// Read the password from stdin.
+        #[arg(long)]
+        new_password_stdin: bool,
+        /// Print the request without sending it. The password is not shown.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Change an account. Only what is given changes.
+    Update {
+        /// Login name or numeric uid.
+        account: String,
+        /// New email address.
+        #[arg(long)]
+        email: Option<String>,
+        /// New description.
+        #[arg(long)]
+        description: Option<String>,
+        /// New role.
+        #[arg(long, value_enum)]
+        role: Option<RoleArg>,
+        /// Add the account to a group; repeat for several.
+        #[arg(long = "add-group")]
+        add_groups: Vec<String>,
+        /// Remove the account from a group; repeat for several.
+        #[arg(long = "remove-group")]
+        remove_groups: Vec<String>,
+        /// Give the account a home folder.
+        #[arg(long, conflicts_with = "no_home_dir")]
+        home_dir: bool,
+        /// Take the home folder away.
+        #[arg(long)]
+        no_home_dir: bool,
+        /// Forbid the account to change its own password.
+        #[arg(long, conflicts_with = "allow_password_change")]
+        deny_password_change: bool,
+        /// Let the account change its own password.
+        #[arg(long)]
+        allow_password_change: bool,
+        /// Disable the account.
+        #[arg(long, conflicts_with_all = ["enable", "no_expiry"])]
+        disable: bool,
+        /// Enable a disabled account, or lift an expiry.
+        #[arg(long, conflicts_with = "no_expiry")]
+        enable: bool,
+        /// Remove the expiry date.
+        #[arg(long)]
+        no_expiry: bool,
+        /// Set a new password, read from stdin.
+        #[arg(long)]
+        new_password_stdin: bool,
+        /// Set a new password, asked for on the terminal or taken from
+        /// `UGOS_NEW_PASSWORD`.
+        #[arg(long, conflicts_with = "new_password_stdin")]
+        new_password: bool,
+    },
+    /// Delete an account.
+    Delete {
+        /// Login name or numeric uid.
+        account: String,
+        /// Delete although the account has snapshots.
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 /// Filesystem snapshot actions.
@@ -1198,26 +1304,36 @@ pub struct SkillArgs {
 }
 
 impl Cli {
-    /// `true` when `--password-stdin` and `--registry-password-stdin` would
-    /// both read the one stdin stream.
+    /// `true` when `--password-stdin` and another flag that reads a password
+    /// from stdin would both read the one stream.
     pub const fn reads_stdin_twice(&self) -> bool {
         self.password_stdin
-            && matches!(
-                &self.command,
+            && match &self.command {
                 Resource::Docker {
-                    action: DockerAction::MirrorAdd {
-                        registry_password_stdin: true,
-                        ..
-                    }
-                }
-            )
+                    action:
+                        DockerAction::MirrorAdd {
+                            registry_password_stdin,
+                            ..
+                        },
+                } => *registry_password_stdin,
+                Resource::User {
+                    action:
+                        UserAction::Create {
+                            new_password_stdin, ..
+                        }
+                        | UserAction::Update {
+                            new_password_stdin, ..
+                        },
+                } => *new_password_stdin,
+                _ => false,
+            }
     }
 }
 
 #[cfg(test)]
 #[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
-    use super::{Cli, Resource, ShareAclAction, ShareAction, SmbAction};
+    use super::{Cli, Resource, ShareAclAction, ShareAction, SmbAction, UserAction};
     use clap::parser::ValueSource;
     use clap::{CommandFactory as _, FromArgMatches as _};
 
@@ -1225,6 +1341,45 @@ mod tests {
         let matches = Cli::command().try_get_matches_from(args)?;
         let cli = Cli::from_arg_matches(&matches)?;
         Ok((matches, cli))
+    }
+
+    #[test]
+    fn the_account_argument_does_not_fill_the_global_user_option() {
+        // The positional once shared the id of `--user`, so the account to
+        // show became the login name and the login failed.
+        for args in [
+            &["ugos-cli", "user", "show", "anna"][..],
+            &["ugos-cli", "user", "update", "anna", "--description", "x"][..],
+            &["ugos-cli", "user", "delete", "anna"][..],
+        ] {
+            let (matches, cli) = parse(args).unwrap();
+            assert_eq!(cli.user, None, "{args:?}");
+            assert_eq!(matches.value_source("user"), None, "{args:?}");
+        }
+        let (_, cli) = parse(&["ugos-cli", "--user", "admin", "user", "show", "anna"]).unwrap();
+        assert_eq!(cli.user.as_deref(), Some("admin"));
+        assert!(matches!(
+            cli.command,
+            Resource::User {
+                action: UserAction::Show { ref account }
+            } if account == "anna"
+        ));
+    }
+
+    #[test]
+    fn two_stdin_password_flags_are_caught() {
+        let (_, cli) = parse(&[
+            "ugos-cli",
+            "--password-stdin",
+            "user",
+            "create",
+            "anna",
+            "--new-password-stdin",
+        ])
+        .unwrap();
+        assert!(cli.reads_stdin_twice());
+        let (_, cli) = parse(&["ugos-cli", "--password-stdin", "user", "create", "anna"]).unwrap();
+        assert!(!cli.reads_stdin_twice());
     }
 
     #[test]

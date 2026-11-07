@@ -18,6 +18,8 @@
 //! Verified against a live NAS on 2026-08-18, including the file manager's
 //! v2 API, which never answers plain requests.
 
+use aes::Aes128;
+use aes::cipher::{Block, BlockCipherDecrypt};
 use aes_gcm::aead::{Aead, KeyInit, Payload};
 use aes_gcm::{Aes256Gcm, Nonce};
 use base64::{Engine as _, engine::general_purpose::STANDARD as B64};
@@ -210,10 +212,92 @@ fn urlencode(value: &str) -> String {
     out
 }
 
+/// Read an `email_encrypted` field of the user listing back to plain text.
+///
+/// UGOS masks the address in `email` and hands the real one over in this
+/// field. The web UI undoes it in the browser: the value is Base64, its last
+/// 16 bytes are an AES-128 key, and the rest is AES-128-ECB with PKCS#7
+/// padding under that key. The key travels with the data, so this hides the
+/// address from a glance and from nothing else.
+///
+/// # Errors
+///
+/// Returns [`UgosError::Encryption`] if the value is not in that form.
+pub fn decrypt_email(blob: &str) -> Result<String> {
+    let bad = |what: &str| UgosError::Encryption(format!("email_encrypted: {what}"));
+    let raw = B64.decode(blob).map_err(|_| bad("not Base64"))?;
+    if raw.len() < 32 || !raw.len().is_multiple_of(16) {
+        return Err(bad("unexpected length"));
+    }
+    let (data, key) = raw.split_at(raw.len() - 16);
+    let cipher = Aes128::new_from_slice(key).map_err(|_| bad("bad key"))?;
+    let mut plain = Vec::with_capacity(data.len());
+    for chunk in data.as_chunks::<16>().0 {
+        let mut block = Block::<Aes128>::from(*chunk);
+        cipher.decrypt_block(&mut block);
+        plain.extend_from_slice(&block);
+    }
+    let pad = usize::from(*plain.last().ok_or_else(|| bad("empty"))?);
+    if pad == 0
+        || pad > 16
+        || plain[plain.len() - pad..]
+            .iter()
+            .any(|&b| usize::from(b) != pad)
+    {
+        return Err(bad("bad padding"));
+    }
+    plain.truncate(plain.len() - pad);
+    String::from_utf8(plain).map_err(|_| bad("not UTF-8"))
+}
+
 #[cfg(test)]
 #[allow(clippy::unwrap_used)]
 mod tests {
     use super::*;
+
+    /// What the web UI's `email_encrypted` looks like, built here with a
+    /// made-up key and address.
+    fn sealed_email(address: &str, key: [u8; 16]) -> String {
+        use aes::cipher::BlockCipherEncrypt;
+        let cipher = Aes128::new_from_slice(&key).unwrap();
+        let pad = 16 - address.len() % 16;
+        let mut data = address.as_bytes().to_vec();
+        data.extend(std::iter::repeat_n(u8::try_from(pad).unwrap(), pad));
+        let mut out = Vec::new();
+        for chunk in data.as_chunks::<16>().0 {
+            let mut block = Block::<Aes128>::from(*chunk);
+            cipher.encrypt_block(&mut block);
+            out.extend_from_slice(&block);
+        }
+        out.extend_from_slice(&key);
+        B64.encode(out)
+    }
+
+    #[test]
+    fn an_encrypted_email_reads_back() {
+        for address in [
+            "a@b.de",
+            "anna@example.org",
+            "exactly-16-chars@",
+            "a.much.longer.address@subdomain.example.org",
+        ] {
+            let blob = sealed_email(address, *b"0123456789abcdef");
+            assert_eq!(decrypt_email(&blob).unwrap(), address);
+        }
+    }
+
+    #[test]
+    fn an_email_blob_in_the_wrong_form_is_refused() {
+        for bad in [
+            "",
+            "not base64!",
+            "AAAA",
+            &B64.encode([0_u8; 33]),
+            &B64.encode([0_u8; 48]),
+        ] {
+            assert!(decrypt_email(bad).is_err(), "{bad:?}");
+        }
+    }
 
     #[test]
     fn round_trip() {

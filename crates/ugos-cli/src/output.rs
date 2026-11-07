@@ -779,33 +779,84 @@ impl From<&ugos_client::types::syslog::LogEntry> for SysLogRow {
 #[derive(Serialize)]
 pub struct UserRow {
     pub username: String,
-    pub account_type: String,
+    pub role: String,
+    pub groups: String,
     pub email: String,
+    pub status: String,
     pub description: String,
 }
 
 table_row! {
   UserRow {
     username => "User",
-    account_type => "Type",
+    role => "Role",
+    groups => "Groups",
     email => "Email",
+    status => "Status",
     description => "Description",
   }
+}
+
+/// The role as the web UI names it.
+fn role_label(user: &ugos_client::types::syslog::User) -> String {
+    match user.role.as_str() {
+        "admin" => "administrator".into(),
+        "users" | "" => "standard".into(),
+        other => other.to_owned(),
+    }
+}
+
+fn group_list(user: &ugos_client::types::syslog::User) -> String {
+    user.groups
+        .iter()
+        .map(|group| group.name.as_str())
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+/// `active`, `disabled` or the date an account expires.
+fn account_status(user: &ugos_client::types::syslog::User) -> String {
+    if user.disabled || user.expire_time == 1 {
+        "disabled".into()
+    } else if user.is_expired {
+        "expired".into()
+    } else if user.expire_time > 1 {
+        if user.expire_date.is_empty() {
+            "expires".into()
+        } else {
+            format!("expires {}", user.expire_date)
+        }
+    } else {
+        "active".into()
+    }
 }
 
 impl From<&ugos_client::types::syslog::User> for UserRow {
     fn from(u: &ugos_client::types::syslog::User) -> Self {
         Self {
             username: u.username.clone(),
-            account_type: if u.account_type == 0 {
-                "standard".into()
-            } else {
-                format!("type {}", u.account_type)
-            },
+            role: role_label(u),
+            groups: group_list(u),
             email: u.email.clone(),
+            status: account_status(u),
             description: u.description.clone(),
         }
     }
+}
+
+/// The detail view of one account.
+pub fn user_rows(user: &ugos_client::types::syslog::User) -> Vec<FieldRow> {
+    vec![
+        field("User", user.username.clone()),
+        field("UID", user.uid.to_string()),
+        field("Role", role_label(user)),
+        field("Groups", group_list(user)),
+        field("Email", user.email.clone()),
+        field("Description", user.description.clone()),
+        field("Status", account_status(user)),
+        field("Home folder", yes_no(user.enable_home_dir)),
+        field("May change password", yes_no(!user.deny_change_pwd)),
+    ]
 }
 
 /// Table row for a directory listing.

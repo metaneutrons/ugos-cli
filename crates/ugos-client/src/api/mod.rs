@@ -8,3 +8,4 @@ pub mod shares;
 pub mod snapshot;
 pub mod syslog;
 pub mod system;
+pub mod users;

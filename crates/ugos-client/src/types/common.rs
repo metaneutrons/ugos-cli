@@ -1,8 +1,18 @@
 //! Common types shared across all UGOS API modules.
 
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 
 use crate::error::{Result, UgosError};
+
+/// Accept the UGOS convention of returning either an array or `null` for an
+/// optional list field while presenting callers with an ordinary empty vector.
+pub(crate) fn null_vec_as_empty<'de, D, T>(deserializer: D) -> std::result::Result<Vec<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<Vec<T>>::deserialize(deserializer).map(Option::unwrap_or_default)
+}
 
 /// Outer envelope for every UGOS API response.
 ///
