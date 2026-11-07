@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.22.0](https://github.com/metaneutrons/ugos-cli/compare/v0.21.0...v0.22.0) (2026-11-07)
+
+
+### ⚠ BREAKING CHANGES
+
+* **client:** mark UgosError non_exhaustive, and add a sealed password check ([#122](https://github.com/metaneutrons/ugos-cli/issues/122))
+
+### Features
+
+* **client:** mark UgosError non_exhaustive, and add a sealed password check ([#122](https://github.com/metaneutrons/ugos-cli/issues/122)) ([ef50219](https://github.com/metaneutrons/ugos-cli/commit/ef502190f916f81be1c62f434c13ec0ff897cc61))
+
 ## [0.21.0](https://github.com/metaneutrons/ugos-cli/compare/v0.20.0...v0.21.0) (2026-11-07)
 
 
