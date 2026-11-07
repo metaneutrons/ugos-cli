@@ -81,7 +81,9 @@ ugos-cli user me
 ugos-cli user show anna
 ugos-cli user create anna --email anna@example.org --group family   # asks for the password
 ugos-cli user update anna --description "Anna B." --disable
-ugos-cli user delete anna
+ugos-cli user update anna --expires 2027-01-31
+ugos-cli user delete anna            # refuses a home folder with files, unless --force
+ugos-cli group list
 
 # Browse the NAS
 ugos-cli fs ls /volume1/download
@@ -493,7 +495,8 @@ notes are kept because the reasoning is easy to lose and expensive to redo.
 | **OVA** | export, parse |
 | **Log** | system log across all modules, with filters |
 | **VM log** (`vm log`) | KVM audit log, list operators |
-| **User** | list, show, create, update (email, description, role, groups, home folder, password, disable), delete |
+| **User** | list, show, create, update (email, description, role, groups, home folder, password, disable, expiry), delete |
+| **Group** | list (read only) |
 | **Host** (`info`, `overview`) | CPU cores and memory; load plus every VM at once |
 | **System** | hardware and firmware info, live CPU/memory/disk/network/fan readings, processes, services |
 | **Download** | queue a URL for the NAS to fetch, list, check, status, remove |
@@ -534,7 +537,7 @@ anything critical.
 | Resource | Notes |
 |----------|-------|
 | SMB start, stop and settings | Each interrupts every connected client, which cannot be tried safely on a NAS in use. The endpoints are in [docs/api-shares.md](docs/api-shares.md). NFS, FTP, WebDAV and rsync are not wired either |
-| User quota, permissions, groups, import and invitations | `user quota` is per volume and `dir_quota` of an edit has no effect; the rest is read from the bundle only. See [docs/api-users.md](docs/api-users.md) |
+| User quota, permissions, creating and editing groups, import and invitations | `user quota` is per volume and `dir_quota` of an edit has no effect; the rest is read from the bundle only. See [docs/api-users.md](docs/api-users.md) |
 | Image rename | `RenameImage` answers `successful` and renames nothing; field names unknown |
 | OVA import (one step) | `ova parse` reads an OVA into a VM spec; creating the VM from it is still a manual second step |
 | Backup | There is no backup API. The only three `backup_restore` paths appear solely in the UI's encryption whitelist, nothing calls them, and the group has no status or listing endpoint — see [docs/api-backup.md](docs/api-backup.md) |

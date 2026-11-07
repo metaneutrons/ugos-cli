@@ -25,7 +25,10 @@ Reconstructed from the lazily loaded bundle of the control panel
 | GET, POST | `user/quota/{uid}` | plain | not wired (quota per volume) |
 | GET, POST | `user/permission/{uid}`, `user/authorized/{uid}` | plain | not wired |
 | | `user/search`, `user/import*`, `user/invite*`, `user/headpic/*`, `otp/disable` | plain | not wired |
-| | `group/list`, `group/info/{gid}`, `group/create`, `group/edit`, `group/delete` | plain | not wired |
+| GET | `group/list` | plain | `group list` |
+| POST | `group/name/check`, `group/create`, `group/edit` | plain | not wired |
+| DELETE | `group/delete` | plain | not wired |
+| GET | `group/info/{gid}` | plain | not wired |
 
 All of them are `v1`.
 
@@ -111,8 +114,14 @@ time:
 
 `expire_time` is `-1` for an account that never expires and `1` for one that
 is disabled; `ugos-cli user update --disable` and `--enable` set those two.
-A Unix time sets an expiry, and the web UI sends the date as text in
-`expire_date`. Neither was tried.
+
+An expiry date goes in two fields, as the web UI's date picker sends it:
+`expire_date` is the text `YYYY-MM-DD`, and `expire_time` is midnight UTC of
+that day in seconds. UGOS keeps the date and **moves the time to midnight of
+its own time zone** (on a NAS in Central European Time, an hour earlier), so
+the date is the field to compare. A date in the past is refused by the web UI,
+and so by `ugos-cli`; one beyond 2280 is too. `ugos-cli user update --expires
+DATE` sets it, and `--no-expiry` lifts it.
 
 ## Deleting
 
@@ -135,15 +144,45 @@ An account that is not an administrator is answered
 `1008, Standard users do not have permission to access this interface`, here
 and on every other call that changes an account.
 
-`ugos-cli user delete` refuses the account it is logged in with, and the only
-administrator. After the call it reads the list again and says so if the
+**The home folder goes with the account, and so do the files in it.** A
+throwaway account with one file in `/home/NAME` left nothing behind: the folder
+was gone (`1302, Path does not exist`) and so was its place in
+`/volume1/@home`. A recycle bin was not looked for. `ugos-cli user delete`
+reads the folder first and refuses a non-empty one unless `--force` is given,
+as it does for snapshots.
+
+`ugos-cli user delete` also refuses the account it is logged in with, and the
+only administrator. After the call it reads the list again and says so if the
 account is still there.
+
+## Groups
+
+### group/list
+- **Response**: `{list: [{gid, groupname, description, users, utime}]}`
+
+`users` is `null` for a group with no members and `[{name, uid}]` otherwise.
+Only the groups an administrator made are listed, from `gid` 1000. The built-in
+`admin`, `users` and `ughomeusers` are not, though an account's own `groups`
+names them. The web UI's account form offers only the listed groups, and it
+sends only those back in `groups`. UGOS accepts the full list as well (the
+built-in groups follow the role and the home folder anyway), which is what
+`ugos-cli` sends.
+
+### group/create, group/delete
+- **Create**: POST `{groupname, description, users: [{name}]}`, answered
+  `{result: gid}`. `group/name/check` takes `{name}` and answers `{}` for a
+  free name.
+- **Delete**: DELETE with the JSON body `[gid]`, answered `{}`
+
+Neither is wired; both were used once to learn the shape above, on a throwaway
+group that was deleted again. Joining a group is a field of the account, not
+of the group: an account created with `groups: [{name}]` shows up in the
+group's `users` at once, and leaves it when the account is deleted.
 
 ## Not known
 
-- What happens to the home folder of a deleted account and to the files in it.
-- The format of `expire_date`, and whether a Unix time in `expire_time` expires
-  an account as the web UI says.
-- What a custom group looks like in `group/list`. The test NAS had none.
+- Whether a recycle bin keeps the files of a deleted home folder.
 - Whether `user/rule/password` rejects a password that `user/create` accepts.
   The web UI asks first, `ugos-cli` does not.
+- What `group/edit` and the per-user permissions do. They are read from the
+  bundle only.
