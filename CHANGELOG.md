@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.20.0](https://github.com/metaneutrons/ugos-cli/compare/v0.19.0...v0.20.0) (2026-11-07)
+
+
+### Features
+
+* **cli:** user expiry dates, a home folder guard on delete, and group list ([#118](https://github.com/metaneutrons/ugos-cli/issues/118)) ([28a6fdf](https://github.com/metaneutrons/ugos-cli/commit/28a6fdffa727a5b861e41e1fee992d58ed6044c6))
+
 ## [0.19.0](https://github.com/metaneutrons/ugos-cli/compare/v0.18.0...v0.19.0) (2026-11-07)
 
 
