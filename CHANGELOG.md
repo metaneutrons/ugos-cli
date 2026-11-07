@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.18.0](https://github.com/metaneutrons/ugos-cli/compare/v0.17.0...v0.18.0) (2026-11-07)
+
+
+### Features
+
+* **cli:** shared folders and the SMB service ([#113](https://github.com/metaneutrons/ugos-cli/issues/113)) ([3393231](https://github.com/metaneutrons/ugos-cli/commit/3393231189f8151b2c4da956f85bbe8287003778))
+
 ## [0.17.0](https://github.com/metaneutrons/ugos-cli/compare/v0.16.1...v0.17.0) (2026-11-05)
 
 
