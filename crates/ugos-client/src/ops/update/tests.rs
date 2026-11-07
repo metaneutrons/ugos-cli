@@ -1,6 +1,6 @@
 use serde_json::json;
 
-use super::backup::{RestoreService, check_backup_file, flatten_services, pick_services};
+use super::backup::{RestoreService, check_backup, flatten_services, pick_services};
 use super::firmware::{CHUNK, check_image};
 
 fn tree() -> serde_json::Value {
@@ -48,29 +48,17 @@ fn services_are_picked_by_path_or_item_or_all() {
 
 #[test]
 fn a_backup_file_is_checked_by_name_and_size() {
-    let dir = std::env::temp_dir().join(format!("ugos-update-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let good = dir.join("backup_restore.ugb");
-    std::fs::write(&good, b"x").unwrap();
-    assert_eq!(check_backup_file(&good).unwrap(), 1);
-    let wrong_name = dir.join("config.ugb");
-    std::fs::write(&wrong_name, b"x").unwrap();
-    assert!(check_backup_file(&wrong_name).is_err());
-    let empty = dir.join("backup_restore2.ugb");
-    std::fs::write(&empty, b"").unwrap();
-    assert!(check_backup_file(&empty).is_err());
-    std::fs::remove_dir_all(&dir).unwrap();
+    assert!(check_backup("backup_restore.ugb", 1).is_ok());
+    assert!(check_backup("config.ugb", 1).is_err());
+    assert!(check_backup("backup_restore.zip", 1).is_err());
+    assert!(check_backup("backup_restore.ugb", 0).is_err());
+    assert!(check_backup("backup_restore.ugb", 100 * 1024 * 1024 + 1).is_err());
 }
 
 #[test]
 fn a_firmware_image_is_checked_and_cut_in_chunks() {
-    let dir = std::env::temp_dir().join(format!("ugos-image-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).unwrap();
-    let image = dir.join("fw.img");
-    std::fs::write(&image, vec![0u8; CHUNK + 1]).unwrap();
-    assert_eq!(check_image(&image).unwrap(), (CHUNK as u64 + 1, 2));
-    let not_img = dir.join("fw.bin");
-    std::fs::write(&not_img, b"x").unwrap();
-    assert!(check_image(&not_img).is_err());
-    std::fs::remove_dir_all(&dir).unwrap();
+    assert_eq!(check_image("fw.img", CHUNK as u64 + 1).unwrap(), 2);
+    assert_eq!(check_image("fw.img", CHUNK as u64).unwrap(), 1);
+    assert!(check_image("fw.bin", 1).is_err());
+    assert!(check_image("fw.img", 0).is_err());
 }

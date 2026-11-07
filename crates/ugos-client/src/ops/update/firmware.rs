@@ -211,24 +211,20 @@ pub async fn manual_status(client: &UgosClient) -> Result<ManualStatus> {
     client.get("firmware/manual/status").await
 }
 
-/// The checks the web UI makes before it sends a file, as the size and the
-/// number of chunks.
+/// The checks the web UI makes before it sends a firmware file, on the name
+/// and the size: the number of chunks it is cut in.
 ///
 /// # Errors
 ///
 /// Refuses a file that is not an `.img` or is empty.
-pub fn check_image(file: &Path) -> Result<(u64, usize)> {
-    if file.extension().and_then(|e| e.to_str()) != Some("img") {
+pub fn check_image(name: &str, size: u64) -> Result<usize> {
+    if Path::new(name).extension().and_then(|e| e.to_str()) != Some("img") {
         return Err(refused("a firmware file ends in .img"));
     }
-    let size = std::fs::metadata(file)
-        .map_err(|e| UgosError::io(format!("reading '{}'", file.display()), e))?
-        .len();
     if size == 0 {
         return Err(refused("the firmware file is empty"));
     }
-    let chunks = usize::try_from(size.div_ceil(CHUNK as u64)).unwrap_or(usize::MAX);
-    Ok((size, chunks))
+    Ok(usize::try_from(size.div_ceil(CHUNK as u64)).unwrap_or(usize::MAX))
 }
 
 /// Upload a firmware image in chunks. UGOS installs it and restarts the NAS.
@@ -245,7 +241,15 @@ pub async fn upload(
     force: bool,
     progress: &(dyn Fn(usize, usize) + Send + Sync),
 ) -> Result<()> {
-    let (_, chunks) = check_image(file)?;
+    let name = file
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("firmware.img")
+        .to_owned();
+    let size = std::fs::metadata(file)
+        .map_err(|e| UgosError::io(format!("reading '{}'", file.display()), e))?
+        .len();
+    let chunks = check_image(&name, size)?;
     if !force {
         return Err(UgosError::NeedsForce(
             "installing a firmware image flashes the NAS and restarts it".into(),
@@ -254,11 +258,6 @@ pub async fn upload(
     let bytes = std::fs::read(file)
         .map_err(|e| UgosError::io(format!("reading '{}'", file.display()), e))?;
     let md5 = hex::encode(Md5::digest(&bytes));
-    let name = file
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or("firmware.img")
-        .to_owned();
     for (index, part) in bytes.chunks(CHUNK).enumerate() {
         let form = reqwest::multipart::Form::new()
             .part(

@@ -75,6 +75,23 @@ async fn wait_for_install(client: &UgosClient, w: &mut impl Write) -> Result<()>
     bail!("the install did not finish in 45 minutes; check `update progress`")
 }
 
+async fn config_cmd(
+    client: &UgosClient,
+    args: &UpdateConfigArgs,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
+    let change = config_change(args)?;
+    let got = if change == ConfigChange::default() {
+        firmware::config(client).await?
+    } else {
+        firmware::set_config(client, &change, args.force)
+            .await
+            .map_err(with_force_hint)?
+    };
+    show(w, fmt, &got, &rows::firmware_config_rows(&got))
+}
+
 /// Run an `update` subcommand.
 pub async fn update(
     client: &UgosClient,
@@ -84,17 +101,7 @@ pub async fn update(
 ) -> Result<()> {
     match action {
         UpdateAction::Status => firmware_state(client, fmt, w).await,
-        UpdateAction::Config(args) => {
-            let change = config_change(args)?;
-            let got = if change == ConfigChange::default() {
-                firmware::config(client).await?
-            } else {
-                firmware::set_config(client, &change, args.force)
-                    .await
-                    .map_err(with_force_hint)?
-            };
-            show(w, fmt, &got, &rows::firmware_config_rows(&got))
-        }
+        UpdateAction::Config(args) => config_cmd(client, args, fmt, w).await,
         UpdateAction::Install(a) => {
             let _ = firmware::install(client, a.force)
                 .await

@@ -177,30 +177,36 @@ pub fn pick_services(all: &[RestoreService], wanted: &[String]) -> Result<Vec<St
     Ok(names)
 }
 
-/// What the web UI checks before it sends a backup file.
+/// What the web UI checks about a backup file before it sends it: the name
+/// and the size.
 ///
 /// # Errors
 ///
-/// Refuses a file that is not a `.ugb`, is too large, or lacks
-/// `backup_restore` in its name.
-pub fn check_backup_file(file: &Path) -> Result<u64> {
-    let name = file
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or_default();
-    if file.extension().and_then(|e| e.to_str()) != Some("ugb") || !name.contains("backup_restore")
+/// Refuses a file that is not a `.ugb`, lacks `backup_restore` in its name,
+/// or is empty or larger than 100 MiB.
+pub fn check_backup(name: &str, size: u64) -> Result<()> {
+    if Path::new(name).extension().and_then(|e| e.to_str()) != Some("ugb")
+        || !name.contains("backup_restore")
     {
         return Err(refused(
             "a backup file is a .ugb with backup_restore in its name",
         ));
     }
-    let size = std::fs::metadata(file)
-        .map_err(|e| UgosError::io(format!("reading '{}'", file.display()), e))?
-        .len();
     if size == 0 || size > LARGEST {
         return Err(refused("a backup file is up to 100 MiB"));
     }
-    Ok(size)
+    Ok(())
+}
+
+fn check_backup_file(file: &Path) -> Result<()> {
+    let name = file
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or_default();
+    let size = std::fs::metadata(file)
+        .map_err(|e| UgosError::io(format!("reading '{}'", file.display()), e))?
+        .len();
+    check_backup(name, size)
 }
 
 /// Restore services from a backup file. UGOS overwrites their configuration
@@ -218,7 +224,7 @@ pub async fn restore(
     wanted: &[String],
     force: bool,
 ) -> Result<Value> {
-    let _ = check_backup_file(file)?;
+    check_backup_file(file)?;
     let names = pick_services(&services(client).await?, wanted)?;
     if !force {
         return Err(UgosError::NeedsForce(
