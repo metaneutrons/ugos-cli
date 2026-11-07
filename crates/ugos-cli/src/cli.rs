@@ -126,6 +126,22 @@ pub enum Resource {
         #[command(subcommand)]
         action: UserAction,
     },
+    /// Storage pools: the RAID sets that volumes live on.
+    Pool {
+        #[command(subcommand)]
+        action: PoolAction,
+    },
+    /// Volumes of the NAS. `storage` is the KVM storage and has nothing to do
+    /// with these.
+    Volume {
+        #[command(subcommand)]
+        action: VolumeAction,
+    },
+    /// Disks: state, SMART data and test plans.
+    Disk {
+        #[command(subcommand)]
+        action: DiskAction,
+    },
     /// Groups that an administrator made.
     Group {
         #[command(subcommand)]
@@ -203,6 +219,54 @@ pub struct LogArgs {
     /// Entries per page.
     #[arg(long, default_value = "20")]
     pub size: u32,
+}
+
+/// Pool subcommands. Reading only.
+#[derive(Debug, Subcommand)]
+pub enum PoolAction {
+    /// List the pools.
+    List,
+    /// Show one pool with its disks, scrub and trim.
+    Show {
+        /// Pool name, e.g. `pool1`, or its label.
+        pool: String,
+    },
+}
+
+/// Volume subcommands. Reading only.
+#[derive(Debug, Subcommand)]
+pub enum VolumeAction {
+    /// List the volumes.
+    List,
+    /// Show one volume.
+    Show {
+        /// Volume name, e.g. `volume1`, its label or its mount path.
+        volume: String,
+    },
+}
+
+/// Disk subcommands. Reading only.
+#[derive(Debug, Subcommand)]
+pub enum DiskAction {
+    /// List the disks.
+    List,
+    /// Show one disk.
+    Show {
+        /// Short name, device path, slot or label, e.g. `nvme0n1` or `nvme1`.
+        disk: String,
+    },
+    /// Show the SMART report of a disk.
+    Smart {
+        /// Short name, device path, slot or label.
+        disk: String,
+    },
+    /// Show the history of a disk's tests.
+    History {
+        /// Short name, device path, slot or label.
+        disk: String,
+    },
+    /// List the scheduled test plans.
+    Plans,
 }
 
 /// Group subcommands.

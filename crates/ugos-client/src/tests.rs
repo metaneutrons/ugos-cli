@@ -995,3 +995,126 @@ mod users {
         assert_eq!(groups[1].users, Vec::new());
     }
 }
+
+// ── Storage Manager ─────────────────────────────────────────────────
+
+mod storage {
+    use crate::api::storage::{pick_disk, pick_pool, pick_volume};
+    use crate::error::UgosError;
+    use crate::types::common::ResultWrapper;
+    use crate::types::storage::{Disk, Pool, Smart, StorageVolume, TestPlan, TestRecord};
+
+    const POOLS: &str = r#"{"result": [{"name": "pool1", "label": "Storage Pool 1",
+        "level": "raid5", "status": 0, "total": 1000, "used": 400, "free": 600,
+        "total_disk_num": 2, "progress": 0, "remaining_time": -1, "spare": null,
+        "disks": [{"dev_name": "/dev/sda", "label": "Disk 1", "size": 500, "slot": "sata1", "status": 0},
+                  {"dev_name": "/dev/sdb", "label": "Disk 2", "size": 500, "slot": "sata2", "status": 0}],
+        "trim": {"enable": true, "is_support": true, "next_start_time": "2026-11-18 10:00:00",
+                 "scheduled": {"first_run_datetime": "2026-01-18 10:00:00", "interval": 1, "interval_unit": 5}},
+        "data_scrub": {"is_cron": false, "last_time": "--", "next_start_time": "--", "process": 0, "status": 0},
+        "support_extend": true, "support_delete": true, "volumes": [{"name": "volume1"}]}]}"#;
+
+    #[test]
+    fn a_pool_keeps_what_the_commands_show() {
+        let pools = serde_json::from_str::<ResultWrapper<Vec<Pool>>>(POOLS)
+            .unwrap()
+            .result;
+        let pool = &pools[0];
+        assert_eq!(
+            (pool.level.as_str(), pool.total, pool.used),
+            ("raid5", 1000, 400)
+        );
+        assert_eq!(pool.disks.len(), 2);
+        assert_eq!(pool.disks[1].slot, "sata2");
+        assert!(pool.trim.as_ref().unwrap().enable);
+        assert_eq!(pool.data_scrub.as_ref().unwrap().last_time, "--");
+        assert_eq!(pool.remaining_time, -1);
+    }
+
+    #[test]
+    fn a_pool_is_found_by_name_or_label() {
+        let pools = serde_json::from_str::<ResultWrapper<Vec<Pool>>>(POOLS)
+            .unwrap()
+            .result;
+        assert_eq!(pick_pool(&pools, "pool1").unwrap().label, "Storage Pool 1");
+        assert_eq!(pick_pool(&pools, "storage pool 1").unwrap().name, "pool1");
+        assert!(matches!(
+            pick_pool(&pools, "pool9"),
+            Err(UgosError::NotFound { kind: "pool", .. })
+        ));
+    }
+
+    #[test]
+    fn a_volume_is_found_by_name_label_or_any_mount_path() {
+        let volumes = serde_json::from_str::<ResultWrapper<Vec<StorageVolume>>>(
+            r#"{"result": [{"name": "volume1", "label": "Volume 1", "poolname": "pool1",
+                "mntpath": "/volume1", "mntpaths": ["/volume1", "/home"], "filesystem": "btrfs",
+                "total": 100, "used": 40, "available": 60, "is_home": true}]}"#,
+        )
+        .unwrap()
+        .result;
+        for which in ["volume1", "VOLUME 1", "/volume1", "/volume1/", "/home"] {
+            assert_eq!(
+                pick_volume(&volumes, which).unwrap().name,
+                "volume1",
+                "{which}"
+            );
+        }
+        assert!(pick_volume(&volumes, "/volume2").is_err());
+    }
+
+    #[test]
+    fn a_disk_is_found_by_name_path_slot_or_label() {
+        let disks = serde_json::from_str::<ResultWrapper<Vec<Disk>>>(
+            r#"{"result": [{"name": "nvme0n1", "dev_name": "/dev/nvme0n1", "slot": "nvme1",
+                "label": "M.2 Hard Drive 1", "size": 8, "temperature": 48, "used_for": "Storage Pool 1"}]}"#,
+        )
+        .unwrap()
+        .result;
+        for which in [
+            "nvme0n1",
+            "/dev/nvme0n1",
+            "nvme1",
+            "NVME1",
+            "m.2 hard drive 1",
+        ] {
+            assert_eq!(pick_disk(&disks, which).unwrap().name, "nvme0n1", "{which}");
+        }
+        assert!(matches!(
+            pick_disk(&disks, "sda"),
+            Err(UgosError::NotFound { kind: "disk", .. })
+        ));
+    }
+
+    #[test]
+    fn a_smart_report_keeps_numbers_and_lists() {
+        let smart: Smart = serde_json::from_str(
+            r#"{"is_testing": false, "last": {"last_time": 0, "next_time": 1794405600, "status": 1},
+                "long_test_cost": 5, "short_test_cost": 5, "progress": 0, "remain_time": 0,
+                "report": [{"id": 1, "label": "Temperature", "name": "temperature", "value": 48},
+                           {"id": 13, "label": "Temperature sensors", "name": "temperature_sensors", "value": [58, 47, 47]}]}"#,
+        )
+        .unwrap();
+        assert_eq!(smart.last.next_time, 1_794_405_600);
+        assert_eq!(smart.report[0].value, 48);
+        assert_eq!(smart.report[1].value, serde_json::json!([58, 47, 47]));
+    }
+
+    #[test]
+    fn test_history_and_plans_parse() {
+        let history = serde_json::from_str::<ResultWrapper<Vec<TestRecord>>>(
+            r#"{"result": [{"err_code": "", "smart_type": 1, "status": 1, "time": 1793800800, "type": 0}]}"#,
+        )
+        .unwrap()
+        .result;
+        assert_eq!(history[0].smart_type, 1);
+        let plans = serde_json::from_str::<ResultWrapper<Vec<TestPlan>>>(
+            r#"{"result": [{"cron_id": 1, "name": "Test plan 1", "next_time": "2026-11-11 15:00:00",
+                "disks": ["/dev/nvme0n1"], "schedule": {"interval": 1, "interval_unit": 6}}]}"#,
+        )
+        .unwrap()
+        .result;
+        assert_eq!(plans[0].schedule.interval_unit, 6);
+        assert_eq!(plans[0].disks, ["/dev/nvme0n1"]);
+    }
+}
