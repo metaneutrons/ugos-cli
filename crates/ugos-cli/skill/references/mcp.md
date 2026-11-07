@@ -2,6 +2,39 @@
 
 Generated from the build by a test in ugos-mcp. Started with `ugos-mcp`.
 
+## ugos_disk_history
+
+Show the history of a disk's SMART tests
+
+- `name` (required): What to look at: a name, label or id, as the matching list tool shows it.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_disk_list
+
+List the disks with model, size, temperature, hours on and the pool they serve
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_disk_plans
+
+List the scheduled disk test plans
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_disk_show
+
+Show one disk with serial, firmware and interface. Name it by short name, device path, slot or label
+
+- `name` (required): What to look at: a name, label or id, as the matching list tool shows it.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_disk_smart
+
+Show the SMART report of a disk: wear, spare, errors, unsafe shutdowns and the test state
+
+- `name` (required): What to look at: a name, label or id, as the matching list tool shows it.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
 ## ugos_docker_batch
 
 Batch operate on Docker containers (start/stop/restart/remove)
@@ -275,6 +308,19 @@ Export a VM as an OVA file to a path on the NAS
 Parse an OVA file on the NAS and return the VM configuration it contains
 
 - `ova_path` (required): OVA file path on the NAS.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_pool_list
+
+List the storage pools (RAID sets) with level, capacity and disks
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_pool_show
+
+Show one storage pool with its disks, scrub and trim
+
+- `name` (required): What to look at: a name, label or id, as the matching list tool shows it.
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
 ## ugos_project_create
@@ -585,4 +631,17 @@ List VNC links for a VM
 
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 - `vm` (required): VM display name or UUID.
+
+## ugos_volume_list
+
+List the NAS volumes (file systems on the pools) with usage
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_volume_show
+
+Show one NAS volume, found by name, label or mount path
+
+- `name` (required): What to look at: a name, label or id, as the matching list tool shows it.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
 

@@ -20,7 +20,7 @@ fn make_server() -> UgosMcp {
 }
 
 /// Every tool the server registers.
-const EXPECTED_TOOLS: [&str; 79] = [
+const EXPECTED_TOOLS: [&str; 88] = [
     "ugos_target_list",
     // KVM
     "ugos_vm_list",
@@ -112,6 +112,16 @@ const EXPECTED_TOOLS: [&str; 79] = [
     "ugos_group_list",
     "ugos_user_update",
     "ugos_user_delete",
+    // Storage Manager
+    "ugos_pool_list",
+    "ugos_pool_show",
+    "ugos_volume_list",
+    "ugos_volume_show",
+    "ugos_disk_list",
+    "ugos_disk_show",
+    "ugos_disk_smart",
+    "ugos_disk_history",
+    "ugos_disk_plans",
 ];
 
 #[test]

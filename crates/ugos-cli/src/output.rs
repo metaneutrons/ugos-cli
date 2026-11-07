@@ -40,6 +40,10 @@ macro_rules! table_row {
     (@unit $field:ident) => { () };
 }
 
+// Row types of the NAS administration commands. They use `table_row!`, so they
+// come after it.
+pub mod nas_storage;
+
 // ── Display row types ───────────────────────────────────────────────
 
 /// Table row for VM list.

@@ -21,6 +21,7 @@ use rmcp::{
     schemars, tool, tool_handler, tool_router,
 };
 mod manage;
+mod nas;
 
 use tokio::sync::OnceCell;
 use ugos_client::api::docker::DockerApi;
@@ -30,6 +31,7 @@ use ugos_client::{Credentials, TlsPolicy, UgosClient, tls};
 use crate::manage::{
     AccountParam, ShareAclSetParam, ShareCreateParam, ShareParam, ShareUpdateParam, UserUpdateParam,
 };
+use crate::nas::NameParam;
 
 // ── Target config ───────────────────────────────────────────────────
 
@@ -1463,6 +1465,86 @@ impl UgosMcp {
     async fn ugos_user_delete(&self, Parameters(p): Parameters<AccountParam>) -> String {
         match self.client(&p.target).await {
             Ok(c) => manage::user_delete(c, &p.account).await,
+            Err(e) => e,
+        }
+    }
+
+    // ── Storage Manager (read only) ─────────────────────────────────
+
+    #[tool(description = "List the storage pools (RAID sets) with level, capacity and disks")]
+    async fn ugos_pool_list(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas::pool_list(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show one storage pool with its disks, scrub and trim")]
+    async fn ugos_pool_show(&self, Parameters(p): Parameters<NameParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas::pool_show(c, &p.name).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the NAS volumes (file systems on the pools) with usage")]
+    async fn ugos_volume_list(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas::volume_list(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show one NAS volume, found by name, label or mount path")]
+    async fn ugos_volume_show(&self, Parameters(p): Parameters<NameParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas::volume_show(c, &p.name).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "List the disks with model, size, temperature, hours on and the pool they serve"
+    )]
+    async fn ugos_disk_list(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas::disk_list(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Show one disk with serial, firmware and interface. Name it by short name, device path, slot or label"
+    )]
+    async fn ugos_disk_show(&self, Parameters(p): Parameters<NameParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas::disk_show(c, &p.name).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Show the SMART report of a disk: wear, spare, errors, unsafe shutdowns and the test state"
+    )]
+    async fn ugos_disk_smart(&self, Parameters(p): Parameters<NameParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas::disk_smart(c, &p.name).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show the history of a disk's SMART tests")]
+    async fn ugos_disk_history(&self, Parameters(p): Parameters<NameParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas::disk_history(c, &p.name).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the scheduled disk test plans")]
+    async fn ugos_disk_plans(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas::disk_plans(c).await,
             Err(e) => e,
         }
     }

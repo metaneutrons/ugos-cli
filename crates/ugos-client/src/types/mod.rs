@@ -7,6 +7,7 @@ pub mod files;
 pub mod kvm;
 pub mod shares;
 pub mod snapshot;
+pub mod storage;
 pub mod syslog;
 pub mod system;
 pub mod users;

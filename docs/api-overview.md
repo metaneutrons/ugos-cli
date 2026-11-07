@@ -19,6 +19,7 @@ Base URL: `https://<nas-ip>:9443/ugreen/v1/`
 | **Filesystem snapshots** | com.ugreen.snapshot | Complete | [api-snapshot.md](api-snapshot.md) |
 | **Shared folders and SMB** | com.ugreen.filemgr, com.ugreen.ctlmgr | Reading, creating, changing, deleting; SMB service read only | [api-shares.md](api-shares.md) |
 | **User accounts** | core | Reading, creating, changing, deleting; no groups, quota or permissions | [api-users.md](api-users.md) |
+| **Storage Manager** | com.ugreen.storagemgr | Pools, volumes, disks and SMART data, read only | [api-storage.md](api-storage.md) |
 | **Backup** | — | No API exists | [api-backup.md](api-backup.md) |
 
 ### Known but Undocumented (endpoints found in main JS bundle)
