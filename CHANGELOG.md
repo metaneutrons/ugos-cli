@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.21.0](https://github.com/metaneutrons/ugos-cli/compare/v0.20.0...v0.21.0) (2026-11-07)
+
+
+### ⚠ BREAKING CHANGES
+
+* **mcp:** tools for shared folders, user accounts and groups ([#120](https://github.com/metaneutrons/ugos-cli/issues/120))
+
+### Features
+
+* **mcp:** tools for shared folders, user accounts and groups ([#120](https://github.com/metaneutrons/ugos-cli/issues/120)) ([e040b84](https://github.com/metaneutrons/ugos-cli/commit/e040b84077175679b03a86c33579756e460c5209))
+
 ## [0.20.0](https://github.com/metaneutrons/ugos-cli/compare/v0.19.0...v0.20.0) (2026-11-07)
 
 
