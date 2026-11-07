@@ -43,13 +43,20 @@ Ask the user before running any command that changes or removes something:
   `docker project-rm`, and `docker batch`
 - `share create`, `share update`, `share acl set`, and `share delete` (it
   deletes the folder and everything in it)
+- `user create`, `user update` (it can disable an account, change its role or
+  set a new password), and `user delete`
 - `download add`, `download rm`
 
 State what will change and on which NAS, and wait for a clear yes. A refusal or
 silence is not a yes.
 
-`vm create` and `share create` have `--dry-run`, which prints the request without
-touching the NAS. Use it first.
+`vm create`, `share create` and `user create` have `--dry-run`, which prints the
+request without touching the NAS. Use it first.
+
+The password of a new or changed account is never an option. `user create` and
+`user update --new-password` ask for it on the terminal, or take it from
+`UGOS_NEW_PASSWORD`; `--new-password-stdin` reads it from stdin. Do not make up
+a password and put it in a command line or a file.
 
 ## Where to look
 

@@ -43,9 +43,9 @@ async fn main() -> Result<()> {
     }
     let password = if cli.password_stdin {
         if cli.reads_stdin_twice() {
-            bail!("--password-stdin and --registry-password-stdin both read stdin");
+            bail!("--password-stdin and another stdin flag both read stdin");
         }
-        password_from_reader(&mut std::io::stdin().lock())?
+        password_from_reader(&mut std::io::stdin().lock(), "--password-stdin")?
     } else {
         cli.password
             .clone()
@@ -118,14 +118,17 @@ fn check_password_sources(matches: &clap::ArgMatches, cli: &cli::Cli) -> Result<
 
 /// First line of `reader`, without its line ending. An empty line is refused
 /// rather than sent as a password.
-fn password_from_reader(reader: &mut impl std::io::BufRead) -> Result<String> {
+pub(crate) fn password_from_reader(
+    reader: &mut impl std::io::BufRead,
+    source: &str,
+) -> Result<String> {
     let mut line = String::new();
     let _ = reader
         .read_line(&mut line)
         .context("reading the password from stdin")?;
     let password = line.trim_end_matches(['\r', '\n']);
     if password.is_empty() {
-        bail!("--password-stdin read an empty line");
+        bail!("{source} read an empty line");
     }
     Ok(password.to_owned())
 }
@@ -321,22 +324,31 @@ mod tests {
     #[test]
     fn reads_the_first_line_and_drops_the_line_ending() {
         let mut input: &[u8] = b"hunter2\nsecond\n";
-        assert_eq!(password_from_reader(&mut input).unwrap(), "hunter2");
+        assert_eq!(
+            password_from_reader(&mut input, "--password-stdin").unwrap(),
+            "hunter2"
+        );
         let mut input: &[u8] = b"hunter2\r\n";
-        assert_eq!(password_from_reader(&mut input).unwrap(), "hunter2");
+        assert_eq!(
+            password_from_reader(&mut input, "--password-stdin").unwrap(),
+            "hunter2"
+        );
     }
 
     #[test]
     fn keeps_spaces_inside_the_password() {
         let mut input: &[u8] = b" a b \n";
-        assert_eq!(password_from_reader(&mut input).unwrap(), " a b ");
+        assert_eq!(
+            password_from_reader(&mut input, "--password-stdin").unwrap(),
+            " a b "
+        );
     }
 
     #[test]
     fn refuses_an_empty_line_and_an_empty_stream() {
         let mut line: &[u8] = b"\n";
-        assert!(password_from_reader(&mut line).is_err());
+        assert!(password_from_reader(&mut line, "--password-stdin").is_err());
         let mut nothing: &[u8] = b"";
-        assert!(password_from_reader(&mut nothing).is_err());
+        assert!(password_from_reader(&mut nothing, "--password-stdin").is_err());
     }
 }

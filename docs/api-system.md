@@ -99,6 +99,8 @@ by side. This is a different log from the KVM app's own audit trail
 
 ## Users (`user/`)
 
+Creating, changing and deleting accounts is in [api-users.md](api-users.md).
+
 ### list
 - **Method**: GET, plain
 - **Response**: `{list: [...]}`

@@ -498,6 +498,7 @@ mod tests {
             "snapshot rm",
             "docker rm",
             "share delete",
+            "user delete",
         ] {
             assert!(BODY.contains(word), "the body does not name `{word}`");
         }

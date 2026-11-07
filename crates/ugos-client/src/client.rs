@@ -202,6 +202,57 @@ impl UgosClient {
             .await
     }
 
+    /// Perform a DELETE request that carries a JSON body and is confirmed
+    /// with the account's password, which UGOS asks for before it deletes a
+    /// user account.
+    ///
+    /// The password goes in the `X-CurPass-Token` header, sealed the way
+    /// [`seal_password`](Self::seal_password) does it. It is the one this
+    /// client logged in with.
+    ///
+    /// # Errors
+    ///
+    /// Returns the appropriate [`UgosError`] on API, crypto or network failure.
+    pub async fn delete_with_body_confirmed<
+        T: DeserializeOwned + Send,
+        B: serde::Serialize + Sync,
+    >(
+        &self,
+        path: &str,
+        body: &B,
+    ) -> Result<T> {
+        self.retrying(|| async {
+            let token = self.session.read().await.token.clone();
+            let url = Self::append_token(&self.url_for(path), &token);
+            let sealed = self.seal_password(&self.creds.password).await?;
+            let resp: ApiResponse<serde_json::Value> = self
+                .http
+                .delete(&url)
+                .header("X-CurPass-Token", sealed)
+                .json(body)
+                .send()
+                .await?
+                .json()
+                .await?;
+            Self::decode(resp)
+        })
+        .await
+    }
+
+    /// Seal a password the way the login does: RSA with the login key that
+    /// `verify/check` hands out, and not the session key of the encrypted
+    /// transport. UGOS expects passwords in this form wherever the web UI
+    /// sends one, including the password of a new account.
+    ///
+    /// # Errors
+    ///
+    /// Returns the appropriate [`UgosError`] on crypto or network failure.
+    pub async fn seal_password(&self, password: &str) -> Result<String> {
+        let login_key =
+            auth::fetch_rsa_key(&self.http, &self.base_url, &self.creds.username).await?;
+        auth::encrypt_password(&login_key, password)
+    }
+
     /// Internal request with a JSON body for methods other than POST.
     async fn do_request<T: DeserializeOwned + Send, B: serde::Serialize + Sync>(
         &self,

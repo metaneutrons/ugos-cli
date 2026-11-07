@@ -843,3 +843,133 @@ mod shares {
         assert_eq!(advanced.shares[0].name, "docker");
     }
 }
+
+// ── User accounts ───────────────────────────────────────────────────
+
+mod users {
+    use crate::api::users::{create_body, edit_body, pick_user};
+    use crate::error::UgosError;
+    use crate::types::syslog::{GroupRef, User};
+    use crate::types::users::{DISABLED, DeleteCheck, EXPIRES_NEVER, NewUser, ROLE_USER, UserEdit};
+
+    /// `user/list`, trimmed to what matters and with made-up people.
+    const USER_LIST: &str = r#"{"list": [
+        {"account_type": 0, "deny_change_pwd": false, "description": "",
+         "dir_quota": 0, "email": "a****a@example.org",
+         "email_encrypted": "AAAA", "enable_home_dir": true,
+         "expire_date": "", "expire_time": -1,
+         "groups": [{"gid": 10, "name": "admin"}, {"gid": 100, "name": "users"}],
+         "is_expired": false, "role": "admin", "uid": 1000, "unit": 0,
+         "username": "anna", "otp_info": {"secret": ""}},
+        {"description": "guest", "email": "", "expire_time": 1, "groups": null,
+         "role": "users", "uid": 1001, "username": "1000"}
+    ]}"#;
+
+    fn users() -> Vec<User> {
+        #[derive(serde::Deserialize)]
+        struct List {
+            list: Vec<User>,
+        }
+        serde_json::from_str::<List>(USER_LIST).unwrap().list
+    }
+
+    #[test]
+    fn a_listed_account_keeps_what_an_edit_needs() {
+        let all = users();
+        let anna = &all[0];
+        assert_eq!(anna.role, "admin");
+        assert_eq!(anna.uid, 1000);
+        assert_eq!(anna.groups.len(), 2);
+        assert_eq!(anna.groups[1].name, "users");
+        assert_eq!(anna.expire_time, EXPIRES_NEVER);
+        assert!(anna.enable_home_dir);
+        assert_eq!(anna.email_encrypted, "AAAA");
+    }
+
+    #[test]
+    fn missing_fields_and_null_groups_do_not_break_the_list() {
+        let guest = &users()[1];
+        assert_eq!(guest.expire_time, DISABLED);
+        assert_eq!(guest.groups, Vec::<GroupRef>::new());
+        assert_eq!(guest.dir_quota, 0);
+    }
+
+    #[test]
+    fn the_obscured_email_does_not_go_back_out_in_json() {
+        let json = serde_json::to_value(&users()[0]).unwrap();
+        assert!(json.get("email_encrypted").is_none());
+        assert_eq!(json["email"], "a****a@example.org");
+    }
+
+    #[test]
+    fn a_name_wins_over_a_uid_and_a_uid_still_finds() {
+        let all = users();
+        assert_eq!(pick_user(&all, "1000").unwrap().uid, 1001);
+        assert_eq!(pick_user(&all, "anna").unwrap().uid, 1000);
+        assert_eq!(pick_user(&all, "1001").unwrap().username, "1000");
+        assert!(matches!(
+            pick_user(&all, "nobody"),
+            Err(UgosError::NotFound { kind: "user", .. })
+        ));
+    }
+
+    #[test]
+    fn the_create_body_carries_the_sealed_password_only() {
+        let mut new = NewUser::new("ben", "secret-in-the-clear");
+        new.groups = vec!["family".into()];
+        new.email = "ben@example.org".into();
+        let body = create_body(&new, "SEALED");
+        assert_eq!(body["password"], "SEALED");
+        assert!(!body.to_string().contains("secret-in-the-clear"));
+        assert_eq!(body["groups"], serde_json::json!([{"name": "family"}]));
+        assert_eq!(body["role"], ROLE_USER);
+        assert_eq!(body["enable_home_dir"], true);
+        assert_eq!(body["email"], "ben@example.org");
+    }
+
+    fn edit() -> UserEdit {
+        UserEdit {
+            uid: 1001,
+            username: "ben".into(),
+            email: "ben@example.org".into(),
+            description: "Ben".into(),
+            role: ROLE_USER.into(),
+            groups: vec!["family".into()],
+            enable_home_dir: true,
+            deny_change_pwd: false,
+            dir_quota: 0,
+            unit: 1,
+            password: Some("secret-in-the-clear".into()),
+            expire_time: EXPIRES_NEVER,
+            expire_date: String::new(),
+        }
+    }
+
+    #[test]
+    fn the_edit_body_always_names_the_email_and_the_uid() {
+        // Leaving the email out made UGOS blank it.
+        let body = edit_body(&edit(), None);
+        assert_eq!(body["email"], "ben@example.org");
+        assert_eq!(body["uid"], 1001);
+        assert_eq!(body["expire_time"], -1);
+        assert_eq!(body["groups"], serde_json::json!([{"name": "family"}]));
+    }
+
+    #[test]
+    fn the_edit_body_has_a_password_only_when_there_is_a_sealed_one() {
+        assert!(edit_body(&edit(), None).get("password").is_none());
+        let body = edit_body(&edit(), Some("SEALED"));
+        assert_eq!(body["password"], "SEALED");
+        assert!(!body.to_string().contains("secret-in-the-clear"));
+    }
+
+    #[test]
+    fn the_delete_check_reads_what_would_be_lost() {
+        let check: DeleteCheck =
+            serde_json::from_str(r#"{"safespace": false, "snapshot": true}"#).unwrap();
+        assert!(check.snapshot);
+        assert!(!check.safespace);
+        let none: DeleteCheck = serde_json::from_str("{}").unwrap();
+        assert_eq!(none, DeleteCheck::default());
+    }
+}

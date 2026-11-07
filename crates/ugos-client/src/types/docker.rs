@@ -1,16 +1,8 @@
 //! Docker container and image management types.
 
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::{Deserialize, Serialize};
 
-/// Accept the UGOS convention of returning either an array or `null` for an
-/// optional list field while presenting callers with an ordinary empty vector.
-fn null_vec_as_empty<'de, D, T>(deserializer: D) -> Result<Vec<T>, D::Error>
-where
-    D: Deserializer<'de>,
-    T: Deserialize<'de>,
-{
-    Option::<Vec<T>>::deserialize(deserializer).map(Option::unwrap_or_default)
-}
+use super::common::null_vec_as_empty;
 
 // ── Overview ────────────────────────────────────────────────────────
 
