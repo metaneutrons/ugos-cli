@@ -222,6 +222,230 @@ Show NAS host hardware info (CPU cores, memory)
 
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
+## ugos_hw_buzzer
+
+Show the buzzer settings: which events sound it
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_hw_buzzer_alarms
+
+List the events the buzzer can sound for
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_hw_buzzer_set
+
+Change which events sound the buzzer
+
+- `cache_exception`: A cache disk fails.
+- `fan_fault`: A fan fails.
+- `shutdown`: The NAS shuts down.
+- `startup`: The NAS starts (not on every model).
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `too_hot`: A disk is too hot.
+
+## ugos_hw_cpu
+
+Show the CPU performance mode
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_hw_cpu_set
+
+Set the CPU performance mode: high, balanced or save
+
+- `mode` (required): The mode: for the CPU `high`, `balanced` or `save`; for the fan
+`quiet`, `auto` or `full`.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_hw_fan
+
+Show the fan mode and the fan curve
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_hw_fan_curve
+
+Set a custom fan curve of 17 duties per fan (20 to 100 percent at 0 to 80 degrees). Only on models that support it
+
+- `cpu` (required): 17 duties for the CPU fan. From 55 °C the duty is 100 whatever is given.
+- `sys` (required): 17 duties (20 to 100 %) for the device fan at 0, 5, ... 80 °C.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_hw_fan_set
+
+Set the fan mode: quiet, auto or full
+
+- `mode` (required): The mode: for the CPU `high`, `balanced` or `save`; for the fan
+`quiet`, `auto` or `full`.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_hw_gpu
+
+List the GPUs of the NAS and their mode
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_hw_gpu_mode
+
+Set a GPU to NAS use or VFIO passthrough. The NAS restarts, so this is refused unless force is given: ask the user first
+
+- `accept_disclaimer`: Accept the passthrough disclaimer, as the web UI asks the user to.
+- `force`: Go on although the NAS restarts. Ask the user first.
+- `gpu` (required): The GPU id or name.
+- `mode` (required): `nas` or `vfio` (passthrough).
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_hw_led
+
+Show the LED settings and brightness schedule
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_hw_led_brightness
+
+Set the LED brightness on weekdays
+
+- `days` (required): Weekdays, `1` Monday to `7` Sunday.
+- `percent` (required): Brightness in percent.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_hw_led_off
+
+Switch the LEDs off
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_hw_led_on
+
+Switch the LEDs on
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_hw_power
+
+Show the power settings: restart after power loss, wake on LAN, disk sleep and the schedule
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_hw_power_set
+
+Change the power settings
+
+- `auto_on`: Power on again after a power loss.
+- `schedule`: The power schedule on or off.
+- `sleep`: When disks sleep: `never`, `10m`, `20m`, `30m`, `1h`, `2h` or `3h`.
+- `sleep_log`: Log the sleeping.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `usb_sleep`: When USB disks sleep, like `sleep`.
+- `wake`: What wakes a sleeping disk: `login` or `rw`.
+- `wol`: Wake on LAN.
+
+## ugos_hw_schedule_add
+
+Add an entry to the power schedule (power on or off at a time on weekdays)
+
+- `action` (required): `on` powers the NAS on, `off` powers it off.
+- `days` (required): Weekdays, `1` Monday to `7` Sunday, comma separated, or `daily`,
+`weekdays`, `weekend`.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `time` (required): Time as `HH:MM`.
+
+## ugos_hw_schedule_remove
+
+Remove the power schedule entry at a position
+
+- `position` (required): Position, counting from 1.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_hw_screen
+
+Show the settings of the small display
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_hw_screen_set
+
+Change brightness, timeout, wallpaper or language of the small display
+
+- `brightness`: Brightness, 25 to 100.
+- `language`: A language key from the language list.
+- `off_after`: Seconds until it goes dark: 15, 30, 60, 120, 300, or 0 for never.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `wallpaper`: A wallpaper path from the wallpaper list.
+
+## ugos_hw_screen_wallpapers
+
+List the wallpapers of the small display
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_hw_ups
+
+Show the UPS settings and state
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_hw_ups_check
+
+Check that a NUT server answers at an address
+
+- `name` (required): What to look at: a name, label or id, as the matching list tool shows it.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_hw_ups_disconnect
+
+Disconnect the UPS
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_hw_ups_firmware
+
+Show the firmware of the USB UPS
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_hw_ups_mibs
+
+List the SNMP MIBs for a UPS
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_hw_ups_set
+
+Connect a UPS (USB, SNMP or network) and set what to do on battery. Stops and restarts the UPS service
+
+- `action`: What to do on battery: `standby` or `shutdown` (default).
+- `community`: SNMP community.
+- `mib`: SNMP MIB (default `auto`).
+- `network`: A UPS that another NAS serves, at this address.
+- `nut_server`: Share the USB UPS with other NAS (NUT server).
+- `snmp`: A UPS read by SNMP at this address.
+- `snmp_version`: SNMP version, 1 or 2 (default 2).
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `usb`: A UPS on a USB port.
+- `wait`: When: `battery-low` (default), `now`, or a time like `5m` or `2h`.
+
+## ugos_hw_zram
+
+Show whether memory compression (zram) is on
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_hw_zram_off
+
+Switch memory compression off. The NAS restarts, so this is refused unless force is given: ask the user first
+
+- `force`: Go on although this restarts the NAS. Ask the user first.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_hw_zram_on
+
+Switch memory compression on
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
 ## ugos_image_delete
 
 Delete an ISO/disk image
@@ -241,6 +465,25 @@ List ISO/disk images available for KVM
 Check which VMs use an image
 
 - `name` (required): Image name.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_lang_list
+
+List the languages
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_lang_set
+
+Set the language (name is the language key, or auto)
+
+- `name` (required): What to look at: a name, label or id, as the matching list tool shows it.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_lang_show
+
+Show the language of the NAS
+
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
 ## ugos_log_operators
@@ -772,10 +1015,95 @@ Check which VMs use a storage volume
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 - `uuid` (required): Storage volume UUID.
 
+## ugos_system_finder
+
+Show the finder switches: improvement plan and findable from the web
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_system_finder_set
+
+Change the finder switches
+
+- `improvement`: Join the improvement plan.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `web_find`: Let the NAS be found from the web.
+
+## ugos_system_hostname_set
+
+Set the host name of the NAS (name is the new host name)
+
+- `name` (required): What to look at: a name, label or id, as the matching list tool shows it.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
 ## ugos_target_list
 
 List available UGOS NAS targets. Call this first to discover target names for use in other tools.
 
+
+## ugos_terminal_set
+
+Change SSH and Telnet. Switching a service on is refused unless force is given: it opens a way in, so ask the user first
+
+- `force`: Go on although this switches a service on. Ask the user first.
+- `lan_only`: Only from the local network, for both.
+- `sftp`: SFTP over SSH.
+- `ssh`: SSH on or off.
+- `ssh_duration`: How long SSH stays on: `1` 10 min, `2` 30 min, `3` 1 h, `4` 2 h, `5` 3 h,
+`6` 6 h, `7` until switched off.
+- `ssh_encryption`: SSH encryption: `1` low or `3` high.
+- `ssh_port`: SSH port.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `telnet`: Telnet on or off. Telnet sends passwords in the clear.
+- `telnet_port`: Telnet port.
+
+## ugos_terminal_show
+
+Show SSH and Telnet settings
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_time_server_add
+
+Add a time server (name is the host)
+
+- `name` (required): What to look at: a name, label or id, as the matching list tool shows it.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_time_server_remove
+
+Remove a time server (name is the host)
+
+- `name` (required): What to look at: a name, label or id, as the matching list tool shows it.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_time_servers
+
+List the time servers
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_time_set
+
+Set the time zone, a time server or the clock by hand. A change that may invalidate the cloud certificate needs force
+
+- `force`: Go on although the cloud certificate may not be valid then.
+- `manual_utc`: Set the clock by hand, as `YYYY-MM-DD HH:MM:SS` in UTC.
+- `server`: Keep the clock from this time server.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `timezone`: A time zone from the zone list, e.g. `Europe/Berlin`.
+
+## ugos_time_show
+
+Show time zone, time and how the clock is kept
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_time_zones
+
+List the time zones
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
 
 ## ugos_usb_list
 

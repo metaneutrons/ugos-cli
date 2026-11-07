@@ -1,5 +1,8 @@
 //! Command dispatch — maps CLI actions to API calls and output.
 
+mod clock;
+mod hw;
+mod hw_power;
 mod nas_storage;
 mod net;
 mod net_links;
@@ -52,6 +55,10 @@ pub async fn run(
         Resource::Log(args) => syslog(client, args, fmt, w).await,
         Resource::User { action } => user::user(client, action, fmt, w).await,
         Resource::Group { action } => user::group(client, action, fmt, w).await,
+        Resource::Hw { action } => hw::hw(client, action, fmt, w).await,
+        Resource::Time { action } => clock::time_cmd(client, action, fmt, w).await,
+        Resource::Lang { action } => clock::lang_cmd(client, action, fmt, w).await,
+        Resource::Terminal { action } => clock::terminal_cmd(client, action, fmt, w).await,
         Resource::Net { action } => net::net(client, action, fmt, w).await,
         Resource::Pool { action } => nas_storage::pool(client, action, fmt, w).await,
         Resource::Volume { action } => nas_storage::volume(client, action, fmt, w).await,
@@ -323,6 +330,15 @@ async fn system(
                 }
                 OutputFormat::Json => output::print_json(w, &svcs)?,
             }
+        }
+        SystemAction::Hostname { name } => {
+            clock::hostname(client, name.as_deref(), fmt, w).await?;
+        }
+        SystemAction::Finder {
+            improvement,
+            web_find,
+        } => {
+            clock::finder_cmd(client, *improvement, *web_find, fmt, w).await?;
         }
     }
     Ok(())

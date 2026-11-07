@@ -1,7 +1,14 @@
 //! Command-line argument definitions.
 
+mod hw;
 mod net;
 
+pub use self::hw::{
+    BuzzerAction, CpuAction, CpuMode, FanAction, FanMode, GpuAction, GpuModeArg, HwAction,
+    LangAction, LedAction, OnOff, PowerAction, PowerSetArgs, ScheduleAction, ScreenAction,
+    ServerAction, TerminalAction, TerminalSetArgs, TimeAction, UpsAction, UpsActionKind,
+    UpsSetArgs, Wake, ZramAction,
+};
 pub use self::net::{
     BondAction, BridgeAction, DnsArgs, FlowAction, GatewayAction, Ipv6Arg, NetAction, ProxyAction,
     SetArgs, WifiCommand,
@@ -132,6 +139,27 @@ pub enum Resource {
     User {
         #[command(subcommand)]
         action: UserAction,
+    },
+    /// Hardware of the NAS: buzzer, CPU mode, fans, LEDs, display, power, UPS,
+    /// memory compression and GPUs.
+    Hw {
+        #[command(subcommand)]
+        action: HwAction,
+    },
+    /// Time, time zone and time servers of the NAS.
+    Time {
+        #[command(subcommand)]
+        action: TimeAction,
+    },
+    /// The default language of the NAS.
+    Lang {
+        #[command(subcommand)]
+        action: LangAction,
+    },
+    /// SSH and Telnet on the NAS.
+    Terminal {
+        #[command(subcommand)]
+        action: TerminalAction,
     },
     /// Network settings of the NAS: interfaces, DNS, gateways, bonds,
     /// bridges, Wi-Fi and traffic control. `network` is the KVM network.
@@ -688,6 +716,20 @@ pub enum SystemAction {
     },
     /// Installed services and their resource use.
     Services,
+    /// Show the host name, or set it: letters, digits and hyphens, up to 15.
+    Hostname {
+        /// The new name.
+        name: Option<String>,
+    },
+    /// Show or set the finder and improvement-plan switches.
+    Finder {
+        /// Join the improvement plan.
+        #[arg(long, value_enum)]
+        improvement: Option<OnOff>,
+        /// Let the NAS be found from the web.
+        #[arg(long, value_enum)]
+        web_find: Option<OnOff>,
+    },
 }
 
 /// PCI passthrough subcommands.

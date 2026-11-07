@@ -22,6 +22,7 @@ use rmcp::{
 };
 mod manage;
 mod nas;
+mod nas_hw;
 mod nas_net;
 
 use tokio::sync::OnceCell;
@@ -34,6 +35,10 @@ use crate::manage::{
     ShareParam, ShareUpdateParam, UserUpdateParam,
 };
 use crate::nas::NameParam;
+use crate::nas_hw::{
+    BuzzerParam, FanCurveParam, FinderParam, ForceParam, GpuParam, LedParam, ModeParam,
+    PositionParam, PowerParam, ScheduleParam, ScreenParam, TerminalParam, TimeParam, UpsParam,
+};
 use crate::nas_net::{
     BondCreateParam, FlowAddParam, FlowPositionParam, GatewayOrderParam, IfaceForceParam,
     NetDnsParam, NetProxyParam, NetSetParam, PortsParam, WifiParam,
@@ -1780,6 +1785,378 @@ impl UgosMcp {
     async fn ugos_net_flow_enable(&self, Parameters(p): Parameters<FlowPositionParam>) -> String {
         match self.client(&p.target).await {
             Ok(c) => nas_net::flow_enable(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    // ── Hardware, power, time, language, terminal ───────────────────
+    #[tool(description = "Show the buzzer settings: which events sound it")]
+    async fn ugos_hw_buzzer(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::buzzer_show(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the events the buzzer can sound for")]
+    async fn ugos_hw_buzzer_alarms(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::buzzer_alarms(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Change which events sound the buzzer")]
+    async fn ugos_hw_buzzer_set(&self, Parameters(p): Parameters<BuzzerParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::buzzer_set(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show the CPU performance mode")]
+    async fn ugos_hw_cpu(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::cpu_show(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Set the CPU performance mode: high, balanced or save")]
+    async fn ugos_hw_cpu_set(&self, Parameters(p): Parameters<ModeParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::cpu_set(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show the fan mode and the fan curve")]
+    async fn ugos_hw_fan(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::fan_show(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Set the fan mode: quiet, auto or full")]
+    async fn ugos_hw_fan_set(&self, Parameters(p): Parameters<ModeParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::fan_set(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Set a custom fan curve of 17 duties per fan (20 to 100 percent at 0 to 80 degrees). Only on models that support it"
+    )]
+    async fn ugos_hw_fan_curve(&self, Parameters(p): Parameters<FanCurveParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::fan_curve(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show the LED settings and brightness schedule")]
+    async fn ugos_hw_led(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::led_show(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Switch the LEDs on")]
+    async fn ugos_hw_led_on(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::led_on(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Switch the LEDs off")]
+    async fn ugos_hw_led_off(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::led_off(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Set the LED brightness on weekdays")]
+    async fn ugos_hw_led_brightness(&self, Parameters(p): Parameters<LedParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::led_brightness(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show the settings of the small display")]
+    async fn ugos_hw_screen(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::screen_show(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the wallpapers of the small display")]
+    async fn ugos_hw_screen_wallpapers(
+        &self,
+        Parameters(p): Parameters<TargetOnlyParam>,
+    ) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::screen_wallpapers(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Change brightness, timeout, wallpaper or language of the small display")]
+    async fn ugos_hw_screen_set(&self, Parameters(p): Parameters<ScreenParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::screen_set(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show whether memory compression (zram) is on")]
+    async fn ugos_hw_zram(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::zram_show(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Switch memory compression on")]
+    async fn ugos_hw_zram_on(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::zram_on(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Switch memory compression off. The NAS restarts, so this is refused unless force is given: ask the user first"
+    )]
+    async fn ugos_hw_zram_off(&self, Parameters(p): Parameters<ForceParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::zram_off(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Show the power settings: restart after power loss, wake on LAN, disk sleep and the schedule"
+    )]
+    async fn ugos_hw_power(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::power_show(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Change the power settings")]
+    async fn ugos_hw_power_set(&self, Parameters(p): Parameters<PowerParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::power_set(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Add an entry to the power schedule (power on or off at a time on weekdays)"
+    )]
+    async fn ugos_hw_schedule_add(&self, Parameters(p): Parameters<ScheduleParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::schedule_add(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Remove the power schedule entry at a position")]
+    async fn ugos_hw_schedule_remove(&self, Parameters(p): Parameters<PositionParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::schedule_remove(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show the UPS settings and state")]
+    async fn ugos_hw_ups(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::ups_show(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Connect a UPS (USB, SNMP or network) and set what to do on battery. Stops and restarts the UPS service"
+    )]
+    async fn ugos_hw_ups_set(&self, Parameters(p): Parameters<UpsParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::ups_set(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Disconnect the UPS")]
+    async fn ugos_hw_ups_disconnect(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::ups_disconnect(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Check that a NUT server answers at an address")]
+    async fn ugos_hw_ups_check(&self, Parameters(p): Parameters<NameParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::ups_check(c, &p.name).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the SNMP MIBs for a UPS")]
+    async fn ugos_hw_ups_mibs(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::ups_mibs(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show the firmware of the USB UPS")]
+    async fn ugos_hw_ups_firmware(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::ups_firmware(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the GPUs of the NAS and their mode")]
+    async fn ugos_hw_gpu(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::gpu_list(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Set a GPU to NAS use or VFIO passthrough. The NAS restarts, so this is refused unless force is given: ask the user first"
+    )]
+    async fn ugos_hw_gpu_mode(&self, Parameters(p): Parameters<GpuParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::gpu_mode(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show time zone, time and how the clock is kept")]
+    async fn ugos_time_show(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::time_show(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the time zones")]
+    async fn ugos_time_zones(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::time_zones(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Set the time zone, a time server or the clock by hand. A change that may invalidate the cloud certificate needs force"
+    )]
+    async fn ugos_time_set(&self, Parameters(p): Parameters<TimeParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::time_set(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the time servers")]
+    async fn ugos_time_servers(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::time_servers(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Add a time server (name is the host)")]
+    async fn ugos_time_server_add(&self, Parameters(p): Parameters<NameParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::time_server_add(c, &p.name).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Remove a time server (name is the host)")]
+    async fn ugos_time_server_remove(&self, Parameters(p): Parameters<NameParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::time_server_remove(c, &p.name).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show the language of the NAS")]
+    async fn ugos_lang_show(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::lang_show(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the languages")]
+    async fn ugos_lang_list(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::lang_list(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Set the language (name is the language key, or auto)")]
+    async fn ugos_lang_set(&self, Parameters(p): Parameters<NameParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::lang_set(c, &p.name).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show SSH and Telnet settings")]
+    async fn ugos_terminal_show(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::terminal_show(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Change SSH and Telnet. Switching a service on is refused unless force is given: it opens a way in, so ask the user first"
+    )]
+    async fn ugos_terminal_set(&self, Parameters(p): Parameters<TerminalParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::terminal_set(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Set the host name of the NAS (name is the new host name)")]
+    async fn ugos_system_hostname_set(&self, Parameters(p): Parameters<NameParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::hostname_set(c, &p.name).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show the finder switches: improvement plan and findable from the web")]
+    async fn ugos_system_finder(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::finder_show(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Change the finder switches")]
+    async fn ugos_system_finder_set(&self, Parameters(p): Parameters<FinderParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_hw::finder_set(c, &p).await,
             Err(e) => e,
         }
     }

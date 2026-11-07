@@ -42,6 +42,7 @@ macro_rules! table_row {
 
 // Row types of the NAS administration commands. They use `table_row!`, so they
 // come after it.
+pub mod hw;
 pub mod nas_storage;
 pub mod net;
 
