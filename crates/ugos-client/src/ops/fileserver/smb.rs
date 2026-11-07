@@ -124,25 +124,8 @@ fn has_protocol(config: &Config, code: i64) -> bool {
         .is_some_and(|list| list.iter().any(|v| v.as_i64() == Some(code)))
 }
 
-/// Check the settings together, as the web UI's dialog does, and say what
-/// needs `force`.
-pub(super) fn finish(
-    current: &Config,
-    next: &mut Config,
-    enable: bool,
-    force: bool,
-) -> Result<Vec<PortUse>> {
-    let name = next
-        .get("work_group")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_owned();
-    let name = if name.is_empty() {
-        "WORKGROUP".to_owned()
-    } else {
-        name
-    };
-    let _ = next.insert("work_group".into(), Value::String(name));
+/// The combinations of settings the web UI's dialog refuses.
+fn check_combinations(next: &Config) -> Result<()> {
     if next
         .get("smb_protocols")
         .and_then(Value::as_array)
@@ -176,19 +159,38 @@ pub(super) fn finish(
             "macOS special characters need symbolic links, which are off",
         ));
     }
-    if !force {
-        if has_protocol(next, 1) && !has_protocol(current, 1) {
-            return Err(UgosError::NeedsForce(
-                "SMB1 is a high-risk protocol, old and open to attacks".into(),
-            ));
-        }
-        if flag(next, "enable_ntlmv1") && !flag(current, "enable_ntlmv1") {
-            return Err(UgosError::NeedsForce(
-                "NTLMv1 is a weak login that can be broken".into(),
-            ));
-        }
+    Ok(())
+}
+
+/// What the web UI asks a confirmation for.
+fn check_risks(current: &Config, next: &Config) -> Result<()> {
+    if has_protocol(next, 1) && !has_protocol(current, 1) {
+        return Err(UgosError::NeedsForce(
+            "SMB1 is a high-risk protocol, old and open to attacks".into(),
+        ));
     }
-    let _ = enable;
+    if flag(next, "enable_ntlmv1") && !flag(current, "enable_ntlmv1") {
+        return Err(UgosError::NeedsForce(
+            "NTLMv1 is a weak login that can be broken".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// Check the settings together, as the web UI's dialog does, and say what
+/// needs `force`.
+pub(super) fn finish(current: &Config, next: &mut Config, force: bool) -> Result<Vec<PortUse>> {
+    let name = next
+        .get("work_group")
+        .and_then(Value::as_str)
+        .unwrap_or_default();
+    if name.is_empty() {
+        let _ = next.insert("work_group".into(), Value::String("WORKGROUP".into()));
+    }
+    check_combinations(next)?;
+    if !force {
+        check_risks(current, next)?;
+    }
     Ok(Vec::new())
 }
 

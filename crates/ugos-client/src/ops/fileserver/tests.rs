@@ -119,14 +119,14 @@ fn smb_needs_force_for_smb1_and_ntlmv1() {
     let mut next = current.clone();
     let _ = next.insert("smb_protocols".into(), json!([1, 2]));
     assert!(matches!(
-        smb::finish(&current, &mut next, false, false),
+        smb::finish(&current, &mut next, false),
         Err(UgosError::NeedsForce(_))
     ));
-    assert!(smb::finish(&current, &mut next, false, true).is_ok());
+    assert!(smb::finish(&current, &mut next, true).is_ok());
     let mut next = current.clone();
     let _ = next.insert("enable_ntlmv1".into(), json!(true));
     assert!(matches!(
-        smb::finish(&current, &mut next, false, false),
+        smb::finish(&current, &mut next, false),
         Err(UgosError::NeedsForce(_))
     ));
 }
@@ -143,10 +143,7 @@ fn smb_refuses_the_combinations_the_web_ui_refuses() {
         let _ = next.insert("encrypt_mode".into(), json!(2));
         let _ = next.insert("enable_op_locks".into(), json!(key != "enable_smb2_leases"));
         let _ = next.insert(key.into(), value);
-        assert!(
-            smb::finish(&current, &mut next, false, true).is_err(),
-            "{key}"
-        );
+        assert!(smb::finish(&current, &mut next, true).is_err(), "{key}");
     }
 }
 

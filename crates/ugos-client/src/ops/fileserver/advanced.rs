@@ -37,29 +37,16 @@ pub struct AdvancedChange {
 /// More Time Machine targets than this make the web UI ask first.
 const SOFT_LIMIT: usize = 5;
 
-/// Apply a change and read it back.
-///
-/// # Errors
-///
-/// Returns [`UgosError::NeedsForce`] where the web UI asks a confirmation:
-/// discovery services switched on while SMB is off, and more than five
-/// Time Machine targets.
-pub async fn apply(
-    client: &UgosClient,
-    change: &AdvancedChange,
-    force: bool,
-) -> Result<SmbAdvanced> {
-    let current = get(client).await?;
+fn targets(shares: &SmbAdvanced) -> usize {
+    shares.shares.iter().filter(|s| s.time_backup).count()
+}
+
+/// The change as a copy of the current settings.
+fn edited(current: &SmbAdvanced, change: &AdvancedChange) -> Result<SmbAdvanced> {
     let mut next = current.clone();
-    if let Some(v) = change.wsdd2 {
-        next.wsdd2 = v;
-    }
-    if let Some(v) = change.bonjour {
-        next.bonjour = v;
-    }
-    if let Some(v) = change.upnp {
-        next.upnp = v;
-    }
+    next.wsdd2 = change.wsdd2.unwrap_or(next.wsdd2);
+    next.bonjour = change.bonjour.unwrap_or(next.bonjour);
+    next.upnp = change.upnp.unwrap_or(next.upnp);
     if let Some(names) = &change.time_machine {
         for share in &mut next.shares {
             share.time_backup = false;
@@ -73,37 +60,63 @@ pub async fn apply(
             share.time_backup = true;
         }
     }
-    let targets = next.shares.iter().filter(|s| s.time_backup).count();
-    let smb_on = Service::Smb.running(&config(client, Service::Smb).await?);
-    if !force {
-        if targets > SOFT_LIMIT && targets > current.shares.iter().filter(|s| s.time_backup).count()
-        {
-            return Err(UgosError::NeedsForce(format!(
-                "{targets} Time Machine targets are more than {SOFT_LIMIT}, which UGOS advises against"
-            )));
-        }
-        let discovery_on = (next.bonjour && !current.bonjour) || (next.wsdd2 && !current.wsdd2);
-        if discovery_on && !smb_on {
-            return Err(UgosError::NeedsForce(
-                "Bonjour and WS-Discovery announce SMB shares, and SMB is off".into(),
-            ));
-        }
+    Ok(next)
+}
+
+/// What the web UI asks a confirmation for.
+fn check_risks(current: &SmbAdvanced, next: &SmbAdvanced, smb_on: bool) -> Result<()> {
+    let count = targets(next);
+    if count > SOFT_LIMIT && count > targets(current) {
+        return Err(UgosError::NeedsForce(format!(
+            "{count} Time Machine targets are more than {SOFT_LIMIT}, which UGOS advises against"
+        )));
     }
-    let body = json!({
+    let discovery_on = (next.bonjour && !current.bonjour) || (next.wsdd2 && !current.wsdd2);
+    if discovery_on && !smb_on {
+        return Err(UgosError::NeedsForce(
+            "Bonjour and WS-Discovery announce SMB shares, and SMB is off".into(),
+        ));
+    }
+    Ok(())
+}
+
+/// The body of `file/advanced/start`.
+fn body(next: &SmbAdvanced) -> Value {
+    json!({
         "enableWsdd2Service": next.wsdd2,
         "enableBonjourService": next.bonjour,
         "enableUPnPService": next.upnp,
-        "enableTimeMachine": targets > 0,
+        "enableTimeMachine": targets(next) > 0,
         "shareFolders": next.shares.iter().map(|s| json!({
             "fileId": s.id, "fileName": s.name, "select": s.time_backup,
         })).collect::<Vec<Value>>(),
-    });
-    let _: Value = client.post("file/advanced/start", &body).await?;
+    })
+}
+
+/// Apply a change and read it back.
+///
+/// # Errors
+///
+/// Returns [`UgosError::NeedsForce`] where the web UI asks a confirmation:
+/// discovery services switched on while SMB is off, and more than five
+/// Time Machine targets.
+pub async fn apply(
+    client: &UgosClient,
+    change: &AdvancedChange,
+    force: bool,
+) -> Result<SmbAdvanced> {
+    let current = get(client).await?;
+    let next = edited(&current, change)?;
+    if !force {
+        let smb_on = Service::Smb.running(&config(client, Service::Smb).await?);
+        check_risks(&current, &next, smb_on)?;
+    }
+    let _: Value = client.post("file/advanced/start", &body(&next)).await?;
     let after = get(client).await?;
     if after.wsdd2 != next.wsdd2
         || after.bonjour != next.bonjour
         || after.upnp != next.upnp
-        || after.shares.iter().filter(|s| s.time_backup).count() != targets
+        || targets(&after) != targets(&next)
     {
         return Err(refused("UGOS said yes but the settings did not change"));
     }

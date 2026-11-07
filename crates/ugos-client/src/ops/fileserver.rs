@@ -216,7 +216,7 @@ pub async fn apply(
         mark_on(service, &mut next);
     }
     let ports = match service {
-        Service::Smb => smb::finish(&current, &mut next, enable, change.force)?,
+        Service::Smb => smb::finish(&current, &mut next, change.force)?,
         Service::Ftp => ftp::finish(&current, &mut next, enable, change.force)?,
         Service::Nfs => nfs::finish(&current, &mut next, enable, change.force)?,
         Service::Rsync => {

@@ -62,6 +62,28 @@ pub const FIELDS: &[Field] = &[
     ),
 ];
 
+/// The passive range: both ends or neither, in order.
+fn passive_range(current: &Config, next: &mut Config) -> Result<()> {
+    if !flag(next, "enable_pasv_port") {
+        for key in ["pasv_min_port", "pasv_max_port"] {
+            let old = current.get(key).cloned().unwrap_or_else(|| Value::from(0));
+            let _ = next.insert(key.into(), old);
+        }
+        return Ok(());
+    }
+    let (low, high) = (number(next, "pasv_min_port"), number(next, "pasv_max_port"));
+    if low == 0 || high == 0 {
+        return Err(refused(
+            "the passive range needs passive-min and passive-max",
+        ));
+    }
+    if low > high {
+        let _ = next.insert("pasv_min_port".into(), Value::from(high));
+        let _ = next.insert("pasv_max_port".into(), Value::from(low));
+    }
+    Ok(())
+}
+
 pub(super) fn finish(
     current: &Config,
     next: &mut Config,
@@ -77,25 +99,7 @@ pub(super) fn finish(
             "plain FTP sends names and passwords in the clear; FTPS does not".into(),
         ));
     }
-    if flag(next, "enable_pasv_port") {
-        let (low, high) = (number(next, "pasv_min_port"), number(next, "pasv_max_port"));
-        if low == 0 || high == 0 {
-            return Err(refused(
-                "the passive range needs passive-min and passive-max",
-            ));
-        }
-        if low > high {
-            let _ = next.insert("pasv_min_port".into(), Value::from(high));
-            let _ = next.insert("pasv_max_port".into(), Value::from(low));
-        }
-    } else {
-        for key in ["pasv_min_port", "pasv_max_port"] {
-            let _ = next.insert(
-                key.into(),
-                current.get(key).cloned().unwrap_or_else(|| Value::from(0)),
-            );
-        }
-    }
+    passive_range(current, next)?;
     if flag(next, "enable_rate")
         && (number(next, "max_upload_rate") <= 0 || number(next, "max_download_rate") <= 0)
     {
