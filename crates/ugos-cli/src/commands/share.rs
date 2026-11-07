@@ -8,7 +8,7 @@ use ugos_client::api::files::FilesApi;
 use ugos_client::api::shares::SharesApi;
 use ugos_client::types::files::Volume;
 use ugos_client::types::shares::{
-    Access, AclChange, NewShare, PathAcl, PrincipalKind, QUOTA_UNITS, Share, ShareInfo,
+    Access, AclChange, AclUser, NewShare, PathAcl, PrincipalKind, QUOTA_UNITS, Share, ShareInfo,
 };
 
 use crate::cli::{OutputFormat, ShareAclAction, ShareAction, SmbAction};
@@ -28,25 +28,8 @@ pub async fn share(
     w: &mut impl Write,
 ) -> Result<()> {
     match action {
-        ShareAction::List => {
-            let shares = client.share_list().await?;
-            match fmt {
-                OutputFormat::Table => {
-                    let rows: Vec<output::ShareRow> = shares.iter().map(Into::into).collect();
-                    output::print_list(w, &rows, fmt)?;
-                }
-                OutputFormat::Json => output::print_json(w, &shares)?,
-            }
-        }
-        ShareAction::Show { share } => {
-            let info = settings_of(client, share).await?;
-            match fmt {
-                OutputFormat::Table => {
-                    output::print_list(w, &output::share_info_rows(&info), fmt)?;
-                }
-                OutputFormat::Json => output::print_json(w, &info)?,
-            }
-        }
+        ShareAction::List => list(client, fmt, w).await,
+        ShareAction::Show { share } => show(client, share, fmt, w).await,
         ShareAction::Create {
             name,
             volume,
@@ -68,7 +51,7 @@ pub async fn share(
                 recycle_for_everyone: *recycle_for_everyone,
                 data_check: *data_check,
             };
-            create(client, &options, *dry_run, fmt, w).await?;
+            create(client, &options, *dry_run, fmt, w).await
         }
         ShareAction::Update {
             share,
@@ -80,20 +63,48 @@ pub async fn share(
             show_unreadable,
         } => {
             let change = SettingsChange {
-                quota: match (quota, no_quota) {
-                    (Some(text), _) => Some(parse_quota(text)?),
-                    (None, true) => Some((0, 1)),
-                    (None, false) => None,
-                },
+                quota: quota_change(quota.as_deref(), *no_quota)?,
                 network_places_hide: flag_pair(*hide_in_network, *show_in_network),
                 no_permission_hide: flag_pair(*hide_unreadable, *show_unreadable),
             };
-            update(client, share, &change, fmt, w).await?;
+            update(client, share, &change, fmt, w).await
         }
-        ShareAction::Delete { share, force } => delete(client, share, *force, fmt, w).await?,
-        ShareAction::Acl { action } => acl(client, action, fmt, w).await?,
+        ShareAction::Delete { share, force } => delete(client, share, *force, fmt, w).await,
+        ShareAction::Acl { action } => acl(client, action, fmt, w).await,
     }
-    Ok(())
+}
+
+async fn list(client: &UgosClient, fmt: OutputFormat, w: &mut impl Write) -> Result<()> {
+    let shares = client.share_list().await?;
+    match fmt {
+        OutputFormat::Table => {
+            let rows: Vec<output::ShareRow> = shares.iter().map(Into::into).collect();
+            output::print_list(w, &rows, fmt)
+        }
+        OutputFormat::Json => output::print_json(w, &shares),
+    }
+}
+
+async fn show(
+    client: &UgosClient,
+    share: &str,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
+    let info = settings_of(client, share).await?;
+    match fmt {
+        OutputFormat::Table => output::print_list(w, &output::share_info_rows(&info), fmt),
+        OutputFormat::Json => output::print_json(w, &info),
+    }
+}
+
+/// The quota change that `--quota` and `--no-quota` ask for, if any.
+fn quota_change(quota: Option<&str>, no_quota: bool) -> Result<Option<(i64, i64)>> {
+    match (quota, no_quota) {
+        (Some(text), _) => parse_quota(text).map(Some),
+        (None, true) => Ok(Some((0, 1))),
+        (None, false) => Ok(None),
+    }
 }
 
 /// What `share create` was asked for.
@@ -217,7 +228,7 @@ async fn delete(
     output::print_success(w, &format!("Deleted share '{}'", found.name), fmt)
 }
 
-/// Run an `share acl` subcommand.
+/// Run a `share acl` subcommand.
 async fn acl(
     client: &UgosClient,
     action: &ShareAclAction,
@@ -225,41 +236,55 @@ async fn acl(
     w: &mut impl Write,
 ) -> Result<()> {
     match action {
-        ShareAclAction::Show { share } => {
-            let found = client.share_find(share).await?;
-            let acl = client.share_acl(&found.path).await?;
-            match fmt {
-                OutputFormat::Table => output::print_list(w, &output::acl_rows(&acl), fmt)?,
-                OutputFormat::Json => output::print_json(w, &acl)?,
-            }
-        }
-        ShareAclAction::Set { share, rules } => {
-            let found = client.share_find(share).await?;
-            let rules = rules
-                .iter()
-                .map(|text| parse_rule(text))
-                .collect::<Result<Vec<_>>>()?;
-            let before = client.share_acl(&found.path).await?;
-            let changes = plan_changes(&before, &rules)?;
-            client.share_acl_set(&found.path, &changes).await?;
-
-            // The administrators group is kept at read and write whatever is
-            // asked, and UGOS says nothing, so read the result back.
-            let after = client.share_acl(&found.path).await?;
-            let refused = unapplied(&after, &rules);
-            if !refused.is_empty() {
-                bail!("UGOS did not apply: {}", refused.join("; "));
-            }
-            match fmt {
-                OutputFormat::Table => {
-                    writeln!(w, "Updated access on '{}'", found.name)?;
-                    output::print_list(w, &output::acl_rows(&after), fmt)?;
-                }
-                OutputFormat::Json => output::print_json(w, &after)?,
-            }
-        }
+        ShareAclAction::Show { share } => acl_show(client, share, fmt, w).await,
+        ShareAclAction::Set { share, rules } => acl_set(client, share, rules, fmt, w).await,
     }
-    Ok(())
+}
+
+async fn acl_show(
+    client: &UgosClient,
+    share: &str,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
+    let found = client.share_find(share).await?;
+    let acl = client.share_acl(&found.path).await?;
+    match fmt {
+        OutputFormat::Table => output::print_list(w, &output::acl_rows(&acl), fmt),
+        OutputFormat::Json => output::print_json(w, &acl),
+    }
+}
+
+async fn acl_set(
+    client: &UgosClient,
+    share: &str,
+    rules: &[String],
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
+    let found = client.share_find(share).await?;
+    let rules = rules
+        .iter()
+        .map(|text| parse_rule(text))
+        .collect::<Result<Vec<_>>>()?;
+    let before = client.share_acl(&found.path).await?;
+    let changes = plan_changes(&before, &rules)?;
+    client.share_acl_set(&found.path, &changes).await?;
+
+    // The administrators group is kept at read and write whatever is
+    // asked, and UGOS says nothing, so read the result back.
+    let after = client.share_acl(&found.path).await?;
+    let refused = unapplied(&after, &rules);
+    if !refused.is_empty() {
+        bail!("UGOS did not apply: {}", refused.join("; "));
+    }
+    match fmt {
+        OutputFormat::Table => {
+            writeln!(w, "Updated access on '{}'", found.name)?;
+            output::print_list(w, &output::acl_rows(&after), fmt)
+        }
+        OutputFormat::Json => output::print_json(w, &after),
+    }
 }
 
 /// Run an `smb` subcommand.
@@ -473,50 +498,49 @@ fn parse_rule(text: &str) -> Result<Rule> {
     })
 }
 
+/// The users of an access list, whatever group lists them.
+fn users_of(acl: &PathAcl) -> impl Iterator<Item = &AclUser> {
+    acl.acls.iter().flat_map(|group| &group.users)
+}
+
+/// Whether the rule's principal is an administrator, or an error that names
+/// the principals the list does show.
+fn resolve_admin(acl: &PathAcl, rule: &Rule) -> Result<bool> {
+    match rule.kind {
+        PrincipalKind::Group => {
+            if acl.acls.iter().any(|group| group.name == rule.name) {
+                return Ok(false);
+            }
+            bail!(
+                "no group '{}' in this share's access list; known groups: {}",
+                rule.name,
+                known(acl.acls.iter().map(|group| group.name.as_str()))
+            )
+        }
+        PrincipalKind::User => match users_of(acl).find(|user| user.username == rule.name) {
+            Some(user) => Ok(user.is_admin),
+            None => bail!(
+                "no user '{}' in this share's access list; known users: {}",
+                rule.name,
+                known(users_of(acl).map(|user| user.username.as_str()))
+            ),
+        },
+    }
+}
+
 /// Turn rules into the changes to send, checking each name against the list.
 fn plan_changes(acl: &PathAcl, rules: &[Rule]) -> Result<Vec<AclChange>> {
-    let mut changes = Vec::new();
-    for rule in rules {
-        let is_admin = match rule.kind {
-            PrincipalKind::Group => {
-                if !acl.acls.iter().any(|group| group.name == rule.name) {
-                    bail!(
-                        "no group '{}' in this share's access list; known groups: {}",
-                        rule.name,
-                        known(acl.acls.iter().map(|group| group.name.as_str()))
-                    );
-                }
-                false
-            }
-            PrincipalKind::User => {
-                let Some(user) = acl
-                    .acls
-                    .iter()
-                    .flat_map(|group| &group.users)
-                    .find(|user| user.username == rule.name)
-                else {
-                    bail!(
-                        "no user '{}' in this share's access list; known users: {}",
-                        rule.name,
-                        known(
-                            acl.acls
-                                .iter()
-                                .flat_map(|group| &group.users)
-                                .map(|user| user.username.as_str())
-                        )
-                    );
-                };
-                user.is_admin
-            }
-        };
-        changes.push(AclChange {
-            kind: rule.kind,
-            name: rule.name.clone(),
-            permission_mask: rule.access.mask(),
-            is_admin,
-        });
-    }
-    Ok(changes)
+    rules
+        .iter()
+        .map(|rule| {
+            Ok(AclChange {
+                kind: rule.kind,
+                name: rule.name.clone(),
+                permission_mask: rule.access.mask(),
+                is_admin: resolve_admin(acl, rule)?,
+            })
+        })
+        .collect()
 }
 
 fn known<'a>(names: impl Iterator<Item = &'a str>) -> String {
@@ -533,39 +557,44 @@ fn known<'a>(names: impl Iterator<Item = &'a str>) -> String {
     }
 }
 
+/// What the list holds for the rule's principal, as the mask set on it.
+fn mask_set(acl: &PathAcl, rule: &Rule) -> Option<i64> {
+    match rule.kind {
+        PrincipalKind::Group => acl
+            .acls
+            .iter()
+            .find(|group| group.name == rule.name)
+            .map(|group| group.select_permissions),
+        PrincipalKind::User => users_of(acl)
+            .find(|user| user.username == rule.name)
+            .map(|user| user.select_permissions),
+    }
+}
+
+/// A sentence if the list does not show the rule as asked.
+fn unapplied_rule(acl: &PathAcl, rule: &Rule) -> Option<String> {
+    let kind = match rule.kind {
+        PrincipalKind::User => "user",
+        PrincipalKind::Group => "group",
+    };
+    match mask_set(acl, rule).map(Access::from_mask) {
+        Some(now) if now == rule.access => None,
+        Some(now) => Some(format!(
+            "{kind} '{}' stays at {} instead of {}",
+            rule.name,
+            now.label(),
+            rule.access.label()
+        )),
+        None => Some(format!("{kind} '{}' is gone from the list", rule.name)),
+    }
+}
+
 /// The rules that the access list does not show after the change.
 fn unapplied(acl: &PathAcl, rules: &[Rule]) -> Vec<String> {
-    let mut refused = Vec::new();
-    for rule in rules {
-        let set = match rule.kind {
-            PrincipalKind::Group => acl
-                .acls
-                .iter()
-                .find(|group| group.name == rule.name)
-                .map(|group| group.select_permissions),
-            PrincipalKind::User => acl
-                .acls
-                .iter()
-                .flat_map(|group| &group.users)
-                .find(|user| user.username == rule.name)
-                .map(|user| user.select_permissions),
-        };
-        let kind = match rule.kind {
-            PrincipalKind::User => "user",
-            PrincipalKind::Group => "group",
-        };
-        match set.map(Access::from_mask) {
-            Some(now) if now == rule.access => {}
-            Some(now) => refused.push(format!(
-                "{kind} '{}' stays at {} instead of {}",
-                rule.name,
-                now.label(),
-                rule.access.label()
-            )),
-            None => refused.push(format!("{kind} '{}' is gone from the list", rule.name)),
-        }
-    }
-    refused
+    rules
+        .iter()
+        .filter_map(|rule| unapplied_rule(acl, rule))
+        .collect()
 }
 
 #[cfg(test)]
