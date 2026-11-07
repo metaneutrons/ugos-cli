@@ -87,6 +87,16 @@ pub enum UgosError {
         source: std::io::Error,
     },
 
+    /// The client declined to send a request, or found that UGOS did not do
+    /// what it was asked. The message says why, in words for the reader.
+    #[error("{0}")]
+    Refused(String),
+
+    /// The client declined, but would go on if told to. The message names
+    /// what would be lost; the caller decides how to ask.
+    #[error("{0}")]
+    NeedsForce(String),
+
     /// VM or resource not found by display name.
     #[error("{kind} not found: {name}")]
     NotFound {

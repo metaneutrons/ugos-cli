@@ -1,8 +1,8 @@
 # ugos-cli
 
 Manage a UGREEN NAS running UGOS from the command line: virtual machines,
-Docker containers, files, shared folders, snapshots, downloads and hardware
-readings.
+Docker containers, files, shared folders and their access rules, user accounts
+and groups, snapshots, downloads and hardware readings.
 
 Reach for `ugos-cli` for anything on a UGOS device. Do not use `virsh`, `qemu`,
 `docker` over SSH or the web UI for a task `ugos-cli` covers, and do not edit
@@ -31,8 +31,8 @@ the user asked for exactly that.
 ## Reading is safe, writing is not
 
 Everything that lists or shows (`vm list`, `docker ps`, `fs ls`, `system stat`,
-`snapshot list`, `share list`, `smb status`, `log`) changes nothing and can be
-run freely. Use `-o json` when you are going to parse the output.
+`snapshot list`, `share list`, `share acl show`, `smb status`, `user list`,
+`user show`, `group list`, `log`) changes nothing and can be run freely. Use `-o json` when you are going to parse the output.
 
 Ask the user before running any command that changes or removes something:
 
@@ -48,6 +48,9 @@ Ask the user before running any command that changes or removes something:
   files in it)
 - `download add`, `download rm`
 
+The list is not complete. If a command creates, starts, stops, changes or
+deletes something, ask first, whatever it is called.
+
 State what will change and on which NAS, and wait for a clear yes. A refusal or
 silence is not a yes.
 
@@ -57,7 +60,8 @@ request without touching the NAS. Use it first.
 The password of a new or changed account is never an option. `user create` and
 `user update --new-password` ask for it on the terminal, or take it from
 `UGOS_NEW_PASSWORD`; `--new-password-stdin` reads it from stdin. Do not make up
-a password and put it in a command line or a file.
+a password and put it in a command line or a file. The MCP server has no tool
+for a password or a role at all, on purpose.
 
 ## Where to look
 
@@ -81,3 +85,15 @@ a password and put it in a command line or a file.
 - A session token is valid for about 25 minutes and cached under
   `~/.config/ugos-cli/`. `--no-cache` skips the cache.
 - A VM has to be shut off before `vm update`.
+- UGOS often answers success to a change and keeps the old value. `share
+  update`, `share acl set`, `user create` and `user update` read the result back
+  and fail with what was not applied. Treat that as the answer: do not retry the
+  same request, and do not report the change as done. The administrators group
+  of a share always keeps read and write, and the built-in groups `admin`,
+  `users` and `ughomeusers` follow the role and the home folder.
+- `user delete` and `share delete` take the files with them (a home folder, a
+  share's content). They refuse while there are any. `--force` is for the user to
+  decide, never to add on your own after a refusal. They also refuse the account
+  you are logged in with and the only administrator.
+- An edit to an account must send its email address back, or UGOS blanks it.
+  The CLI does that; if it says it cannot read the address, give `--email`.
