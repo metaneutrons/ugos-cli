@@ -20,10 +20,16 @@ use rmcp::{
     model::{Implementation, ServerCapabilities, ServerConfig},
     schemars, tool, tool_handler, tool_router,
 };
+mod manage;
+
 use tokio::sync::OnceCell;
 use ugos_client::api::docker::DockerApi;
 use ugos_client::api::kvm::KvmApi;
 use ugos_client::{Credentials, TlsPolicy, UgosClient, tls};
+
+use crate::manage::{
+    AccountParam, ShareAclSetParam, ShareCreateParam, ShareParam, ShareUpdateParam, UserUpdateParam,
+};
 
 // ── Target config ───────────────────────────────────────────────────
 
@@ -1332,6 +1338,131 @@ impl UgosMcp {
                     Err(e) => format!("error: {e}"),
                 }
             }
+            Err(e) => e,
+        }
+    }
+
+    // ── Shared folders, accounts and groups ─────────────────────────
+    //
+    // The logic is in `manage`. Passwords, roles and `--force` are left to
+    // `ugos-cli`; see there for why.
+
+    #[tool(description = "List the shared folders (SMB shares) of a UGOS NAS")]
+    async fn ugos_share_list(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => manage::share_list(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Show the settings of a shared folder: volume, quota, visibility, encryption"
+    )]
+    async fn ugos_share_show(&self, Parameters(p): Parameters<ShareParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => manage::share_show(c, &p.share).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show who may access a shared folder: groups, users and their access")]
+    async fn ugos_share_acl_show(&self, Parameters(p): Parameters<ShareParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => manage::share_acl_show(c, &p.share).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show the SMB service settings and the discovery services")]
+    async fn ugos_smb_status(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => manage::smb_status(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Create a shared folder. Only administrators can open it at first; set access with ugos_share_acl_set"
+    )]
+    async fn ugos_share_create(&self, Parameters(p): Parameters<ShareCreateParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => manage::share_create(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Change the quota or the visibility of a shared folder. The result is read back; an error says what UGOS did not apply"
+    )]
+    async fn ugos_share_update(&self, Parameters(p): Parameters<ShareUpdateParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => manage::share_update(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Set access rules on a shared folder. The administrators group always keeps read and write; a rule asking for less is reported, not applied"
+    )]
+    async fn ugos_share_acl_set(&self, Parameters(p): Parameters<ShareAclSetParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => manage::share_acl_set(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Delete a shared folder and everything in it. Refused while the folder holds files; this server does not force it"
+    )]
+    async fn ugos_share_delete(&self, Parameters(p): Parameters<ShareParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => manage::share_delete(c, &p.share).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List user accounts with role, groups and status")]
+    async fn ugos_user_list(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => manage::user_list(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show one user account")]
+    async fn ugos_user_show(&self, Parameters(p): Parameters<AccountParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => manage::user_show(c, &p.account).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "List the groups an administrator made, with their members. The built-in groups are not listed"
+    )]
+    async fn ugos_group_list(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => manage::group_list(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Change a user account: email, description, groups, home folder, password rule, disable or expiry. Cannot set a password or a role; use ugos-cli for those. Refuses to lock out the account this server is logged in with"
+    )]
+    async fn ugos_user_update(&self, Parameters(p): Parameters<UserUpdateParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => manage::user_update(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Delete a user account. Its home folder and the files in it go with it, so an account with files or snapshots is refused; this server does not force it"
+    )]
+    async fn ugos_user_delete(&self, Parameters(p): Parameters<AccountParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => manage::user_delete(c, &p.account).await,
             Err(e) => e,
         }
     }

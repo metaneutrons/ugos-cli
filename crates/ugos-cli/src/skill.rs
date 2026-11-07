@@ -23,9 +23,9 @@ pub const NAME: &str = "ugos-cli";
 
 /// What the skill is for, which an AI tool reads to decide whether to load it.
 const DESCRIPTION: &str = "Manage a UGREEN NAS running UGOS through ugos-cli: virtual \
-machines, Docker containers, files, snapshots, downloads and hardware readings. Use it \
-whenever a task involves a UGOS device, instead of virsh, qemu, docker over SSH or the \
-web UI.";
+machines, Docker containers, files, shared folders and their access rules, user accounts \
+and groups, snapshots, downloads and hardware readings. Use it whenever a task involves a \
+UGOS device, instead of virsh, qemu, docker over SSH or the web UI.";
 
 /// The hand-written guidance.
 const BODY: &str = include_str!("../skill/body.md");
@@ -457,6 +457,35 @@ fn sentence(text: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[allow(clippy::panic)]
+    /// Every command the hand-written body names is one this build has. A
+    /// renamed or removed command would otherwise stay in the advice for good.
+    #[test]
+    fn every_command_the_body_names_exists() {
+        use clap::CommandFactory as _;
+        let root = crate::cli::Cli::command();
+        let mut checked = 0;
+        for span in BODY.split('`').skip(1).step_by(2) {
+            let mut words = span.split_whitespace();
+            let Some(first) = words.next() else { continue };
+            let Some(mut command) = root.find_subcommand(first) else {
+                continue;
+            };
+            let mut path = vec![first];
+            for word in words {
+                if word.starts_with('-') || !command.has_subcommands() {
+                    break;
+                }
+                command = command.find_subcommand(word).unwrap_or_else(|| {
+                    panic!("`{span}` in the body: no `{}` {word}", path.join(" "))
+                });
+                path.push(word);
+            }
+            checked += 1;
+        }
+        assert!(checked > 20, "only {checked} commands were checked");
+    }
 
     #[test]
     fn the_skill_meets_the_specification() {

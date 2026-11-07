@@ -177,6 +177,12 @@ Stop a Docker container
 - `id` (required): Container ID.
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
+## ugos_group_list
+
+List the groups an administrator made, with their members. The built-in groups are not listed
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
 ## ugos_host_info
 
 Show NAS host hardware info (CPU cores, memory)
@@ -323,6 +329,73 @@ Stop a Docker Compose project (containers remain, not removed)
 - `name` (required): Compose project name.
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
+## ugos_share_acl_set
+
+Set access rules on a shared folder. The administrators group always keeps read and write; a rule asking for less is reported, not applied
+
+- `rules` (required): Rules like `user:anna=rw` or `group:family=read`. Access is `none`,
+`read`, `rw` or `inherit`. Names must be in the share's access list.
+- `share` (required): Share name or numeric id.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_share_acl_show
+
+Show who may access a shared folder: groups, users and their access
+
+- `share` (required): Share name or numeric id.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_share_create
+
+Create a shared folder. Only administrators can open it at first; set access with ugos_share_acl_set
+
+- `data_check`: Keep data checksums.
+- `hide_in_network`: Hide the share from network browsing.
+- `name` (required): Share name. Not `home`, `homes` or `personal_folder`, no slash, at most 80 characters.
+- `no_recycle`: Turn the recycle bin off.
+- `quota`: Quota such as `500m`, `100g` or `2t`. No quota when left out.
+- `recycle_for_everyone`: Let everyone empty the recycle bin, not only administrators.
+- `show_unreadable`: Show the share to users who cannot open it (default: hidden from them).
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `volume`: Volume name or path, e.g. `/volume1`. Optional when the NAS has one volume.
+
+## ugos_share_delete
+
+Delete a shared folder and everything in it. Refused while the folder holds files; this server does not force it
+
+- `share` (required): Share name or numeric id.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_share_list
+
+List the shared folders (SMB shares) of a UGOS NAS
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_share_show
+
+Show the settings of a shared folder: volume, quota, visibility, encryption
+
+- `share` (required): Share name or numeric id.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_share_update
+
+Change the quota or the visibility of a shared folder. The result is read back; an error says what UGOS did not apply
+
+- `hide_in_network`: Hide the share from network browsing (`true`) or show it (`false`).
+- `hide_unreadable`: Hide the share from users who cannot open it (`true`) or show it (`false`).
+- `no_quota`: Lift the quota.
+- `quota`: New quota such as `500m`, `100g` or `2t`.
+- `share` (required): Share name or numeric id.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_smb_status
+
+Show the SMB service settings and the discovery services
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
 ## ugos_snapshot_create
 
 Create a snapshot of a virtual machine
@@ -404,6 +477,42 @@ List USB devices available to a VM
 
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 - `vm` (required): VM display name or UUID.
+
+## ugos_user_delete
+
+Delete a user account. Its home folder and the files in it go with it, so an account with files or snapshots is refused; this server does not force it
+
+- `account` (required): Login name or numeric uid.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_user_list
+
+List user accounts with role, groups and status
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_user_show
+
+Show one user account
+
+- `account` (required): Login name or numeric uid.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_user_update
+
+Change a user account: email, description, groups, home folder, password rule, disable or expiry. Cannot set a password or a role; use ugos-cli for those. Refuses to lock out the account this server is logged in with
+
+- `account` (required): Login name or numeric uid.
+- `add_groups`: Groups to join.
+- `deny_password_change`: Forbid (`true`) or allow (`false`) the account to change its own password.
+- `description`: New description.
+- `disable`: Disable the account.
+- `email`: New email address. The stored one is kept when left out.
+- `enable`: Enable a disabled account, or lift an expiry.
+- `expires`: Let the account expire on a date, `YYYY-MM-DD`.
+- `home_dir`: Give (`true`) or take away (`false`) the home folder.
+- `remove_groups`: Groups to leave. The built-in groups cannot be left.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
 
 ## ugos_vm_create
 

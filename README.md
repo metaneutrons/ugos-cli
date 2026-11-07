@@ -231,6 +231,22 @@ Multiple NAS targets are supported:
 }
 ```
 
+The server also covers shared folders and user accounts. Reading is open:
+`ugos_share_list`, `ugos_share_show`, `ugos_share_acl_show`, `ugos_smb_status`,
+`ugos_user_list`, `ugos_user_show` and `ugos_group_list`. Changing goes through
+the same checks as `ugos-cli` and is read back, so a request UGOS answered with
+success and did not carry out comes back as an error: `ugos_share_create`,
+`ugos_share_update`, `ugos_share_acl_set`, `ugos_share_delete`,
+`ugos_user_update` and `ugos_user_delete`. Three things are left to the CLI on
+purpose:
+
+- **Passwords.** A tool parameter passes through the model and its logs, so no
+  tool creates an account or sets a password. Use `ugos-cli user create` and
+  `user update --new-password`.
+- **Roles.** No tool makes an account an administrator.
+- **`--force`.** The delete tools refuse a share or a home folder that holds
+  files, and a refusal stays one. The message names what the user would run.
+
 ### Agent skill
 
 An AI coding tool works better with `ugos-cli` when it knows the tool is there:
@@ -495,7 +511,7 @@ notes are kept because the reasoning is easy to lose and expensive to redo.
 | **OVA** | export, parse |
 | **Log** | system log across all modules, with filters |
 | **VM log** (`vm log`) | KVM audit log, list operators |
-| **User** | list, show, create, update (email, description, role, groups, home folder, password, disable, expiry), delete |
+| **User** | list, show, create, update (email, description, role, groups, home folder, password, disable, expiry), delete; the MCP server has all but create, password and role |
 | **Group** | list (read only) |
 | **Host** (`info`, `overview`) | CPU cores and memory; load plus every VM at once |
 | **System** | hardware and firmware info, live CPU/memory/disk/network/fan readings, processes, services |

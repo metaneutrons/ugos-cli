@@ -31,6 +31,7 @@ pub mod auth;
 pub mod client;
 pub mod crypto;
 pub mod error;
+pub mod ops;
 pub mod tls;
 mod totp;
 pub mod types;

@@ -19,90 +19,108 @@ fn make_server() -> UgosMcp {
     }])
 }
 
+/// Every tool the server registers.
+const EXPECTED_TOOLS: [&str; 79] = [
+    "ugos_target_list",
+    // KVM
+    "ugos_vm_list",
+    "ugos_vm_show",
+    "ugos_vm_start",
+    "ugos_vm_stop",
+    "ugos_vm_reboot",
+    "ugos_vm_delete",
+    "ugos_vm_create",
+    "ugos_vm_update",
+    "ugos_host_info",
+    // Snapshots
+    "ugos_snapshot_list",
+    "ugos_snapshot_create",
+    "ugos_snapshot_delete",
+    "ugos_snapshot_revert",
+    "ugos_snapshot_describe",
+    // Network
+    "ugos_network_list",
+    "ugos_network_show",
+    "ugos_network_delete",
+    "ugos_network_create",
+    "ugos_network_update",
+    // Storage
+    "ugos_storage_list",
+    "ugos_storage_usage",
+    "ugos_storage_add",
+    "ugos_storage_delete",
+    // Image
+    "ugos_image_list",
+    "ugos_image_delete",
+    "ugos_image_usage",
+    // USB
+    "ugos_usb_list",
+    // VNC
+    "ugos_vnc_list",
+    "ugos_vnc_generate",
+    // OVA
+    "ugos_ova_export",
+    "ugos_ova_parse",
+    // Logs
+    "ugos_log_search",
+    "ugos_log_operators",
+    // Docker
+    "ugos_docker_overview",
+    "ugos_docker_status",
+    "ugos_docker_ps",
+    "ugos_docker_show",
+    "ugos_docker_create",
+    "ugos_docker_start",
+    "ugos_docker_stop",
+    "ugos_docker_restart",
+    "ugos_docker_rm",
+    "ugos_docker_logs",
+    "ugos_docker_clone",
+    "ugos_docker_batch",
+    "ugos_docker_images",
+    "ugos_docker_search",
+    "ugos_docker_pull",
+    "ugos_docker_image_export",
+    "ugos_docker_image_load_url",
+    "ugos_docker_image_load_path",
+    "ugos_docker_mirrors",
+    "ugos_docker_mirror_add",
+    "ugos_docker_mirror_delete",
+    "ugos_docker_mirror_switch",
+    "ugos_docker_compose",
+    "ugos_project_list",
+    "ugos_project_show",
+    "ugos_project_create",
+    "ugos_project_start",
+    "ugos_project_stop",
+    "ugos_project_restart",
+    "ugos_project_remove",
+    "ugos_docker_proxy_get",
+    "ugos_docker_proxy_set",
+    // Shared folders
+    "ugos_share_list",
+    "ugos_share_show",
+    "ugos_share_acl_show",
+    "ugos_smb_status",
+    "ugos_share_create",
+    "ugos_share_update",
+    "ugos_share_acl_set",
+    "ugos_share_delete",
+    // Accounts and groups
+    "ugos_user_list",
+    "ugos_user_show",
+    "ugos_group_list",
+    "ugos_user_update",
+    "ugos_user_delete",
+];
+
 #[test]
 fn all_tools_registered() {
     let server = make_server();
     let tools = server.tool_router.list_all();
     let names: Vec<&str> = tools.iter().map(|t| t.name.as_ref()).collect();
 
-    let expected = [
-        "ugos_target_list",
-        // KVM
-        "ugos_vm_list",
-        "ugos_vm_show",
-        "ugos_vm_start",
-        "ugos_vm_stop",
-        "ugos_vm_reboot",
-        "ugos_vm_delete",
-        "ugos_vm_create",
-        "ugos_vm_update",
-        "ugos_host_info",
-        // Snapshots
-        "ugos_snapshot_list",
-        "ugos_snapshot_create",
-        "ugos_snapshot_delete",
-        "ugos_snapshot_revert",
-        "ugos_snapshot_describe",
-        // Network
-        "ugos_network_list",
-        "ugos_network_show",
-        "ugos_network_delete",
-        "ugos_network_create",
-        "ugos_network_update",
-        // Storage
-        "ugos_storage_list",
-        "ugos_storage_usage",
-        "ugos_storage_add",
-        "ugos_storage_delete",
-        // Image
-        "ugos_image_list",
-        "ugos_image_delete",
-        "ugos_image_usage",
-        // USB
-        "ugos_usb_list",
-        // VNC
-        "ugos_vnc_list",
-        "ugos_vnc_generate",
-        // OVA
-        "ugos_ova_export",
-        "ugos_ova_parse",
-        // Logs
-        "ugos_log_search",
-        "ugos_log_operators",
-        // Docker
-        "ugos_docker_overview",
-        "ugos_docker_status",
-        "ugos_docker_ps",
-        "ugos_docker_show",
-        "ugos_docker_create",
-        "ugos_docker_start",
-        "ugos_docker_stop",
-        "ugos_docker_restart",
-        "ugos_docker_rm",
-        "ugos_docker_logs",
-        "ugos_docker_clone",
-        "ugos_docker_batch",
-        "ugos_docker_images",
-        "ugos_docker_search",
-        "ugos_docker_pull",
-        "ugos_docker_image_export",
-        "ugos_docker_image_load_url",
-        "ugos_docker_image_load_path",
-        "ugos_docker_mirrors",
-        "ugos_docker_mirror_add",
-        "ugos_docker_mirror_delete",
-        "ugos_docker_mirror_switch",
-        "ugos_docker_compose",
-        "ugos_project_list",
-        "ugos_project_show",
-        "ugos_project_create",
-        "ugos_project_start",
-        "ugos_project_stop",
-        "ugos_project_restart",
-        "ugos_project_remove",
-        "ugos_docker_proxy_get",
-        "ugos_docker_proxy_set",
-    ];
+    let expected = EXPECTED_TOOLS;
 
     for name in &expected {
         assert!(
@@ -122,6 +140,42 @@ fn all_tools_registered() {
             .filter(|n| !expected.contains(n))
             .collect::<Vec<_>>()
     );
+}
+
+/// What the server leaves to `ugos-cli` on purpose. A tool that creates an
+/// account, sets a password or a role, or forces a delete would put a secret
+/// through the model or let a refusal be overridden by the same caller.
+#[test]
+fn no_tool_takes_a_password_or_a_role_or_forces() {
+    let server = make_server();
+    let tools = server.tool_router.list_all();
+    for tool in &tools {
+        assert!(
+            !tool.name.contains("user_create") && !tool.name.contains("password"),
+            "{} must stay out of the server",
+            tool.name
+        );
+        let properties = tool
+            .input_schema
+            .get("properties")
+            .and_then(|value| value.as_object());
+        for name in properties.into_iter().flat_map(|map| map.keys()) {
+            // `deny_password_change` is a policy switch, not a password.
+            let risky = ["password", "new_password", "force", "secret"].contains(&name.as_str());
+            let shares_or_users = tool.name.contains("share") || tool.name.contains("user");
+            assert!(
+                !(risky && shares_or_users),
+                "{} has a `{name}` parameter",
+                tool.name
+            );
+        }
+        if tool.name == "ugos_user_update" {
+            assert!(
+                properties.is_some_and(|map| !map.contains_key("role")),
+                "ugos_user_update must not set a role"
+            );
+        }
+    }
 }
 
 #[test]

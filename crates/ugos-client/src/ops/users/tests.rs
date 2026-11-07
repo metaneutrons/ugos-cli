@@ -1,7 +1,8 @@
-//! Unit tests of the `user` command.
+//! Unit tests of the user operations.
 
 use super::*;
-use ugos_client::types::syslog::GroupRef;
+use crate::types::syslog::GroupRef;
+use crate::types::users::ROLE_USER;
 
 fn account() -> User {
     User {
@@ -19,21 +20,18 @@ fn account() -> User {
                 name: "family".into(),
             },
         ],
-        expire_time: ugos_client::types::users::EXPIRES_NEVER,
+        expire_time: crate::types::users::EXPIRES_NEVER,
         enable_home_dir: true,
         ..User::default()
     }
 }
 
-fn options<'a>(name: &'a str, groups: &'a [String]) -> CreateOptions<'a> {
-    CreateOptions {
-        name,
-        email: None,
-        description: None,
-        role: RoleArg::User,
-        groups,
+fn options(name: &str, groups: &[String]) -> UserRequest {
+    UserRequest {
+        name: name.to_owned(),
+        groups: groups.to_vec(),
         home_dir: true,
-        deny_password_change: false,
+        ..UserRequest::default()
     }
 }
 
@@ -67,8 +65,8 @@ fn creation_options_reach_the_request() {
     let groups = vec!["family".to_owned()];
     let mut asked = options("anna", &groups);
     asked.deny_password_change = true;
-    asked.email = Some(" anna@example.org ");
-    asked.description = Some("Anna");
+    asked.email = Some(" anna@example.org ".into());
+    asked.description = Some("Anna".into());
     let new = build_new_user(&asked).unwrap();
     assert!(new.deny_change_pwd);
     assert_eq!(new.email, "anna@example.org");
@@ -79,7 +77,7 @@ fn creation_options_reach_the_request() {
 #[test]
 fn an_administrator_may_always_change_the_password() {
     let mut asked = options("boss", &[]);
-    asked.role = RoleArg::Admin;
+    asked.role = ROLE_ADMIN.to_owned();
     asked.deny_password_change = true;
     let new = build_new_user(&asked).unwrap();
     assert_eq!(new.role, ROLE_ADMIN);
@@ -111,7 +109,7 @@ fn an_edit_keeps_everything_that_was_not_asked_for() {
     assert_eq!(edit.description, "Anna B.");
     assert_eq!(edit.role, ROLE_USER);
     assert_eq!(edit.groups, ["users", "family"]);
-    assert_eq!(edit.expire_time, ugos_client::types::users::EXPIRES_NEVER);
+    assert_eq!(edit.expire_time, crate::types::users::EXPIRES_NEVER);
     assert_eq!(edit.email, "");
     assert_eq!(edit.password, None);
 }
@@ -127,7 +125,7 @@ fn an_email_that_cannot_be_read_back_is_not_blanked() {
         ..UserChanges::default()
     };
     let error = change.apply(&masked).unwrap_err().to_string();
-    assert!(error.contains("--email"), "{error}");
+    assert!(error.contains("give an email address"), "{error}");
 
     let give = UserChanges {
         email: Some(" new@example.org ".into()),
@@ -156,7 +154,7 @@ fn disabling_sets_the_expiry_and_drops_the_date() {
         ..UserChanges::default()
     };
     let edit = change.apply(&account()).unwrap();
-    assert_eq!(edit.expire_time, ugos_client::types::users::DISABLED);
+    assert_eq!(edit.expire_time, crate::types::users::DISABLED);
     assert_eq!(edit.expire_date, "");
 }
 

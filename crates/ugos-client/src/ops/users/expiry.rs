@@ -1,7 +1,7 @@
 //! The expiry of an account: never, disabled, or a date.
 
-use anyhow::{Result, bail};
-use ugos_client::types::users::{DISABLED, EXPIRES_NEVER};
+use crate::error::{Result, UgosError};
+use crate::types::users::{DISABLED, EXPIRES_NEVER};
 
 /// Seconds in a day.
 const DAY: i64 = 86_400;
@@ -12,7 +12,9 @@ const LATEST: i64 = 4_133_894_400;
 /// An expiry as UGOS holds it: the time in seconds, and the date as text.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Expiry {
+    /// Unix time in seconds, or `-1` for never and `1` for disabled.
     pub time: i64,
+    /// The date as `YYYY-MM-DD`, empty unless an expiry date is set.
     pub date: String,
 }
 
@@ -29,6 +31,8 @@ impl Expiry {
         date: String::new(),
     };
 
+    /// Whether this is the switched-off state.
+    #[must_use]
     pub const fn is_disabled(&self) -> bool {
         self.time == DISABLED
     }
@@ -39,8 +43,13 @@ impl Expiry {
 ///
 /// `today` is the current day, counted from 1970-01-01. A date before it is
 /// refused, as the picker refuses it.
+///
+/// # Errors
+///
+/// Returns [`UgosError::Refused`] for text that is not a date, a date in the
+/// past, or one beyond what UGOS allows.
 pub fn parse_date(text: &str, today: i64) -> Result<Expiry> {
-    let bad = || anyhow::anyhow!("'{text}' is not a date; write YYYY-MM-DD");
+    let bad = || UgosError::Refused(format!("'{text}' is not a date; write YYYY-MM-DD"));
     let mut parts = text.trim().splitn(3, '-');
     let mut next = |width: usize| -> Result<i64> {
         let part = parts.next().ok_or_else(bad)?;
@@ -55,11 +64,13 @@ pub fn parse_date(text: &str, today: i64) -> Result<Expiry> {
     }
     let days = days_from_civil(year, month, day);
     if days < today {
-        bail!("{text} is in the past");
+        return Err(UgosError::Refused(format!("{text} is in the past")));
     }
     let time = days * DAY;
     if time > LATEST {
-        bail!("{text} is further out than UGOS allows");
+        return Err(UgosError::Refused(format!(
+            "{text} is further out than UGOS allows"
+        )));
     }
     Ok(Expiry {
         time,
@@ -68,6 +79,7 @@ pub fn parse_date(text: &str, today: i64) -> Result<Expiry> {
 }
 
 /// The current day, counted from 1970-01-01.
+#[must_use]
 pub fn today() -> i64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
