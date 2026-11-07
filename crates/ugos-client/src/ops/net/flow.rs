@@ -5,7 +5,7 @@
 //! change it as a flat list of rules, and send it.
 
 use super::validate;
-use crate::api::net::NetApi;
+use crate::api::net::{NetApi, NetFlowApi};
 use crate::client::UgosClient;
 use crate::error::{Result, UgosError};
 use crate::types::net::{Flow, FlowGroup, FlowRule};

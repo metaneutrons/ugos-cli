@@ -8,7 +8,7 @@
 use rmcp::schemars;
 use serde::Serialize;
 use ugos_client::UgosClient;
-use ugos_client::api::net::NetApi;
+use ugos_client::api::net::{NetApi, NetFlowApi, NetWifiApi};
 use ugos_client::error::UgosError;
 use ugos_client::ops::net::flow::{self, NewRule};
 use ugos_client::ops::net::general::{

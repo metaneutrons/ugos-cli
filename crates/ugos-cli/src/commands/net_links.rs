@@ -4,7 +4,7 @@ use std::io::Write;
 
 use anyhow::{Result, bail};
 use ugos_client::UgosClient;
-use ugos_client::api::net::NetApi;
+use ugos_client::api::net::{NetApi, NetFlowApi, NetWifiApi};
 use ugos_client::ops::net::flow::{self, NewRule};
 use ugos_client::ops::net::links::{self, BondIpv4};
 use ugos_client::ops::net::wifi;
@@ -251,6 +251,42 @@ async fn wifi_list(
     }
 }
 
+/// The rule that `net flow add` asks for.
+fn new_rule(action: &FlowAction) -> Result<NewRule> {
+    let FlowAction::Add {
+        interface,
+        all_ports,
+        ports,
+        service,
+        target,
+        protocol,
+        min_rate,
+        max_rate,
+    } = action
+    else {
+        bail!("not an add command");
+    };
+    let kind = if *all_ports {
+        "all"
+    } else if !service.is_empty() {
+        "sys"
+    } else if ports.is_some() {
+        "custom"
+    } else {
+        bail!("give --all-ports, --ports or --service")
+    };
+    Ok(NewRule {
+        interface: interface.clone(),
+        kind: kind.into(),
+        ports: ports.clone().unwrap_or_default(),
+        target: target.clone(),
+        protocol: protocol.clone(),
+        min_rate: *min_rate,
+        max_rate: *max_rate,
+        sections: service.iter().flat_map(|s| split_list(s)).collect(),
+    })
+}
+
 /// Run a `net flow` subcommand.
 pub async fn flow(
     client: &UgosClient,
@@ -261,37 +297,7 @@ pub async fn flow(
     let current = match action {
         FlowAction::List => client.net_flow().await?,
         FlowAction::Services => return flow_services(client, fmt, w).await,
-        FlowAction::Add {
-            interface,
-            all_ports,
-            ports,
-            service,
-            target,
-            protocol,
-            min_rate,
-            max_rate,
-        } => {
-            let kind = if *all_ports {
-                "all"
-            } else if !service.is_empty() {
-                "sys"
-            } else if ports.is_some() {
-                "custom"
-            } else {
-                bail!("give --all-ports, --ports or --service")
-            };
-            let rule = NewRule {
-                interface: interface.clone(),
-                kind: kind.into(),
-                ports: ports.clone().unwrap_or_default(),
-                target: target.clone(),
-                protocol: protocol.clone(),
-                min_rate: *min_rate,
-                max_rate: *max_rate,
-                sections: service.iter().flat_map(|s| split_list(s)).collect(),
-            };
-            flow::add_rule(client, &rule).await?
-        }
+        FlowAction::Add { .. } => flow::add_rule(client, &new_rule(action)?).await?,
         FlowAction::Rm { position } => flow::remove_rule(client, *position).await?,
         FlowAction::Enable { position } => flow::enable_rule(client, *position, true).await?,
         FlowAction::Disable { position } => flow::enable_rule(client, *position, false).await?,

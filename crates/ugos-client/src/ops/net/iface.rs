@@ -10,7 +10,7 @@ use std::time::Duration;
 use serde_json::{Value, json};
 
 use super::validate;
-use crate::api::net::NetApi;
+use crate::api::net::{NetApi, NetWriteApi};
 use crate::client::UgosClient;
 use crate::error::{Result, UgosError};
 use crate::types::net::{Address, Iface, NewAddress};

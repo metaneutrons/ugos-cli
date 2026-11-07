@@ -268,26 +268,39 @@ async fn proxy(
     fmt: OutputFormat,
     w: &mut impl Write,
 ) -> Result<()> {
-    let change = match action {
-        ProxyAction::Show => {
-            let settings = client.net_settings().await?;
-            return match fmt {
-                OutputFormat::Table => output::print_list(
-                    w,
-                    &rows::general_rows(
-                        &settings,
-                        &client.net_gateways().await?,
-                        &client.net_ipv6().await?,
-                    ),
-                    fmt,
-                ),
-                OutputFormat::Json => output::print_json(
-                    w,
-                    &serde_json::json!({ "enable": settings.proxy.enable, "list": settings.proxy.list }),
-                ),
-            };
+    let Some(change) = proxy_change(action)? else {
+        return proxy_show(client, fmt, w).await;
+    };
+    let (now, reboot) = set_proxy(client, &change).await?;
+    let state = if now.proxy.enable == 1 { "set" } else { "off" };
+    let tail = if reboot {
+        "; UGOS asks for a reboot"
+    } else {
+        ""
+    };
+    output::print_success(w, &format!("Proxy {state}{tail}"), fmt)
+}
+
+async fn proxy_show(client: &UgosClient, fmt: OutputFormat, w: &mut impl Write) -> Result<()> {
+    let settings = client.net_settings().await?;
+    match fmt {
+        OutputFormat::Table => {
+            let gateways = client.net_gateways().await?;
+            let ipv6 = client.net_ipv6().await?;
+            output::print_list(w, &rows::general_rows(&settings, &gateways, &ipv6), fmt)
         }
-        ProxyAction::Off => ProxyChange::Off,
+        OutputFormat::Json => output::print_json(
+            w,
+            &serde_json::json!({ "enable": settings.proxy.enable, "list": settings.proxy.list }),
+        ),
+    }
+}
+
+/// The change a `net proxy` command asks for; `None` for `show`.
+fn proxy_change(action: &ProxyAction) -> Result<Option<ProxyChange>> {
+    match action {
+        ProxyAction::Show => Ok(None),
+        ProxyAction::Off => Ok(Some(ProxyChange::Off)),
         ProxyAction::Set {
             all,
             http,
@@ -308,35 +321,41 @@ async fn proxy(
                 )),
                 None => None,
             };
-            match (all, http, https) {
-                (Some(all), None, None) => ProxyChange::All {
-                    host: host_port(all)?.0,
-                    port: host_port(all)?.1,
-                    local: *local,
-                    auth,
-                },
-                (None, h, s) if h.is_some() || s.is_some() => ProxyChange::Split {
-                    http: h.as_deref().map(host_port).transpose()?,
-                    https: s.as_deref().map(host_port).transpose()?,
-                    local: *local,
-                    auth,
-                },
-                _ => bail!("give --all, or --http and/or --https"),
-            }
+            proxy_set(
+                all.as_deref(),
+                http.as_deref(),
+                https.as_deref(),
+                *local,
+                auth,
+            )
+            .map(Some)
         }
-    };
-    let (now, reboot) = set_proxy(client, &change).await?;
-    output::print_success(
-        w,
-        &format!(
-            "Proxy {}{}",
-            if now.proxy.enable == 1 { "set" } else { "off" },
-            if reboot {
-                "; UGOS asks for a reboot"
-            } else {
-                ""
-            }
-        ),
-        fmt,
-    )
+    }
+}
+
+fn proxy_set(
+    all: Option<&str>,
+    http: Option<&str>,
+    https: Option<&str>,
+    local: bool,
+    auth: Option<(String, String)>,
+) -> Result<ProxyChange> {
+    match (all, http, https) {
+        (Some(all), None, None) => {
+            let (host, port) = host_port(all)?;
+            Ok(ProxyChange::All {
+                host,
+                port,
+                local,
+                auth,
+            })
+        }
+        (None, h, s) if h.is_some() || s.is_some() => Ok(ProxyChange::Split {
+            http: h.map(host_port).transpose()?,
+            https: s.map(host_port).transpose()?,
+            local,
+            auth,
+        }),
+        _ => bail!("give --all, or --http and/or --https"),
+    }
 }

@@ -4,7 +4,7 @@ use std::time::Duration;
 
 use serde_json::{Value, json};
 
-use crate::api::net::{NetApi, WifiAction};
+use crate::api::net::{NetWifiApi, WifiAction};
 use crate::client::UgosClient;
 use crate::error::{Result, UgosError};
 use crate::types::net::{WifiNetwork, WifiResult};

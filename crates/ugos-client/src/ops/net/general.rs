@@ -4,7 +4,7 @@
 //! reads it, edits a copy, sends it, and reads it again.
 
 use super::validate;
-use crate::api::net::NetApi;
+use crate::api::net::{NetApi, NetWriteApi};
 use crate::client::UgosClient;
 use crate::error::{Result, UgosError};
 use crate::types::net::{Gateways, NetSettings, ProxyAuth, ProxyEntry};
