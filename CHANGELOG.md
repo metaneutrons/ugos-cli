@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.0](https://github.com/metaneutrons/ugos-cli/compare/v0.18.0...v0.19.0) (2026-11-07)
+
+
+### Features
+
+* **cli:** create, update and delete user accounts ([#116](https://github.com/metaneutrons/ugos-cli/issues/116)) ([1d838fa](https://github.com/metaneutrons/ugos-cli/commit/1d838fa079ba280c89f9e507c249de9250e6febc))
+
 ## [0.18.0](https://github.com/metaneutrons/ugos-cli/compare/v0.17.0...v0.18.0) (2026-11-07)
 
 
