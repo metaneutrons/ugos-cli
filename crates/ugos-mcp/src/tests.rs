@@ -20,7 +20,14 @@ fn make_server() -> UgosMcp {
 }
 
 /// Every tool the server registers.
-const EXPECTED_TOOLS: [&str; 157] = [
+const EXPECTED_TOOLS: [&str; 164] = [
+    "ugos_fileservice_status",
+    "ugos_fileservice_settings",
+    "ugos_fileservice_start",
+    "ugos_fileservice_set",
+    "ugos_fileservice_stop",
+    "ugos_smb_discovery",
+    "ugos_smb_cache_clear",
     "ugos_hw_buzzer",
     "ugos_hw_buzzer_alarms",
     "ugos_hw_buzzer_set",

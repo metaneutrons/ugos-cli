@@ -1,6 +1,7 @@
 //! Command dispatch — maps CLI actions to API calls and output.
 
 mod clock;
+mod fileserver;
 mod hw;
 mod hw_power;
 mod nas_storage;
@@ -22,6 +23,7 @@ use ugos_client::api::kvm::KvmApi;
 use ugos_client::api::snapshot::SnapshotApi;
 use ugos_client::api::syslog::{LogFilter, SysLogApi};
 use ugos_client::api::system::SystemApi;
+use ugos_client::ops::fileserver::Service;
 use ugos_client::types::docker::RegistryCredentials;
 use ugos_client::types::snapshot::FolderType;
 
@@ -71,7 +73,13 @@ pub async fn run(
         Resource::Fs { action } => fs(client, action, fmt, w).await,
         Resource::Snapshot { action } => fs_snapshot(client, action, fmt, w).await,
         Resource::Share { action } => share::share(client, action, fmt, w).await,
-        Resource::Smb { action } => share::smb(client, action, fmt, w).await,
+        Resource::Smb { action } => fileserver::smb(client, action, fmt, w).await,
+        Resource::Ftp { action } => fileserver::service(client, Service::Ftp, action, fmt, w).await,
+        Resource::Nfs { action } => fileserver::service(client, Service::Nfs, action, fmt, w).await,
+        Resource::Webdav { action } => {
+            fileserver::service(client, Service::Webdav, action, fmt, w).await
+        }
+        Resource::Rsync { action } => fileserver::rsync(client, action, fmt, w).await,
         // Handled in `main` before any connection is made.
         Resource::Skill(_) => Ok(()),
     }

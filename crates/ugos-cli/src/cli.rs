@@ -1,8 +1,12 @@
 //! Command-line argument definitions.
 
+mod fileserver;
 mod hw;
 mod net;
 
+pub use self::fileserver::{
+    ApplyArgs, DiscoveryArgs, RsyncAction, RsyncArgs, ServiceAction, SmbAction, StopArgs,
+};
 pub use self::hw::{
     BuzzerAction, CpuAction, CpuMode, FanAction, FanMode, GpuAction, GpuModeArg, HwAction,
     LangAction, LedAction, OnOff, PowerAction, PowerSetArgs, ScheduleAction, ScreenAction,
@@ -207,10 +211,30 @@ pub enum Resource {
         #[command(subcommand)]
         action: ShareAction,
     },
-    /// The SMB file service.
+    /// The SMB file service (Windows and macOS file sharing).
     Smb {
         #[command(subcommand)]
         action: SmbAction,
+    },
+    /// The FTP and FTPS file service.
+    Ftp {
+        #[command(subcommand)]
+        action: ServiceAction,
+    },
+    /// The NFS file service.
+    Nfs {
+        #[command(subcommand)]
+        action: ServiceAction,
+    },
+    /// The rsync file service.
+    Rsync {
+        #[command(subcommand)]
+        action: RsyncAction,
+    },
+    /// The `WebDAV` file service.
+    Webdav {
+        #[command(subcommand)]
+        action: ServiceAction,
     },
     /// Download Center: fetch files straight to the NAS.
     Download {
@@ -611,14 +635,6 @@ pub enum ShareAclAction {
         #[arg(required = true)]
         rules: Vec<String>,
     },
-}
-
-/// SMB service actions.
-#[derive(Debug, Subcommand)]
-pub enum SmbAction {
-    /// Show the SMB service: state, workgroup, protocol settings and the
-    /// discovery services.
-    Status,
 }
 
 /// File manager subcommands.
@@ -1673,6 +1689,24 @@ mod tests {
             cli.command,
             Resource::Smb {
                 action: SmbAction::Status
+            }
+        ));
+    }
+
+    #[test]
+    fn a_file_service_takes_settings_and_force() {
+        let (_, cli) = parse(&["ugos-cli", "ftp", "start", "port=2121", "--force"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Resource::Ftp {
+                action: super::ServiceAction::Start(super::ApplyArgs { force: true, .. })
+            }
+        ));
+        let (_, cli) = parse(&["ugos-cli", "smb", "discovery", "--bonjour", "on"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Resource::Smb {
+                action: SmbAction::Discovery(_)
             }
         ));
     }

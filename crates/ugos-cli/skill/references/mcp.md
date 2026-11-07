@@ -210,6 +210,53 @@ Stop a Docker container
 - `id` (required): Container ID.
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
+## ugos_fileservice_set
+
+Change the settings of a file service that runs. Refused if it is off: start it with the settings instead
+
+- `force`: Go on although the web UI asks a confirmation: plain FTP, SMB1,
+`NTLMv1`, NFS, discovery services while SMB is off. Ask the user first.
+- `password`: The rsync password. Only for a new rsync account.
+- `service` (required): `smb`, `ftp`, `nfs`, `rsync` or `webdav`.
+- `settings`: Settings by alias, like `{"port": 2121, "log": "on"}`. The settings
+tool lists the aliases and what they take.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_fileservice_settings
+
+List the settings of a file service by alias, what they take and mean
+
+- `service` (required): `smb`, `ftp`, `nfs`, `rsync` or `webdav`.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_fileservice_start
+
+Switch a file service on, with settings. Plain FTP, SMB1, NTLMv1 and NFS are refused unless force is given: ask the user first. rsync needs an account, and a password for a new one
+
+- `force`: Go on although the web UI asks a confirmation: plain FTP, SMB1,
+`NTLMv1`, NFS, discovery services while SMB is off. Ask the user first.
+- `password`: The rsync password. Only for a new rsync account.
+- `service` (required): `smb`, `ftp`, `nfs`, `rsync` or `webdav`.
+- `settings`: Settings by alias, like `{"port": 2121, "log": "on"}`. The settings
+tool lists the aliases and what they take.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_fileservice_status
+
+Show a file service (smb, ftp, nfs, rsync or webdav): whether it runs and its settings. For smb, also the discovery services
+
+- `service` (required): `smb`, `ftp`, `nfs`, `rsync` or `webdav`.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_fileservice_stop
+
+Switch a file service off. SMB is refused while Bonjour or WS-Discovery announce it unless force is given: ask the user first
+
+- `force`: Go on although discovery services announce the SMB shares. Ask the
+user first.
+- `service` (required): `smb`, `ftp`, `nfs`, `rsync` or `webdav`.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
 ## ugos_group_list
 
 List the groups an administrator made, with their members. The built-in groups are not listed
@@ -938,6 +985,24 @@ Change the quota or the visibility of a shared folder. The result is read back; 
 - `quota`: New quota such as `500m`, `100g` or `2t`.
 - `share` (required): Share name or numeric id.
 - `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_smb_cache_clear
+
+Clear the SMB cache. The network service restarts, so this is refused unless force is given: ask the user first
+
+- `force`: Go on although the network service restarts. Ask the user first.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_smb_discovery
+
+Show or change the SMB discovery services (WS-Discovery, Bonjour, UPnP) and the Time Machine targets. Without arguments it only reads
+
+- `bonjour`: Bonjour, for Macs.
+- `force`: Go on although UGOS advises against it. Ask the user first.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `time_machine`: Shares that are Time Machine targets; an empty list switches it off.
+- `upnp`: `UPnP` announcements.
+- `wsdd2`: WS-Discovery, for Windows.
 
 ## ugos_smb_status
 
