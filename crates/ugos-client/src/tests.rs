@@ -595,3 +595,251 @@ fn a_running_download_reports_its_progress_as_a_fraction() {
         serde_json::from_value(serde_json::json!({})).unwrap();
     assert!(bare.plan.abs() < f64::EPSILON);
 }
+
+// ── Shared folders and SMB ──────────────────────────────────────────
+
+mod shares {
+    use crate::api::shares::{acl_body, pick_share, update_body};
+    use crate::error::UgosError;
+    use crate::types::common::ResultWrapper;
+    use crate::types::shares::{
+        Access, AclChange, CreatedShare, NewShare, PathAcl, PrincipalKind, Share, ShareInfo,
+        SmbAdvanced, SmbConfig,
+    };
+
+    /// `filemgr/getShareList`, trimmed to two entries.
+    const SHARE_LIST: &str = r#"{"result": [
+        {"atime": 1794014795, "ctime": 1766182462, "device": "", "ext": "",
+         "file_type": 1, "filesystem": "btrfs", "icon": 0, "id": 7, "index": 0,
+         "is_migrated": false, "is_mount": true, "mtime": 1792357980,
+         "name": "media", "owner": "root", "owner_type": "user",
+         "path": "/volume1/media", "permission_mask": 7, "size": 0,
+         "tag_ids": null, "time_backup": false, "type": 1, "uid": 0},
+        {"ctime": 1793105644, "filesystem": "btrfs", "id": 8, "mtime": 1793106057,
+         "name": "7", "owner": "root", "path": "/volume1/7", "time_backup": true}
+    ]}"#;
+
+    fn shares() -> Vec<Share> {
+        let list: ResultWrapper<Vec<Share>> = serde_json::from_str(SHARE_LIST).unwrap();
+        list.result
+    }
+
+    #[test]
+    fn a_share_list_entry_keeps_what_a_share_needs() {
+        let all = shares();
+        assert_eq!(all.len(), 2);
+        assert_eq!(all[0].id, 7);
+        assert_eq!(all[0].name, "media");
+        assert_eq!(all[0].path, "/volume1/media");
+        assert_eq!(all[0].filesystem, "btrfs");
+        assert!(!all[0].time_backup);
+        assert!(all[1].time_backup);
+    }
+
+    #[test]
+    fn a_name_wins_over_an_id_and_an_id_is_the_fallback() {
+        let all = shares();
+        // "7" is the name of share 8 and the id of share 7: the name wins.
+        assert_eq!(pick_share(&all, "7").unwrap().id, 8);
+        assert_eq!(pick_share(&all, "media").unwrap().id, 7);
+        // No share is called "8", so it is read as an id.
+        assert_eq!(pick_share(&all, "8").unwrap().name, "7");
+    }
+
+    #[test]
+    fn an_unknown_share_is_not_found() {
+        let err = pick_share(&shares(), "nope").unwrap_err();
+        assert!(matches!(
+            err,
+            UgosError::NotFound { kind: "share", ref name } if name == "nope"
+        ));
+        assert!(pick_share(&shares(), "99").is_err());
+    }
+
+    /// `filemgr/getShareFolderInfo`.
+    const SHARE_INFO: &str = r#"{"data_check": false, "encrypt_status": 0, "id": 42,
+        "name": "scratch", "network_places_hide": true, "no_permission_hide": true,
+        "owner": "root", "owner_name": "", "owner_type": "user",
+        "path": "/volume1/scratch", "quota": 5, "uid": 0, "unit": 1,
+        "volume": "/volume1"}"#;
+
+    #[test]
+    fn share_settings_deserialize() {
+        let info: ShareInfo = serde_json::from_str(SHARE_INFO).unwrap();
+        assert_eq!(info.id, 42);
+        assert_eq!(info.volume, "/volume1");
+        assert_eq!((info.quota, info.unit), (5, 1));
+        assert!(info.network_places_hide);
+        assert!(info.no_permission_hide);
+        assert!(!info.data_check);
+    }
+
+    #[test]
+    fn the_update_body_nests_the_settings_and_lifts_one_flag() {
+        let info: ShareInfo = serde_json::from_str(SHARE_INFO).unwrap();
+        let body = update_body(&info);
+        assert_eq!(body["id"], 42);
+        let nested = &body["set_share_folder_info"];
+        assert_eq!(nested["name"], "scratch");
+        assert_eq!(nested["volume"], "/volume1");
+        assert_eq!(nested["quota"], 5);
+        assert_eq!(nested["unit"], 1);
+        assert_eq!(nested["network_places_hide"], true);
+        assert_eq!(nested["data_check"], false);
+        // `no_permission_hide` travels beside the settings, not inside them.
+        assert!(nested.get("no_permission_hide").is_none());
+        assert_eq!(body["no_permission_hide"], true);
+        assert_eq!(body["permissions"], serde_json::json!([]));
+        // Nothing sits at the top level that UGOS would silently ignore.
+        assert!(body.get("quota").is_none());
+    }
+
+    #[test]
+    fn a_new_share_defaults_to_what_the_web_ui_offers() {
+        let body = serde_json::to_value(NewShare::new("/volume1", "scratch")).unwrap();
+        assert_eq!(body["volume"], "/volume1");
+        assert_eq!(body["name"], "scratch");
+        assert_eq!(body["quota"], 0);
+        assert_eq!(body["unit"], 1);
+        assert_eq!(body["data_check"], false);
+        assert_eq!(body["network_places_hide"], false);
+        assert_eq!(body["no_permission_hide"], true);
+        assert_eq!(body["enable_recycle"], true);
+        assert_eq!(body["allow_only_admin_recycle"], true);
+        assert_eq!(body["permissions"], serde_json::json!([]));
+        // Encryption is never asked for.
+        assert_eq!(body["open_encrypt"], false);
+        assert_eq!(body["encrypt_session_id"], "");
+    }
+
+    #[test]
+    fn the_created_share_names_its_id_and_path() {
+        let created: CreatedShare = serde_json::from_str(
+            r#"{"id": 42, "name": "scratch", "path": "/volume1/scratch", "owner": "root"}"#,
+        )
+        .unwrap();
+        assert_eq!(created.id, 42);
+        assert_eq!(created.path, "/volume1/scratch");
+    }
+
+    /// `v2/filemgr/pathAcl`, as a share with one admin group answers.
+    const PATH_ACL: &str = r#"{"acls": [{"full_name": "admin", "gid": 10, "name": "admin",
+        "parent_permissions": -1, "permission_mask": 7, "select_permissions": 7,
+        "users": [{"full_name": "fabian", "is_admin": true, "parent_permissions": -1,
+                   "permission_mask": 7, "select_permissions": -1, "uid": 1000,
+                   "username": "fabian"}]}],
+        "no_permission_hide": true, "total_users": 1}"#;
+
+    #[test]
+    fn an_acl_lists_groups_with_their_members() {
+        let acl: PathAcl = serde_json::from_str(PATH_ACL).unwrap();
+        assert_eq!(acl.total_users, 1);
+        assert!(acl.no_permission_hide);
+        let group = &acl.acls[0];
+        assert_eq!(group.name, "admin");
+        assert_eq!(group.select_permissions, 7);
+        let user = &group.users[0];
+        assert_eq!(user.username, "fabian");
+        assert!(user.is_admin);
+        // Nothing set for the user, so the group's access applies.
+        assert_eq!(user.select_permissions, -1);
+        assert_eq!(user.permission_mask, 7);
+    }
+
+    #[test]
+    fn masks_read_the_way_the_web_ui_reads_them() {
+        assert_eq!(Access::from_mask(0), Access::None);
+        assert_eq!(Access::from_mask(4), Access::Read);
+        assert_eq!(Access::from_mask(5), Access::Read);
+        assert_eq!(Access::from_mask(6), Access::ReadWrite);
+        assert_eq!(Access::from_mask(7), Access::ReadWrite);
+        assert_eq!(Access::from_mask(-1), Access::Inherit);
+        assert_eq!(Access::from_mask(3), Access::Other(3));
+    }
+
+    #[test]
+    fn settings_write_the_masks_the_web_ui_writes() {
+        assert_eq!(Access::None.mask(), 0);
+        assert_eq!(Access::Read.mask(), 4);
+        assert_eq!(Access::ReadWrite.mask(), 7);
+        assert_eq!(Access::Inherit.mask(), -1);
+        assert_eq!(Access::Other(3).mask(), 3);
+    }
+
+    #[test]
+    fn access_words_round_trip_and_reject_nonsense() {
+        for access in [
+            Access::None,
+            Access::Read,
+            Access::ReadWrite,
+            Access::Inherit,
+        ] {
+            assert_eq!(Access::parse(&access.label()), Ok(access));
+        }
+        assert_eq!(Access::parse(" RW "), Ok(Access::ReadWrite));
+        assert_eq!(Access::parse("write"), Ok(Access::ReadWrite));
+        assert_eq!(Access::parse("maybe"), Err("maybe".to_owned()));
+        // A mask this client does not know cannot be asked for by word.
+        assert!(Access::parse("mask 3").is_err());
+    }
+
+    #[test]
+    fn the_acl_body_carries_only_the_changes() {
+        let changes = [
+            AclChange {
+                kind: PrincipalKind::User,
+                name: "fabian".into(),
+                permission_mask: Access::Read.mask(),
+                is_admin: true,
+            },
+            AclChange {
+                kind: PrincipalKind::Group,
+                name: "users".into(),
+                permission_mask: Access::Inherit.mask(),
+                is_admin: false,
+            },
+        ];
+        let body = acl_body("/volume1/scratch", &changes);
+        assert_eq!(body["path"], "/volume1/scratch");
+        let list = body["permissions"].as_array().unwrap();
+        assert_eq!(list.len(), 2);
+        assert_eq!(list[0]["type"], "user");
+        assert_eq!(list[0]["name"], "fabian");
+        assert_eq!(list[0]["permission_mask"], 4);
+        assert_eq!(list[0]["is_admin"], true);
+        assert_eq!(list[1]["type"], "group");
+        assert_eq!(list[1]["permission_mask"], -1);
+    }
+
+    #[test]
+    fn the_smb_config_keeps_what_is_worth_showing() {
+        let json = r#"{"status": true, "nas_name": "nas", "work_group": "HOME",
+            "wins_server": "", "is_joined_domain": false,
+            "hide_share_dir_for_no_permission": true, "smb_protocols": [2],
+            "min_protocol": 0, "max_protocol": 0, "encrypt_mode": 0,
+            "server_sign_mode": 1, "enable_ntlmv1": false,
+            "enable_op_locks": true, "veto_files": ""}"#;
+        let config: SmbConfig = serde_json::from_str(json).unwrap();
+        assert!(config.status);
+        assert_eq!(config.work_group, "HOME");
+        assert_eq!(config.smb_protocols, vec![2]);
+        assert_eq!(config.server_sign_mode, 1);
+        assert!(!config.enable_ntlmv1);
+        assert!(config.hide_share_dir_for_no_permission);
+    }
+
+    #[test]
+    fn the_advanced_config_maps_its_camel_case_names() {
+        let json = r#"{"enableBonjourService": false, "enableTimeMachine": true,
+            "enableUPnPService": true, "enableWsdd2Service": true,
+            "sharedFileInfos": [{"id": 4, "modify_time": 1793483009, "name": "docker",
+                                  "path": "/volume1/docker", "time_backup": false, "type": 1}]}"#;
+        let advanced: SmbAdvanced = serde_json::from_str(json).unwrap();
+        assert!(!advanced.bonjour);
+        assert!(advanced.wsdd2);
+        assert!(advanced.upnp);
+        assert!(advanced.time_machine);
+        assert_eq!(advanced.shares.len(), 1);
+        assert_eq!(advanced.shares[0].name, "docker");
+    }
+}

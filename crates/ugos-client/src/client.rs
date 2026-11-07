@@ -481,11 +481,39 @@ impl UgosClient {
         path: &str,
         params: &[(&str, &str)],
     ) -> Result<T> {
+        self.delete_encrypted_inner(path, params, false).await
+    }
+
+    /// Perform an encrypted DELETE that UGOS wants confirmed with the
+    /// account's password, which the file manager asks for before it deletes
+    /// a shared folder.
+    ///
+    /// The password goes in the `X-CurPass-Token` header, RSA-sealed with the
+    /// login key the way the login does it. It is the one this client logged
+    /// in with.
+    ///
+    /// # Errors
+    ///
+    /// Returns the appropriate [`UgosError`] on API, crypto or network failure.
+    pub async fn delete_encrypted_confirmed<T: DeserializeOwned + Send>(
+        &self,
+        path: &str,
+        params: &[(&str, &str)],
+    ) -> Result<T> {
+        self.delete_encrypted_inner(path, params, true).await
+    }
+
+    async fn delete_encrypted_inner<T: DeserializeOwned + Send>(
+        &self,
+        path: &str,
+        params: &[(&str, &str)],
+        confirm_with_password: bool,
+    ) -> Result<T> {
         let public_key = self.public_key().await?;
         let key = RequestKey::generate(&public_key)?;
         let token = self.session.read().await.token.clone();
 
-        let raw: serde_json::Value = self
+        let mut request = self
             .http
             .delete(self.url_for(path))
             .query(&[(
@@ -494,11 +522,18 @@ impl UgosClient {
             )])
             .header("X-Ugreen-Security-Code", &key.security_code)
             .header("X-Ugreen-Security-Key", md5_hex(&token))
-            .header("X-Ugreen-Token", rsa_seal(&public_key, &token)?)
-            .send()
-            .await?
-            .json()
-            .await?;
+            .header("X-Ugreen-Token", rsa_seal(&public_key, &token)?);
+        if confirm_with_password {
+            // The login key, from `verify/check`, and not the session key
+            // the encrypted transport uses: UGOS answers 1006 to the latter.
+            let login_key =
+                auth::fetch_rsa_key(&self.http, &self.base_url, &self.creds.username).await?;
+            request = request.header(
+                "X-CurPass-Token",
+                auth::encrypt_password(&login_key, &self.creds.password)?,
+            );
+        }
+        let raw: serde_json::Value = request.send().await?.json().await?;
         Self::decode_encrypted(raw, &key)
     }
 

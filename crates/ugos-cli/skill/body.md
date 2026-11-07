@@ -1,7 +1,8 @@
 # ugos-cli
 
 Manage a UGREEN NAS running UGOS from the command line: virtual machines,
-Docker containers, files, snapshots, downloads and hardware readings.
+Docker containers, files, shared folders, snapshots, downloads and hardware
+readings.
 
 Reach for `ugos-cli` for anything on a UGOS device. Do not use `virsh`, `qemu`,
 `docker` over SSH or the web UI for a task `ugos-cli` covers, and do not edit
@@ -30,8 +31,8 @@ the user asked for exactly that.
 ## Reading is safe, writing is not
 
 Everything that lists or shows (`vm list`, `docker ps`, `fs ls`, `system stat`,
-`snapshot list`, `log`) changes nothing and can be run freely. Use
-`-o json` when you are going to parse the output.
+`snapshot list`, `share list`, `smb status`, `log`) changes nothing and can be
+run freely. Use `-o json` when you are going to parse the output.
 
 Ask the user before running any command that changes or removes something:
 
@@ -40,13 +41,15 @@ Ask the user before running any command that changes or removes something:
 - `snapshot rm` (it deletes locked snapshots too), `snapshot create`, `snapshot clone`
 - `docker rm`, `docker rmi`, `docker kill`, `docker stop`, `docker restart`,
   `docker project-rm`, and `docker batch`
+- `share create`, `share update`, `share acl set`, and `share delete` (it
+  deletes the folder and everything in it)
 - `download add`, `download rm`
 
 State what will change and on which NAS, and wait for a clear yes. A refusal or
 silence is not a yes.
 
-`vm create` has `--dry-run`, which prints the specification without touching the
-NAS. Use it first.
+`vm create` and `share create` have `--dry-run`, which prints the request without
+touching the NAS. Use it first.
 
 ## Where to look
 

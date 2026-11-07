@@ -91,6 +91,17 @@ ugos-cli snapshot list backup
 ugos-cli snapshot create backup --desc "before the migration"
 ugos-cli snapshot clone backup 3 backup-recovered
 
+# Shared folders (the SMB shares) and their access rules
+ugos-cli share list
+ugos-cli share show media
+ugos-cli share create media --quota 500g --dry-run   # print the request first
+ugos-cli share create media --quota 500g
+ugos-cli share update media --hide-in-network
+ugos-cli share acl show media
+ugos-cli share acl set media user:anna=rw group:family=read
+ugos-cli share delete media                          # deletes the folder's files too
+ugos-cli smb status
+
 # Let the NAS fetch a file straight from the internet
 ugos-cli download add https://example.org/big.iso
 ugos-cli download list
@@ -451,6 +462,7 @@ notes are kept because the reasoning is easy to lose and expensive to redo.
 | [api-downloadcenter.md](docs/api-downloadcenter.md) | Queuing downloads for the NAS to fetch |
 | [api-system.md](docs/api-system.md) | Machine info, monitoring, processes, services |
 | [api-snapshot.md](docs/api-snapshot.md) | Filesystem snapshots of shares and homes |
+| [api-shares.md](docs/api-shares.md) | Shared folders, their access rules, and the SMB service |
 | [packaging.md](docs/packaging.md) | Release channels, signing and reproducibility |
 | [api-backup.md](docs/api-backup.md) | Why no backup commands exist |
 
@@ -477,6 +489,8 @@ notes are kept because the reasoning is easy to lose and expensive to redo.
 | **Download** | queue a URL for the NAS to fetch, list, check, status, remove |
 | **Files** (`fs`) | list a directory, list volumes, upload, download, create, rename, delete |
 | **Filesystem snapshots** (`snapshot`) | list folders, list, create, edit, delete, clone |
+| **Shared folders** (`share`) | list, show, create, update (quota, visibility), delete, show and set access rules |
+| **SMB service** (`smb`) | show state, workgroup, protocol codes and discovery services |
 | **Docker container** (`docker`) | list, show, create, start, stop, restart, kill, remove, update, clone, batch-operate, logs |
 | **Docker image** | list, search, download, delete, export, load (URL/path) |
 | **Docker registry** | list/add/delete/switch mirror, HTTP proxy get/set |
@@ -509,6 +523,7 @@ anything critical.
 
 | Resource | Notes |
 |----------|-------|
+| SMB start, stop and settings | Each interrupts every connected client, which cannot be tried safely on a NAS in use. The endpoints are in [docs/api-shares.md](docs/api-shares.md). NFS, FTP, WebDAV and rsync are not wired either |
 | Image rename | `RenameImage` answers `successful` and renames nothing; field names unknown |
 | OVA import (one step) | `ova parse` reads an OVA into a VM spec; creating the VM from it is still a manual second step |
 | Backup | There is no backup API. The only three `backup_restore` paths appear solely in the UI's encryption whitelist, nothing calls them, and the group has no status or listing endpoint — see [docs/api-backup.md](docs/api-backup.md) |
