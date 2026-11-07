@@ -240,6 +240,38 @@ impl UgosClient {
         .await
     }
 
+    /// Perform a POST request that is confirmed with the account's password,
+    /// as UGOS asks before it deletes a LUN together with its target.
+    ///
+    /// The password goes in the `X-CurPass-Token` header, sealed the way
+    /// [`seal_password`](Self::seal_password) does it.
+    ///
+    /// # Errors
+    ///
+    /// Returns the appropriate [`UgosError`] on API, crypto or network failure.
+    pub async fn post_confirmed<T: DeserializeOwned + Send, B: serde::Serialize + Sync>(
+        &self,
+        path: &str,
+        body: &B,
+    ) -> Result<T> {
+        self.retrying(|| async {
+            let token = self.session.read().await.token.clone();
+            let url = Self::append_token(&self.url_for(path), &token);
+            let sealed = self.seal_password(&self.creds.password).await?;
+            let resp: ApiResponse<serde_json::Value> = self
+                .http
+                .post(&url)
+                .header("X-CurPass-Token", sealed)
+                .json(body)
+                .send()
+                .await?
+                .json()
+                .await?;
+            Self::decode(resp)
+        })
+        .await
+    }
+
     /// Perform a GET request that is confirmed with the account's password,
     /// as UGOS asks before a factory reset.
     ///

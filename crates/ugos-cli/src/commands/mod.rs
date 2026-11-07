@@ -7,6 +7,7 @@ mod hw_power;
 mod nas_storage;
 mod net;
 mod net_links;
+mod san;
 mod secret;
 mod share;
 mod update;
@@ -80,6 +81,7 @@ pub async fn run(
         Resource::Webdav { action } => {
             fileserver::service(client, Service::Webdav, action, fmt, w).await
         }
+        Resource::San { action } => san::san(client, action, fmt, w).await,
         Resource::Update { action } => update::update(client, action, fmt, w).await,
         Resource::Backup { action } => update::backup(client, action, fmt, w).await,
         Resource::Index { action } => update::index(client, action, fmt, w).await,

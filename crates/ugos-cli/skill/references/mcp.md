@@ -1008,6 +1008,189 @@ Stop a Docker Compose project (containers remain, not removed)
 - `name` (required): Compose project name.
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
+## ugos_san_group_create
+
+Make an initiator group with at least one initiator IQN
+
+- `desc`: A description, up to 32 characters.
+- `iqns` (required): Initiator IQNs, at least one.
+- `name` (required): Name, letters, digits, `_` and `-`, up to 32.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_san_group_delete
+
+Delete an initiator group. Refused while LUNs are bound to it unless force is given: ask the user first
+
+- `force`: Go on although data is destroyed or connections are cut. Ask the user
+first.
+- `name` (required): Name or id.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `with_lun`: Targets: delete the mapped LUN and its data as well.
+
+## ugos_san_group_edit
+
+Change a group: name, description, add or remove initiators. Refused while LUNs are bound to it unless force is given: ask the user first
+
+- `add`: Initiator IQNs to add.
+- `desc`: A new description.
+- `force`: Go on although LUNs are bound to the group. Ask the user first.
+- `name` (required): Name or id.
+- `new_name`: A new name.
+- `remove`: Initiator IQNs to remove.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_san_group_list
+
+List the initiator groups
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_san_lun_create
+
+Make a LUN of a size in whole GB or TB on a volume, thin or thick
+
+- `desc`: A description, up to 32 characters.
+- `force`: Go on although a thin LUN is larger than the free space. Ask the user
+first.
+- `name` (required): Name, letters, digits, `_` and `-`, up to 32.
+- `size` (required): Size in whole GB or TB, like `100G` or `2T`.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `thin`: A thin LUN, which takes space as it is written. Else thick.
+- `volume` (required): The volume, by name or label.
+
+## ugos_san_lun_delete
+
+Delete a LUN and the data on it. Refused unless force is given: ask the user first
+
+- `force`: Go on although data is destroyed or connections are cut. Ask the user
+first.
+- `name` (required): Name or id.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `with_lun`: Targets: delete the mapped LUN and its data as well.
+
+## ugos_san_lun_edit
+
+Change a LUN: name, description, a larger size, force unit access, access by group. A larger size cannot be undone and access changes what initiators see: refused unless force is given, ask the user first
+
+- `access`: `all` groups, or `groups` for the ones in `groups`.
+- `desc`: A new description.
+- `force`: Go on although a size or access change cannot be undone. Ask the user
+first.
+- `fua`: Force unit access.
+- `groups`: Groups with access, as `name` (read-write) or `name=ro`.
+- `name` (required): The LUN, by name or id.
+- `new_name`: A new name.
+- `size`: A larger size, like `200G`. It cannot be made smaller again.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_san_lun_list
+
+List the LUNs with size, use, volume, target and state
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_san_lun_show
+
+Show one LUN
+
+- `name` (required): Name or id.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_san_setting
+
+Show the iSCSI port, IQN prefix and default CHAP
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_san_setting_set
+
+Change the iSCSI port, IQN prefix or default CHAP. A new port restarts the service and new credentials affect connected initiators: refused unless force is given, ask the user first
+
+- `chap`: The default CHAP, `off`, `one_way` or `mutual`.
+- `force`: Go on although a new port restarts the service or credentials change.
+Ask the user first.
+- `iqn_prefix`: The start of every IQN.
+- `port`: The iSCSI port, 1001 to 65535.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_san_target_connections
+
+List the initiators connected to a target (name), or to all (empty name)
+
+- `force`: Go on although initiators are connected. Ask the user first.
+- `name`: Name or id. For connections, empty means all targets.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_san_target_create
+
+Make an iSCSI target and map a LUN to it, with optional CHAP
+
+- `chap`: CHAP; none when not given.
+- `iqn`: The IQN; the next free one when not given.
+- `lun` (required): The LUN to map, by name or id; it must not be mapped yet.
+- `name` (required): Name, letters, digits, `_` and `-`, up to 32.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_san_target_delete
+
+Delete an iSCSI target; with_lun also destroys the mapped LUN and its data. Refused unless force is given: ask the user first
+
+- `force`: Go on although data is destroyed or connections are cut. Ask the user
+first.
+- `name` (required): Name or id.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `with_lun`: Targets: delete the mapped LUN and its data as well.
+
+## ugos_san_target_disable
+
+Switch an iSCSI target off. Connected initiators lose it: refused unless force is given, ask the user first
+
+- `force`: Go on although initiators are connected. Ask the user first.
+- `name`: Name or id. For connections, empty means all targets.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_san_target_edit
+
+Change a target: name, IQN, several connections, CHAP, digests. Refused while initiators are connected unless force is given: ask the user first
+
+- `apply_now`: Apply CHAP and digest changes to connected initiators now, dropping
+their sessions.
+- `chap`: New CHAP.
+- `data_crc`: Data digest.
+- `force`: Go on although initiators are connected. Ask the user first.
+- `head_crc`: Header digest.
+- `iqn`: A new IQN.
+- `multi_conn`: Several connections per initiator.
+- `name` (required): The target, by name or id.
+- `new_name`: A new name.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_san_target_enable
+
+Switch an iSCSI target on
+
+- `name` (required): Name or id.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_san_target_list
+
+List the iSCSI targets with their LUNs, CHAP and state
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_san_target_predict
+
+Show the next free target name and IQN
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_san_target_show
+
+Show one iSCSI target
+
+- `name` (required): Name or id.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
 ## ugos_share_acl_set
 
 Set access rules on a shared folder. The administrators group always keeps read and write; a rule asking for less is reported, not applied
