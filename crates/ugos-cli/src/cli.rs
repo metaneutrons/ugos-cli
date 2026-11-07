@@ -140,6 +140,16 @@ pub enum Resource {
         #[command(subcommand)]
         action: FsSnapshotAction,
     },
+    /// Shared folders: settings and access rules.
+    Share {
+        #[command(subcommand)]
+        action: ShareAction,
+    },
+    /// The SMB file service.
+    Smb {
+        #[command(subcommand)]
+        action: SmbAction,
+    },
     /// Download Center: fetch files straight to the NAS.
     Download {
         #[command(subcommand)]
@@ -256,6 +266,132 @@ pub enum FsSnapshotAction {
         /// Name for the new folder.
         new_name: String,
     },
+}
+
+/// Shared folder actions.
+///
+/// A share is a top-level folder on a volume that UGOS offers over SMB. The
+/// name is the folder's base name; a number is read as the share id when no
+/// share has that name.
+#[derive(Debug, Subcommand)]
+pub enum ShareAction {
+    /// List the shared folders.
+    List,
+    /// Show the settings of a share.
+    Show {
+        /// Share name or id, as shown by `share list`.
+        share: String,
+    },
+    /// Create a share.
+    ///
+    /// The defaults are the web UI's: a recycle bin that only administrators
+    /// may empty, hidden from users without access, visible in the network,
+    /// no checksums, no encryption, no space limit. Only administrators
+    /// have access at first; grant the rest with `share acl set`.
+    Create {
+        /// Name of the new folder.
+        name: String,
+        /// Volume to create it on, such as `/volume1`. Optional when the NAS
+        /// has a single volume.
+        #[arg(long)]
+        volume: Option<String>,
+        /// Space limit, a number and a unit: `500m`, `100g` or `2t`.
+        #[arg(long)]
+        quota: Option<String>,
+        /// Do not announce the share when browsing the network. It stays
+        /// reachable by name.
+        #[arg(long)]
+        hide_in_network: bool,
+        /// Show the share to users who have no access to it.
+        #[arg(long)]
+        show_unreadable: bool,
+        /// Do not keep a recycle bin.
+        #[arg(long)]
+        no_recycle: bool,
+        /// Let any user with access empty the recycle bin, not only
+        /// administrators.
+        #[arg(long)]
+        recycle_for_everyone: bool,
+        /// Turn on data checksums (btrfs).
+        #[arg(long)]
+        data_check: bool,
+        /// Print the request instead of sending it.
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Change the settings of a share.
+    ///
+    /// The name and the volume stay as they are.
+    Update {
+        /// Share name or id.
+        share: String,
+        /// New space limit: `500m`, `100g` or `2t`.
+        #[arg(long, conflicts_with = "no_quota")]
+        quota: Option<String>,
+        /// Remove the space limit.
+        #[arg(long)]
+        no_quota: bool,
+        /// Do not announce the share when browsing the network.
+        #[arg(long, conflicts_with = "show_in_network")]
+        hide_in_network: bool,
+        /// Announce the share when browsing the network.
+        #[arg(long)]
+        show_in_network: bool,
+        /// Hide the share from users who have no access to it.
+        #[arg(long, conflicts_with = "show_unreadable")]
+        hide_unreadable: bool,
+        /// Show the share to users who have no access to it.
+        #[arg(long)]
+        show_unreadable: bool,
+    },
+    /// Delete a share and everything in its folder.
+    ///
+    /// The folder's files are deleted with it. UGOS asks for the account's
+    /// password for this, and `ugos-cli` sends the one it logged in with.
+    /// Refuses when the folder holds files, unless `--force` is given.
+    Delete {
+        /// Share name or id.
+        share: String,
+        /// Delete the share although its folder is not empty.
+        #[arg(long)]
+        force: bool,
+    },
+    /// Access rules of a share.
+    Acl {
+        #[command(subcommand)]
+        action: ShareAclAction,
+    },
+}
+
+/// Access rule actions of a share.
+#[derive(Debug, Subcommand)]
+pub enum ShareAclAction {
+    /// Show who has which access.
+    Show {
+        /// Share name or id.
+        share: String,
+    },
+    /// Set access for users and groups.
+    ///
+    /// Each rule is `user:NAME=ACCESS` or `group:NAME=ACCESS`, where ACCESS is
+    /// `none`, `read`, `rw` or `inherit` (nothing set for this user or group,
+    /// so the other rules decide). Entries that are not named keep their
+    /// access. UGOS keeps administrators at read and write.
+    Set {
+        /// Share name or id.
+        share: String,
+        /// Rules, such as `user:anna=rw` or `group:guests=read`.
+        #[arg(required = true)]
+        rules: Vec<String>,
+    },
+}
+
+/// SMB service actions.
+#[derive(Debug, Subcommand)]
+pub enum SmbAction {
+    /// Show the SMB service: state, workgroup, protocol settings and the
+    /// discovery services.
+    Status,
 }
 
 /// File manager subcommands.
@@ -1079,9 +1215,9 @@ impl Cli {
 }
 
 #[cfg(test)]
-#[allow(clippy::unwrap_used)]
+#[allow(clippy::unwrap_used, clippy::panic)]
 mod tests {
-    use super::Cli;
+    use super::{Cli, Resource, ShareAclAction, ShareAction, SmbAction};
     use clap::parser::ValueSource;
     use clap::{CommandFactory as _, FromArgMatches as _};
 
@@ -1137,6 +1273,118 @@ mod tests {
         assert!(cli.reads_stdin_twice());
         let (_, cli) = parse(&["ugos-cli", "--password-stdin", "vm", "list"]).unwrap();
         assert!(!cli.reads_stdin_twice());
+    }
+
+    #[test]
+    fn share_create_takes_its_options() {
+        let (_, cli) = parse(&[
+            "ugos-cli",
+            "share",
+            "create",
+            "media",
+            "--volume",
+            "/volume1",
+            "--quota",
+            "500g",
+            "--hide-in-network",
+            "--dry-run",
+        ])
+        .unwrap();
+        let Resource::Share {
+            action:
+                ShareAction::Create {
+                    name,
+                    volume,
+                    quota,
+                    hide_in_network,
+                    dry_run,
+                    show_unreadable,
+                    ..
+                },
+        } = cli.command
+        else {
+            panic!("not a share create");
+        };
+        assert_eq!(name, "media");
+        assert_eq!(volume.as_deref(), Some("/volume1"));
+        assert_eq!(quota.as_deref(), Some("500g"));
+        assert!(hide_in_network && dry_run);
+        assert!(!show_unreadable);
+    }
+
+    #[test]
+    fn share_update_refuses_contradicting_flags() {
+        for args in [
+            &["share", "update", "x", "--quota", "5g", "--no-quota"][..],
+            &[
+                "share",
+                "update",
+                "x",
+                "--hide-in-network",
+                "--show-in-network",
+            ][..],
+            &[
+                "share",
+                "update",
+                "x",
+                "--hide-unreadable",
+                "--show-unreadable",
+            ][..],
+        ] {
+            let mut argv = vec!["ugos-cli"];
+            argv.extend_from_slice(args);
+            let err = parse(&argv).unwrap_err();
+            assert_eq!(
+                err.kind(),
+                clap::error::ErrorKind::ArgumentConflict,
+                "{args:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn share_acl_set_needs_at_least_one_rule() {
+        let err = parse(&["ugos-cli", "share", "acl", "set", "media"]).unwrap_err();
+        assert_eq!(err.kind(), clap::error::ErrorKind::MissingRequiredArgument);
+        let (_, cli) = parse(&[
+            "ugos-cli",
+            "share",
+            "acl",
+            "set",
+            "media",
+            "user:anna=rw",
+            "group:family=read",
+        ])
+        .unwrap();
+        let Resource::Share {
+            action:
+                ShareAction::Acl {
+                    action: ShareAclAction::Set { share, rules },
+                },
+        } = cli.command
+        else {
+            panic!("not a share acl set");
+        };
+        assert_eq!(share, "media");
+        assert_eq!(rules, vec!["user:anna=rw", "group:family=read"]);
+    }
+
+    #[test]
+    fn share_delete_and_smb_status_parse() {
+        let (_, cli) = parse(&["ugos-cli", "share", "delete", "media", "--force"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Resource::Share {
+                action: ShareAction::Delete { force: true, .. }
+            }
+        ));
+        let (_, cli) = parse(&["ugos-cli", "smb", "status"]).unwrap();
+        assert!(matches!(
+            cli.command,
+            Resource::Smb {
+                action: SmbAction::Status
+            }
+        ));
     }
 
     #[test]

@@ -1126,6 +1126,182 @@ pub fn print_json(w: &mut impl Write, value: &impl Serialize) -> Result<()> {
     Ok(())
 }
 
+// ── Shares ──────────────────────────────────────────────────────────
+
+/// Table row for a shared folder.
+#[derive(Serialize)]
+pub struct ShareRow {
+    pub id: i64,
+    pub name: String,
+    pub path: String,
+    pub filesystem: String,
+    pub owner: String,
+    pub time_machine: String,
+}
+
+table_row! {
+  ShareRow {
+    id => "ID",
+    name => "Name",
+    path => "Path",
+    filesystem => "Filesystem",
+    owner => "Owner",
+    time_machine => "Time Machine",
+  }
+}
+
+impl From<&ugos_client::types::shares::Share> for ShareRow {
+    fn from(share: &ugos_client::types::shares::Share) -> Self {
+        Self {
+            id: share.id,
+            name: share.name.clone(),
+            path: share.path.clone(),
+            filesystem: share.filesystem.clone(),
+            owner: share.owner.clone(),
+            time_machine: yes_no(share.time_backup),
+        }
+    }
+}
+
+/// A field and its value, for the detail views of shares and the SMB service.
+#[derive(Serialize)]
+pub struct FieldRow {
+    pub field: String,
+    pub value: String,
+}
+
+table_row! {
+  FieldRow {
+    field => "Field",
+    value => "Value",
+  }
+}
+
+fn field(name: &str, value: impl Into<String>) -> FieldRow {
+    FieldRow {
+        field: name.into(),
+        value: value.into(),
+    }
+}
+
+fn yes_no(flag: bool) -> String {
+    if flag { "yes" } else { "no" }.into()
+}
+
+/// The settings of one share as field and value rows.
+pub fn share_info_rows(info: &ugos_client::types::shares::ShareInfo) -> Vec<FieldRow> {
+    let units = ugos_client::types::shares::QUOTA_UNITS;
+    let quota = if info.quota <= 0 {
+        "none".to_owned()
+    } else {
+        let unit = usize::try_from(info.unit)
+            .ok()
+            .and_then(|index| units.get(index).copied())
+            .unwrap_or("?");
+        format!("{} {unit}", info.quota)
+    };
+    vec![
+        field("ID", info.id.to_string()),
+        field("Name", info.name.clone()),
+        field("Path", info.path.clone()),
+        field("Volume", info.volume.clone()),
+        field("Owner", info.owner.clone()),
+        field("Quota", quota),
+        field("Hidden in network", yes_no(info.network_places_hide)),
+        field(
+            "Hidden from users without access",
+            yes_no(info.no_permission_hide),
+        ),
+        field("Data checksums", yes_no(info.data_check)),
+        field("Encrypted", yes_no(info.encrypt_status != 0)),
+    ]
+}
+
+/// Table row for one entry of an access list.
+#[derive(Serialize)]
+pub struct AclRow {
+    pub kind: String,
+    pub name: String,
+    pub set: String,
+    pub effective: String,
+}
+
+table_row! {
+  AclRow {
+    kind => "Type",
+    name => "Name",
+    set => "Set",
+    effective => "Effective",
+  }
+}
+
+/// The access list of a path: each group, then its members.
+pub fn acl_rows(acl: &ugos_client::types::shares::PathAcl) -> Vec<AclRow> {
+    use ugos_client::types::shares::Access;
+    let mut rows = Vec::new();
+    for group in &acl.acls {
+        rows.push(AclRow {
+            kind: "group".into(),
+            name: group.name.clone(),
+            set: Access::from_mask(group.select_permissions).label(),
+            effective: Access::from_mask(group.permission_mask).label(),
+        });
+        for user in &group.users {
+            rows.push(AclRow {
+                kind: "user".into(),
+                name: user.username.clone(),
+                set: Access::from_mask(user.select_permissions).label(),
+                effective: Access::from_mask(user.permission_mask).label(),
+            });
+        }
+    }
+    rows
+}
+
+/// The SMB service as field and value rows.
+///
+/// Protocol, encryption and signing are numeric codes whose meaning UGOS does
+/// not document, so they are shown as codes.
+pub fn smb_rows(
+    config: &ugos_client::types::shares::SmbConfig,
+    advanced: &ugos_client::types::shares::SmbAdvanced,
+) -> Vec<FieldRow> {
+    let protocols = config
+        .smb_protocols
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join(", ");
+    vec![
+        field("Service", if config.status { "running" } else { "stopped" }),
+        field("Server name", config.nas_name.clone()),
+        field("Workgroup", config.work_group.clone()),
+        field(
+            "WINS server",
+            if config.wins_server.is_empty() {
+                "none".to_owned()
+            } else {
+                config.wins_server.clone()
+            },
+        ),
+        field("Joined to a domain", yes_no(config.is_joined_domain)),
+        field(
+            "Hide shares without access",
+            yes_no(config.hide_share_dir_for_no_permission),
+        ),
+        field("Protocol selection (code)", protocols),
+        field("Minimum protocol (code)", config.min_protocol.to_string()),
+        field("Maximum protocol (code)", config.max_protocol.to_string()),
+        field("Encryption mode (code)", config.encrypt_mode.to_string()),
+        field("Signing mode (code)", config.server_sign_mode.to_string()),
+        field("NTLMv1 allowed", yes_no(config.enable_ntlmv1)),
+        field("Bonjour (Mac discovery)", yes_no(advanced.bonjour)),
+        field("WS-Discovery (Windows discovery)", yes_no(advanced.wsdd2)),
+        field("UPnP", yes_no(advanced.upnp)),
+        field("Time Machine", yes_no(advanced.time_machine)),
+    ]
+}
+
 // ── Docker ──────────────────────────────────────────────────────────
 
 /// Table row for Docker containers.

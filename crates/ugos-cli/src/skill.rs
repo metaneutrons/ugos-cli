@@ -492,7 +492,13 @@ mod tests {
 
     #[test]
     fn the_body_tells_an_agent_to_ask_before_changing_anything() {
-        for word in ["vm delete", "fs rm", "snapshot rm", "docker rm"] {
+        for word in [
+            "vm delete",
+            "fs rm",
+            "snapshot rm",
+            "docker rm",
+            "share delete",
+        ] {
             assert!(BODY.contains(word), "the body does not name `{word}`");
         }
     }

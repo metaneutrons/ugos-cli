@@ -17,6 +17,7 @@ Base URL: `https://<nas-ip>:9443/ugreen/v1/`
 | **Request encryption** | — | Complete | [api-encryption.md](api-encryption.md) |
 | **Transport security** | — | Complete | [api-tls.md](api-tls.md) |
 | **Filesystem snapshots** | com.ugreen.snapshot | Complete | [api-snapshot.md](api-snapshot.md) |
+| **Shared folders and SMB** | com.ugreen.filemgr, com.ugreen.ctlmgr | Reading, creating, changing, deleting; SMB service read only | [api-shares.md](api-shares.md) |
 | **Backup** | — | No API exists | [api-backup.md](api-backup.md) |
 
 ### Known but Undocumented (endpoints found in main JS bundle)

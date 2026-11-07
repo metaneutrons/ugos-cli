@@ -1,5 +1,6 @@
 //! Command dispatch — maps CLI actions to API calls and output.
 
+mod share;
 pub mod vmspec;
 
 use std::io::Write;
@@ -52,6 +53,8 @@ pub async fn run(
         Resource::Download { action } => download(client, action, fmt, w).await,
         Resource::Fs { action } => fs(client, action, fmt, w).await,
         Resource::Snapshot { action } => fs_snapshot(client, action, fmt, w).await,
+        Resource::Share { action } => share::share(client, action, fmt, w).await,
+        Resource::Smb { action } => share::smb(client, action, fmt, w).await,
         // Handled in `main` before any connection is made.
         Resource::Skill(_) => Ok(()),
     }
