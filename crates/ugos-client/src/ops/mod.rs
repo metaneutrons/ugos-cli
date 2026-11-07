@@ -16,4 +16,5 @@ pub mod fileserver;
 pub mod hw;
 pub mod net;
 pub mod shares;
+pub mod update;
 pub mod users;

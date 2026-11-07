@@ -2,6 +2,56 @@
 
 Generated from the build by a test in ugos-mcp. Started with `ugos-mcp`.
 
+## ugos_backup_info
+
+Show the latest cloud backup and whether it is scheduled
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_backup_progress
+
+Progress of a backup or a restore (restore: true)
+
+- `restore`: A restore, not a backup.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_backup_reset_factory
+
+Reset the NAS to factory state: data and configuration are deleted for good. Refused unless force is given: ask the user first, and again
+
+- `force`: Go on although this restarts the NAS. Ask the user first.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_backup_reset_network
+
+Reset the network settings. The NAS may get another address and this session ends. Refused unless force is given: ask the user first
+
+- `force`: Go on although this restarts the NAS. Ask the user first.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_backup_restore
+
+Restore services from a backup file. Overwrites their configuration and restarts them. Refused unless force is given: ask the user first
+
+- `file` (required): Absolute path of `backup_restore.ugb`.
+- `force`: Go on although the restore overwrites the configuration and restarts
+those services. Ask the user first.
+- `services` (required): Services as `category/item` or the item, or `all`.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_backup_save
+
+Save the NAS configuration to a .ugb file on this machine, named like backup_restore.ugb
+
+- `file` (required): Absolute path, named like `backup_restore.ugb`.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_backup_services
+
+List the services a restore can bring back
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
 ## ugos_disk_history
 
 Show the history of a disk's SMART tests
@@ -512,6 +562,40 @@ List ISO/disk images available for KVM
 Check which VMs use an image
 
 - `name` (required): Image name.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_index_pause
+
+Pause the thumbnail service for 1, 2 or 5 hours
+
+- `hours` (required): 1, 2 or 5 hours.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_index_ranges
+
+List the folder ranges thumbnails are made for
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_index_regenerate
+
+Make thumbnails again, for all ranges or the given range ids
+
+- `all`: All ranges.
+- `missing_only`: Only the thumbnails that are missing.
+- `ranges`: Ids of ranges, from the ranges tool.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_index_resume
+
+Resume the thumbnail service after a pause
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_index_status
+
+Show the state of the thumbnail service
+
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
 ## ugos_lang_list
@@ -1080,6 +1164,12 @@ Check which VMs use a storage volume
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 - `uuid` (required): Storage volume UUID.
 
+## ugos_system_about
+
+Show name, model, serial, version, run time, hardware and warranty of the NAS
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
 ## ugos_system_finder
 
 Show the finder switches: improvement plan and findable from the web
@@ -1099,6 +1189,26 @@ Change the finder switches
 Set the host name of the NAS (name is the new host name)
 
 - `name` (required): What to look at: a name, label or id, as the matching list tool shows it.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_system_ports
+
+List the services and applications and the ports they listen on
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_system_poweroff
+
+Power the NAS off; only the power button starts it again. Refused unless force is given: ask the user first
+
+- `force`: Go on although this restarts the NAS. Ask the user first.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_system_reboot
+
+Restart the NAS. Refused unless force is given: ask the user first
+
+- `force`: Go on although this restarts the NAS. Ask the user first.
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
 ## ugos_target_list
@@ -1168,6 +1278,62 @@ Show time zone, time and how the clock is kept
 
 List the time zones
 
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_update_clean
+
+Clear the stored failure of the last firmware install
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_update_config
+
+Show or change how the NAS looks for updates (auto: notify, important, any; check interval). Auto-install is refused unless force is given: ask the user first
+
+- `auto`: `notify`, `important` or `any`. The last two install by themselves and
+restart the NAS, which needs force.
+- `default_interval`: Let UGOS decide how often to check.
+- `every`: Check every this many hours, days or months (1 to 72), with `unit`.
+- `force`: Go on although the NAS then installs updates by itself. Ask the user
+first.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `unit`: `hours`, `days` or `months`.
+
+## ugos_update_install
+
+Install the update that was found. The NAS restarts. Refused unless force is given: ask the user first
+
+- `force`: Go on although this restarts the NAS. Ask the user first.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_update_key
+
+Trust a firmware signing key from a .pub file. Refused unless force is given: ask the user first
+
+- `file` (required): Absolute path of the file.
+- `force`: Go on although this installs, trusts or overwrites. Ask the user
+first.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_update_progress
+
+Progress of a firmware install from a file
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_update_status
+
+Show the installed firmware and the update that was found (version, size, changes, state)
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_update_upload
+
+Install a firmware image (.img) from a file on this machine, in chunks. The NAS flashes and restarts. Refused unless force is given: ask the user first
+
+- `file` (required): Absolute path of the file.
+- `force`: Go on although this installs, trusts or overwrites. Ask the user
+first.
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
 ## ugos_usb_list

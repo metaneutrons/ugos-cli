@@ -23,7 +23,8 @@ Base URL: `https://<nas-ip>:9443/ugreen/v1/`
 | **Network** | com.ugreen.ctlmgr | Interfaces, DNS, gateways, bonds, bridges, Wi-Fi, traffic control; untested parts marked | [api-network.md](api-network.md) |
 | **Hardware** | com.ugreen.ctlmgr | Buzzer, CPU, fans, LEDs, display, power, UPS, GPU, time, language, SSH/Telnet; untested parts marked | [api-hardware.md](api-hardware.md) |
 | **File services** | com.ugreen.ctlmgr | SMB, FTP, NFS, rsync, WebDAV: settings, start, stop, discovery services, Time Machine; untested parts marked | [api-fileservices.md](api-fileservices.md) |
-| **Backup** | — | No API exists | [api-backup.md](api-backup.md) |
+| **Firmware, backup, about, thumbnails** | com.ugreen.ctlmgr | Update status and config, configuration backup and restore, resets, about, index service; risky writes marked untested | [api-update.md](api-update.md) |
+| **Backup** | — | No data backup app; the configuration backup is above | [api-backup.md](api-backup.md) |
 
 ### Known but Undocumented (endpoints found in main JS bundle)
 

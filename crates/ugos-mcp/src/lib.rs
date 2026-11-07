@@ -25,6 +25,7 @@ mod nas;
 mod nas_files;
 mod nas_hw;
 mod nas_net;
+mod nas_update;
 
 use tokio::sync::OnceCell;
 use ugos_client::api::docker::DockerApi;
@@ -46,6 +47,10 @@ use crate::nas_hw::{
 use crate::nas_net::{
     BondCreateParam, FlowAddParam, FlowPositionParam, GatewayOrderParam, IfaceForceParam,
     NetDnsParam, NetProxyParam, NetSetParam, PortsParam, WifiParam,
+};
+use crate::nas_update::{
+    FileParam as UpdateFileParam, PauseParam, ProgressParam, RegenerateParam, RestoreParam,
+    SaveParam, UpdateConfigParam,
 };
 
 // ── Target config ───────────────────────────────────────────────────
@@ -2230,6 +2235,213 @@ impl UgosMcp {
     async fn ugos_smb_cache_clear(&self, Parameters(p): Parameters<ForceOnlyParam>) -> String {
         match self.client(&p.target).await {
             Ok(c) => nas_files::clear_cache(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    // ── Firmware, backup, thumbnails, about, power ──────────────────
+    #[tool(
+        description = "Show the installed firmware and the update that was found (version, size, changes, state)"
+    )]
+    async fn ugos_update_status(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_update::status(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Show or change how the NAS looks for updates (auto: notify, important, any; check interval). Auto-install is refused unless force is given: ask the user first"
+    )]
+    async fn ugos_update_config(&self, Parameters(p): Parameters<UpdateConfigParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_update::config(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Install the update that was found. The NAS restarts. Refused unless force is given: ask the user first"
+    )]
+    async fn ugos_update_install(&self, Parameters(p): Parameters<ForceParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_update::install(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Install a firmware image (.img) from a file on this machine, in chunks. The NAS flashes and restarts. Refused unless force is given: ask the user first"
+    )]
+    async fn ugos_update_upload(&self, Parameters(p): Parameters<UpdateFileParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_update::upload(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Progress of a firmware install from a file")]
+    async fn ugos_update_progress(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_update::progress(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Trust a firmware signing key from a .pub file. Refused unless force is given: ask the user first"
+    )]
+    async fn ugos_update_key(&self, Parameters(p): Parameters<UpdateFileParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_update::key(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Clear the stored failure of the last firmware install")]
+    async fn ugos_update_clean(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_update::clean(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Save the NAS configuration to a .ugb file on this machine, named like backup_restore.ugb"
+    )]
+    async fn ugos_backup_save(&self, Parameters(p): Parameters<SaveParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_update::backup_save(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show the latest cloud backup and whether it is scheduled")]
+    async fn ugos_backup_info(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_update::backup_info(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the services a restore can bring back")]
+    async fn ugos_backup_services(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_update::backup_services(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Restore services from a backup file. Overwrites their configuration and restarts them. Refused unless force is given: ask the user first"
+    )]
+    async fn ugos_backup_restore(&self, Parameters(p): Parameters<RestoreParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_update::backup_restore(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Progress of a backup or a restore (restore: true)")]
+    async fn ugos_backup_progress(&self, Parameters(p): Parameters<ProgressParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_update::backup_progress(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Reset the network settings. The NAS may get another address and this session ends. Refused unless force is given: ask the user first"
+    )]
+    async fn ugos_backup_reset_network(&self, Parameters(p): Parameters<ForceParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_update::reset_network(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Reset the NAS to factory state: data and configuration are deleted for good. Refused unless force is given: ask the user first, and again"
+    )]
+    async fn ugos_backup_reset_factory(&self, Parameters(p): Parameters<ForceParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_update::reset_factory(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show the state of the thumbnail service")]
+    async fn ugos_index_status(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_update::index_status(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the folder ranges thumbnails are made for")]
+    async fn ugos_index_ranges(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_update::index_ranges(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Pause the thumbnail service for 1, 2 or 5 hours")]
+    async fn ugos_index_pause(&self, Parameters(p): Parameters<PauseParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_update::index_pause(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Resume the thumbnail service after a pause")]
+    async fn ugos_index_resume(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_update::index_resume(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Make thumbnails again, for all ranges or the given range ids")]
+    async fn ugos_index_regenerate(&self, Parameters(p): Parameters<RegenerateParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_update::index_regenerate(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Show name, model, serial, version, run time, hardware and warranty of the NAS"
+    )]
+    async fn ugos_system_about(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_update::about_show(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the services and applications and the ports they listen on")]
+    async fn ugos_system_ports(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_update::ports(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Restart the NAS. Refused unless force is given: ask the user first")]
+    async fn ugos_system_reboot(&self, Parameters(p): Parameters<ForceParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_update::power(c, &p, false).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Power the NAS off; only the power button starts it again. Refused unless force is given: ask the user first"
+    )]
+    async fn ugos_system_poweroff(&self, Parameters(p): Parameters<ForceParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_update::power(c, &p, true).await,
             Err(e) => e,
         }
     }

@@ -12,4 +12,5 @@ pub mod snapshot;
 pub mod storage;
 pub mod syslog;
 pub mod system;
+pub mod update;
 pub mod users;

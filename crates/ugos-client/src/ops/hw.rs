@@ -28,6 +28,16 @@ pub async fn reboot(client: &UgosClient) -> Result<()> {
     Ok(())
 }
 
+/// Power the NAS off. Nothing starts it again but the power button.
+///
+/// # Errors
+///
+/// Returns the appropriate [`UgosError`] on failure.
+pub async fn poweroff(client: &UgosClient) -> Result<()> {
+    let _: Value = client.post("desktop/poweroff", &json!({})).await?;
+    Ok(())
+}
+
 /// The error for a change that reboots the NAS and was not forced.
 pub(crate) fn needs_reboot(what: &str) -> UgosError {
     UgosError::NeedsForce(format!("{what} restarts the NAS"))
