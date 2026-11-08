@@ -6,6 +6,7 @@ pub mod download;
 pub mod files;
 pub mod hw;
 pub mod kvm;
+pub mod logcenter;
 pub mod net;
 pub mod recycle;
 pub mod san;

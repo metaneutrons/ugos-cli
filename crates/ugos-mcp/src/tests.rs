@@ -20,7 +20,22 @@ fn make_server() -> UgosMcp {
 }
 
 /// Every tool the server registers.
-const EXPECTED_TOOLS: [&str; 230] = [
+const EXPECTED_TOOLS: [&str; 245] = [
+    "ugos_syslog",
+    "ugos_logcenter_modules",
+    "ugos_logcenter_archive_show",
+    "ugos_logcenter_archive_set",
+    "ugos_logcenter_archive_records",
+    "ugos_logcenter_archive_files",
+    "ugos_logcenter_archive_add",
+    "ugos_logcenter_archive_open",
+    "ugos_logcenter_archive_remove",
+    "ugos_logcenter_notify_show",
+    "ugos_logcenter_notify_set",
+    "ugos_logcenter_notify_records",
+    "ugos_logcenter_filemgr",
+    "ugos_logcenter_clear",
+    "ugos_logcenter_export",
     "ugos_version_folders",
     "ugos_version_set",
     "ugos_version_status",

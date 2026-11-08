@@ -2,6 +2,7 @@
 
 mod fileserver;
 mod hw;
+mod logcenter;
 mod net;
 mod recycle;
 mod san;
@@ -16,6 +17,9 @@ pub use self::hw::{
     LangAction, LedAction, OnOff, PowerAction, PowerSetArgs, ScheduleAction, ScreenAction,
     ServerAction, TerminalAction, TerminalSetArgs, TimeAction, UpsAction, UpsActionKind,
     UpsSetArgs, Wake, ZramAction,
+};
+pub use self::logcenter::{
+    ArchiveAction, ClearArgs, ExportArgs, FilemgrAction, LogCenterAction, NotifyAction,
 };
 pub use self::net::{
     BondAction, BridgeAction, DnsArgs, FlowAction, GatewayAction, Ipv6Arg, NetAction, ProxyAction,
@@ -234,6 +238,11 @@ pub enum Resource {
         #[command(subcommand)]
         action: VersionAction,
     },
+    /// The Log Center: archiving, notifications, clearing and export.
+    Logcenter {
+        #[command(subcommand)]
+        action: LogCenterAction,
+    },
     /// The recycle bins of shared folders and user folders.
     Recycle {
         #[command(subcommand)]
@@ -327,6 +336,23 @@ pub struct LogArgs {
     /// Entries per page.
     #[arg(long, default_value = "20")]
     pub size: u32,
+
+    /// The transfer log (Samba, FTP, `WebDAV`, file manager) instead of the
+    /// event log.
+    #[arg(long)]
+    pub transfer: bool,
+
+    /// Only entries from this time on, `YYYY-MM-DD HH:MM:SS` in UTC.
+    #[arg(long)]
+    pub from: Option<String>,
+
+    /// Only entries up to this time, `YYYY-MM-DD HH:MM:SS` in UTC.
+    #[arg(long)]
+    pub to: Option<String>,
+
+    /// Oldest first.
+    #[arg(long)]
+    pub oldest_first: bool,
 }
 
 /// Pool subcommands. Reading only.
