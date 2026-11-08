@@ -108,6 +108,31 @@ pub async fn user_access(
     Ok(Some(()))
 }
 
+async fn group_permissions(
+    client: &UgosClient,
+    action: &GroupAction,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
+    match action {
+        GroupAction::Permissions { group } => {
+            let g = access::find_group(client, group).await?;
+            permissions_table(
+                w,
+                fmt,
+                &access::permissions(client, Owner::Group(g.gid)).await?,
+            )?;
+        }
+        GroupAction::Permit { group, rules: r } => {
+            let g = access::find_group(client, group).await?;
+            let after = access::set_permissions(client, Owner::Group(g.gid), &rules(r)?).await?;
+            permissions_table(w, fmt, &after)?;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 /// The access subcommands of `group`. `None` when the action is not one.
 pub async fn group_access(
     client: &UgosClient,
@@ -146,18 +171,8 @@ pub async fn group_access(
                 .map_err(with_force_hint)?;
             writeln!(w, "The group {group} is deleted")?;
         }
-        GroupAction::Permissions { group } => {
-            let g = access::find_group(client, group).await?;
-            permissions_table(
-                w,
-                fmt,
-                &access::permissions(client, Owner::Group(g.gid)).await?,
-            )?;
-        }
-        GroupAction::Permit { group, rules: r } => {
-            let g = access::find_group(client, group).await?;
-            let after = access::set_permissions(client, Owner::Group(g.gid), &rules(r)?).await?;
-            permissions_table(w, fmt, &after)?;
+        GroupAction::Permissions { .. } | GroupAction::Permit { .. } => {
+            group_permissions(client, action, fmt, w).await?;
         }
         GroupAction::List => return Ok(None),
     }
