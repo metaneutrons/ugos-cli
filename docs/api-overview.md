@@ -25,6 +25,7 @@ Base URL: `https://<nas-ip>:9443/ugreen/v1/`
 | **File services** | com.ugreen.ctlmgr | SMB, FTP, NFS, rsync, WebDAV: settings, start, stop, discovery services, Time Machine; untested parts marked | [api-fileservices.md](api-fileservices.md) |
 | **SAN Manager** | com.ugreen.iscsi | iSCSI targets, LUNs, initiator groups, global setting | [api-san.md](api-san.md) |
 | **Recycle bins** | com.ugreen.filetrash | Bins of shares and user folders, restore, empty, delete for good, cleanup plans | [api-recycle.md](api-recycle.md) |
+| **File Version Explorer** | com.ugreen.versionmgr | Version settings of folders, history, copy, deleted files | [api-versions.md](api-versions.md) |
 | **Firmware, backup, about, thumbnails** | com.ugreen.ctlmgr | Update status and config, configuration backup and restore, resets, about, index service; risky writes marked untested | [api-update.md](api-update.md) |
 | **Backup** | — | No data backup app; the configuration backup is above | [api-backup.md](api-backup.md) |
 

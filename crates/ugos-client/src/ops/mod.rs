@@ -20,3 +20,4 @@ pub mod san;
 pub mod shares;
 pub mod update;
 pub mod users;
+pub mod versions;

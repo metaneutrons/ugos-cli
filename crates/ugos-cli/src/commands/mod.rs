@@ -13,6 +13,7 @@ mod secret;
 mod share;
 mod update;
 mod user;
+mod versions;
 pub mod vmspec;
 
 use std::io::Write;
@@ -82,6 +83,7 @@ pub async fn run(
         Resource::Webdav { action } => {
             fileserver::service(client, Service::Webdav, action, fmt, w).await
         }
+        Resource::Version { action } => versions::version(client, action, fmt, w).await,
         Resource::Recycle { action } => recycle::recycle(client, action, fmt, w).await,
         Resource::San { action } => san::san(client, action, fmt, w).await,
         Resource::Update { action } => update::update(client, action, fmt, w).await,

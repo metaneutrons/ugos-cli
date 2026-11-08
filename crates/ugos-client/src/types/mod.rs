@@ -16,3 +16,4 @@ pub mod syslog;
 pub mod system;
 pub mod update;
 pub mod users;
+pub mod versions;
