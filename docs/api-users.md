@@ -203,14 +203,15 @@ since that changes a setting of the NAS.
 
 ## The recycle bin
 
-The file manager has the calls for one (`DELETE v1/filemgr/delHomeFolder?path=`,
-`POST v1/filemgr/restoreFiles` and `emptyRecycles`), and its recycle bin
-has the roots `personal`, `common` and `users` and a `#recycle` folder. Whether
-the home folder of a deleted account passes through it could not be seen. After
-a delete the folder and its file were gone from `/home` and `/volume1/@home`.
-`/volume1/@recycle` and `/volume1/@users` exist, but the file manager answers
-`1301, Access not allowed` for them and for everything below them, an
-administrator included, so a copy in there can be neither found nor ruled out.
+The home folder of a deleted account does **not** end up in a recycle bin.
+With the recycle bin API (see [api-recycle.md](api-recycle.md)) this was
+checked on 2026-11-08: a new account has a recycle bin of its own, switched on,
+under `recycle_users`. A throwaway account with one file in `/home/NAME` was
+deleted with `--force`. Afterwards its bin was gone from `getRecycleList`, the
+users root (`recycle ls --root users`) listed nothing, and the folder and its
+file were gone from `/home`. `/volume1/@recycle` and `/volume1/@users` exist,
+but the file manager answers `1301, Access not allowed` for them, an
+administrator included, so a copy there can be neither found nor ruled out.
 Treat the deletion as final.
 
 ## Not known

@@ -20,7 +20,21 @@ fn make_server() -> UgosMcp {
 }
 
 /// Every tool the server registers.
-const EXPECTED_TOOLS: [&str; 207] = [
+const EXPECTED_TOOLS: [&str; 221] = [
+    "ugos_recycle_status",
+    "ugos_recycle_config",
+    "ugos_recycle_list",
+    "ugos_recycle_enable",
+    "ugos_recycle_disable",
+    "ugos_recycle_ls",
+    "ugos_recycle_restore",
+    "ugos_recycle_empty",
+    "ugos_recycle_delete",
+    "ugos_recycle_plan_list",
+    "ugos_recycle_plan_choices",
+    "ugos_recycle_plan_add",
+    "ugos_recycle_plan_edit",
+    "ugos_recycle_plan_remove",
     "ugos_san_setting",
     "ugos_san_setting_set",
     "ugos_san_target_list",

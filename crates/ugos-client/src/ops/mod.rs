@@ -15,6 +15,7 @@ macro_rules! refuse {
 pub mod fileserver;
 pub mod hw;
 pub mod net;
+pub mod recycle;
 pub mod san;
 pub mod shares;
 pub mod update;

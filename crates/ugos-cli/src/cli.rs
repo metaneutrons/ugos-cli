@@ -3,6 +3,7 @@
 mod fileserver;
 mod hw;
 mod net;
+mod recycle;
 mod san;
 mod update;
 
@@ -19,6 +20,7 @@ pub use self::net::{
     BondAction, BridgeAction, DnsArgs, FlowAction, GatewayAction, Ipv6Arg, NetAction, ProxyAction,
     SetArgs, WifiCommand,
 };
+pub use self::recycle::{PlanAction, PlanArgs, PlanUnit, RecycleAction, RecycleRoot};
 pub use self::san::{
     AccessMode, ChapArgs, ChapMode, LunAction, LunCreateArgs, LunEditArgs, SanAction,
     SanGroupAction, SettingAction, TargetAction, TargetCreateArgs, TargetEditArgs,
@@ -224,6 +226,11 @@ pub enum Resource {
     Smb {
         #[command(subcommand)]
         action: SmbAction,
+    },
+    /// The recycle bins of shared folders and user folders.
+    Recycle {
+        #[command(subcommand)]
+        action: RecycleAction,
     },
     /// SAN Manager: iSCSI targets, LUNs, initiator groups and the setting.
     San {

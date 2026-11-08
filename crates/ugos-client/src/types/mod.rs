@@ -7,6 +7,7 @@ pub mod files;
 pub mod hw;
 pub mod kvm;
 pub mod net;
+pub mod recycle;
 pub mod san;
 pub mod shares;
 pub mod snapshot;

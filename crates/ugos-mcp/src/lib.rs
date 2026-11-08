@@ -25,6 +25,7 @@ mod nas;
 mod nas_files;
 mod nas_hw;
 mod nas_net;
+mod nas_recycle;
 mod nas_san;
 mod nas_update;
 
@@ -48,6 +49,9 @@ use crate::nas_hw::{
 use crate::nas_net::{
     BondCreateParam, FlowAddParam, FlowPositionParam, GatewayOrderParam, IfaceForceParam,
     NetDnsParam, NetProxyParam, NetSetParam, PortsParam, WifiParam,
+};
+use crate::nas_recycle::{
+    BinParam, PlanParam, RecycleConfParam, RecycleLsParam, RecyclePathsParam,
 };
 use crate::nas_san::{
     GroupCreateParam, GroupEditParam, LunCreateParam, LunEditParam, SanDeleteParam, SanNameParam,
@@ -2629,6 +2633,138 @@ impl UgosMcp {
     async fn ugos_san_group_delete(&self, Parameters(p): Parameters<SanDeleteParam>) -> String {
         match self.client(&p.target).await {
             Ok(c) => nas_san::group_delete(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    // ── Recycle bins ────────────────────────────────────────────────
+    #[tool(
+        description = "Show the two switches of the recycle bin page (desktop shortcut, recycle folder inside folders)"
+    )]
+    async fn ugos_recycle_status(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_recycle::status(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Change the desktop shortcut and recycle folder switches")]
+    async fn ugos_recycle_config(&self, Parameters(p): Parameters<RecycleConfParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_recycle::config(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "List the recycle bins of the shared folders and the user folders (administrators only): on or off, holds files, retention"
+    )]
+    async fn ugos_recycle_list(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_recycle::list(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Switch a recycle bin on, optionally for administrators only")]
+    async fn ugos_recycle_enable(&self, Parameters(p): Parameters<BinParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_recycle::enable(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Switch a recycle bin off. Refused while it holds files unless force is given: ask the user first"
+    )]
+    async fn ugos_recycle_disable(&self, Parameters(p): Parameters<BinParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_recycle::disable(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "List what is in a recycle bin: a path inside one, or a root (personal, common, users)"
+    )]
+    async fn ugos_recycle_ls(&self, Parameters(p): Parameters<RecycleLsParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_recycle::ls(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Put files back where they were deleted from. Paths must be inside a #recycle folder"
+    )]
+    async fn ugos_recycle_restore(&self, Parameters(p): Parameters<RecyclePathsParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_recycle::restore(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Empty recycle bins for good, by #recycle folder or whole root. Refused unless force is given: ask the user first"
+    )]
+    async fn ugos_recycle_empty(&self, Parameters(p): Parameters<RecyclePathsParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_recycle::empty(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Delete files in a recycle bin for good. Paths must be inside a #recycle folder. Refused unless force is given: ask the user first"
+    )]
+    async fn ugos_recycle_delete(&self, Parameters(p): Parameters<RecyclePathsParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_recycle::delete(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the scheduled cleanup plans of the recycle bins")]
+    async fn ugos_recycle_plan_list(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_recycle::plan_list(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the shares and users a cleanup plan can still take")]
+    async fn ugos_recycle_plan_choices(
+        &self,
+        Parameters(p): Parameters<TargetOnlyParam>,
+    ) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_recycle::plan_choices(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Make a cleanup plan. Refused while a plan for every bin exists: edit that one"
+    )]
+    async fn ugos_recycle_plan_add(&self, Parameters(p): Parameters<PlanParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_recycle::plan_add(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Replace a cleanup plan by id")]
+    async fn ugos_recycle_plan_edit(&self, Parameters(p): Parameters<PlanParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_recycle::plan_edit(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Delete a cleanup plan by id. The bins and their files stay")]
+    async fn ugos_recycle_plan_remove(&self, Parameters(p): Parameters<PlanParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_recycle::plan_remove(c, &p).await,
             Err(e) => e,
         }
     }
