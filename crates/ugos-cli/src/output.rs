@@ -49,6 +49,7 @@ pub mod net;
 pub mod recycle;
 pub mod san;
 pub mod update;
+pub mod versions;
 
 // ── Display row types ───────────────────────────────────────────────
 

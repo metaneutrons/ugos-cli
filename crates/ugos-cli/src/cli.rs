@@ -6,6 +6,7 @@ mod net;
 mod recycle;
 mod san;
 mod update;
+mod versions;
 
 pub use self::fileserver::{
     ApplyArgs, DiscoveryArgs, RsyncAction, RsyncArgs, ServiceAction, SmbAction, StopArgs,
@@ -28,6 +29,7 @@ pub use self::san::{
 pub use self::update::{
     AutoUpdate, BackupAction, ForceArgs, IndexAction, RestoreArgs, UpdateAction, UpdateConfigArgs,
 };
+pub use self::versions::{ClashArg, FolderKindArg, VersionAction};
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 
@@ -226,6 +228,11 @@ pub enum Resource {
     Smb {
         #[command(subcommand)]
         action: SmbAction,
+    },
+    /// The File Version Explorer: older versions of files and deleted files.
+    Version {
+        #[command(subcommand)]
+        action: VersionAction,
     },
     /// The recycle bins of shared folders and user folders.
     Recycle {

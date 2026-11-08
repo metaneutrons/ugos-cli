@@ -14,7 +14,10 @@ use crate::types::recycle::{Plan, PlanChoices};
 /// Returns the appropriate [`UgosError`](crate::error::UgosError) on failure.
 pub async fn list(client: &UgosClient) -> Result<Vec<Plan>> {
     let answer: Value = client.get("filemgr/taskPlanList").await?;
-    Ok(serde_json::from_value(answer["result"].clone()).unwrap_or_default())
+    match answer.get("result") {
+        None | Some(Value::Null) => Ok(Vec::new()),
+        Some(list) => Ok(serde_json::from_value(list.clone())?),
+    }
 }
 
 /// The bins a plan can still take.

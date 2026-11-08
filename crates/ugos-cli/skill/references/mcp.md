@@ -1700,6 +1700,83 @@ Change a user account: email, description, groups, home folder, password rule, d
 - `remove_groups`: Groups to leave. The built-in groups cannot be left.
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
+## ugos_version_calendar
+
+List the days of a month on which something was made, changed or deleted
+
+- `month` (required): The month, 1 to 12.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `year` (required): The year.
+
+## ugos_version_clear_deleted
+
+Drop all versions of deleted files or folders for good. Refused unless force is given: ask the user first
+
+- `force`: Clearing only: go on, the versions are gone for good. Ask the user
+first.
+- `paths` (required): Deleted files or folders.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_version_copy
+
+Copy an older version of a file or folder into a folder on the NAS. Overwriting is refused unless force is given: ask the user first
+
+- `clash`: `skip`, `overwrite` or `keep_both` (default) when the name is taken.
+- `force`: Go on although this overwrites a file. Ask the user first.
+- `path` (required): The file or folder.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `to` (required): The destination folder.
+- `version` (required): The version, from the history tool.
+
+## ugos_version_folders
+
+List the folders and whether they keep file versions (share, user or domain)
+
+- `kind`: `share` (default), `user` or `domain`.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_version_history
+
+List every version of one file, deleted or not
+
+- `path` (required): The file, deleted or not.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_version_ls
+
+List a folder as it was at a time (UTC), optionally with the files deleted since
+
+- `at`: The time to look at, `YYYY-MM-DD HH:MM:SS` in UTC; now when not given.
+- `deleted`: Include what was deleted since.
+- `path` (required): The folder.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_version_restore_deleted
+
+Put deleted files or folders back where they were
+
+- `force`: Clearing only: go on, the versions are gone for good. Ask the user
+first.
+- `paths` (required): Deleted files or folders.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_version_set
+
+Switch file versions on or off for a folder, or change how many are kept (1 to 32). Switching off or keeping fewer deletes versions: refused unless force is given, ask the user first
+
+- `enable`: Keep versions or not.
+- `force`: Go on although UGOS deletes versions for it. Ask the user first.
+- `keep`: How many versions of a file to keep, 1 to 32.
+- `name` (required): The share or user, or its folder.
+- `rescan`: Scan the folder again.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_version_status
+
+Show how far UGOS is with migrating old version histories, in percent
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
 ## ugos_vm_create
 
 Create a new VM from a full VM spec (JSON object matching VmDetail schema). Use ugos_vm_show to see an example spec.

@@ -176,7 +176,10 @@ pub async fn list(client: &UgosClient, place: &Place) -> Result<Vec<RecycleFile>
         .pointer("/right_files/files")
         .cloned()
         .unwrap_or(Value::Null);
-    Ok(serde_json::from_value(files).unwrap_or_default())
+    if files.is_null() {
+        return Ok(Vec::new());
+    }
+    Ok(serde_json::from_value(files)?)
 }
 
 fn check_paths(paths: &[String]) -> Result<()> {

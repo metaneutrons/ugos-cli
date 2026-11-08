@@ -20,7 +20,16 @@ fn make_server() -> UgosMcp {
 }
 
 /// Every tool the server registers.
-const EXPECTED_TOOLS: [&str; 221] = [
+const EXPECTED_TOOLS: [&str; 230] = [
+    "ugos_version_folders",
+    "ugos_version_set",
+    "ugos_version_status",
+    "ugos_version_ls",
+    "ugos_version_history",
+    "ugos_version_copy",
+    "ugos_version_restore_deleted",
+    "ugos_version_clear_deleted",
+    "ugos_version_calendar",
     "ugos_recycle_status",
     "ugos_recycle_config",
     "ugos_recycle_list",

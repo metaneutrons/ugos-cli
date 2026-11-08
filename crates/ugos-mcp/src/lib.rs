@@ -28,6 +28,7 @@ mod nas_net;
 mod nas_recycle;
 mod nas_san;
 mod nas_update;
+mod nas_versions;
 
 use tokio::sync::OnceCell;
 use ugos_client::api::docker::DockerApi;
@@ -60,6 +61,10 @@ use crate::nas_san::{
 use crate::nas_update::{
     FileParam as UpdateFileParam, PauseParam, ProgressParam, RegenerateParam, RestoreParam,
     SaveParam, UpdateConfigParam,
+};
+use crate::nas_versions::{
+    VersionCalendarParam, VersionCopyParam, VersionDeletedParam, VersionFoldersParam,
+    VersionLsParam, VersionPathParam, VersionSetParam,
 };
 
 // ── Target config ───────────────────────────────────────────────────
@@ -2765,6 +2770,100 @@ impl UgosMcp {
     async fn ugos_recycle_plan_remove(&self, Parameters(p): Parameters<PlanParam>) -> String {
         match self.client(&p.target).await {
             Ok(c) => nas_recycle::plan_remove(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    // ── File Version Explorer ───────────────────────────────────────
+    #[tool(
+        description = "List the folders and whether they keep file versions (share, user or domain)"
+    )]
+    async fn ugos_version_folders(&self, Parameters(p): Parameters<VersionFoldersParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_versions::folders(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Switch file versions on or off for a folder, or change how many are kept (1 to 32). Switching off or keeping fewer deletes versions: refused unless force is given, ask the user first"
+    )]
+    async fn ugos_version_set(&self, Parameters(p): Parameters<VersionSetParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_versions::set(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show how far UGOS is with migrating old version histories, in percent")]
+    async fn ugos_version_status(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_versions::status(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "List a folder as it was at a time (UTC), optionally with the files deleted since"
+    )]
+    async fn ugos_version_ls(&self, Parameters(p): Parameters<VersionLsParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_versions::ls(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List every version of one file, deleted or not")]
+    async fn ugos_version_history(&self, Parameters(p): Parameters<VersionPathParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_versions::history(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Copy an older version of a file or folder into a folder on the NAS. Overwriting is refused unless force is given: ask the user first"
+    )]
+    async fn ugos_version_copy(&self, Parameters(p): Parameters<VersionCopyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_versions::copy(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Put deleted files or folders back where they were")]
+    async fn ugos_version_restore_deleted(
+        &self,
+        Parameters(p): Parameters<VersionDeletedParam>,
+    ) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_versions::restore_deleted(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Drop all versions of deleted files or folders for good. Refused unless force is given: ask the user first"
+    )]
+    async fn ugos_version_clear_deleted(
+        &self,
+        Parameters(p): Parameters<VersionDeletedParam>,
+    ) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_versions::clear_deleted(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "List the days of a month on which something was made, changed or deleted"
+    )]
+    async fn ugos_version_calendar(
+        &self,
+        Parameters(p): Parameters<VersionCalendarParam>,
+    ) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_versions::calendar(c, &p).await,
             Err(e) => e,
         }
     }
