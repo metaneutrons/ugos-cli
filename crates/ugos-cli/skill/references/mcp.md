@@ -1008,6 +1008,142 @@ Stop a Docker Compose project (containers remain, not removed)
 - `name` (required): Compose project name.
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
+## ugos_recycle_config
+
+Change the desktop shortcut and recycle folder switches
+
+- `desktop`: A shortcut on the desktop.
+- `folder`: The recycle folder shown inside folders.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_recycle_delete
+
+Delete files in a recycle bin for good. Paths must be inside a #recycle folder. Refused unless force is given: ask the user first
+
+- `force`: Go on although this deletes for good. Ask the user first.
+- `paths`: Paths inside a recycle bin.
+- `root`: Empty only: every bin of a root, `common` or `users`, instead of paths.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_recycle_disable
+
+Switch a recycle bin off. Refused while it holds files unless force is given: ask the user first
+
+- `admin_only`: Switching on: only administrators see what was deleted (shares).
+- `force`: Switching off: go on although the bin holds files. Ask the user first.
+- `name` (required): The share or user, or its folder.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_recycle_empty
+
+Empty recycle bins for good, by #recycle folder or whole root. Refused unless force is given: ask the user first
+
+- `force`: Go on although this deletes for good. Ask the user first.
+- `paths`: Paths inside a recycle bin.
+- `root`: Empty only: every bin of a root, `common` or `users`, instead of paths.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_recycle_enable
+
+Switch a recycle bin on, optionally for administrators only
+
+- `admin_only`: Switching on: only administrators see what was deleted (shares).
+- `force`: Switching off: go on although the bin holds files. Ask the user first.
+- `name` (required): The share or user, or its folder.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_recycle_list
+
+List the recycle bins of the shared folders and the user folders (administrators only): on or off, holds files, retention
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_recycle_ls
+
+List what is in a recycle bin: a path inside one, or a root (personal, common, users)
+
+- `path`: A folder inside a bin, like `/volume1/docs/#recycle`.
+- `root`: Or a root: `personal`, `common` or `users` (common when neither).
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_recycle_plan_add
+
+Make a cleanup plan. Refused while a plan for every bin exists: edit that one
+
+- `all`: Cover every bin.
+- `every`: Empty the bins every this many days or months, with `unit` and
+`first_run`.
+- `first_run`: First run of a timed plan, `YYYY-MM-DD HH:MM:SS` in UTC.
+- `id`: The plan to replace or remove.
+- `name`: A label.
+- `retention_days`: Delete what is older than this many days (1 to 365), every day.
+- `shares`: Shares, by name.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `time`: Time of day of a retention plan, `HH:MM:SS`.
+- `unit`: `days` or `months`.
+- `users`: Users, by name.
+
+## ugos_recycle_plan_choices
+
+List the shares and users a cleanup plan can still take
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_recycle_plan_edit
+
+Replace a cleanup plan by id
+
+- `all`: Cover every bin.
+- `every`: Empty the bins every this many days or months, with `unit` and
+`first_run`.
+- `first_run`: First run of a timed plan, `YYYY-MM-DD HH:MM:SS` in UTC.
+- `id`: The plan to replace or remove.
+- `name`: A label.
+- `retention_days`: Delete what is older than this many days (1 to 365), every day.
+- `shares`: Shares, by name.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `time`: Time of day of a retention plan, `HH:MM:SS`.
+- `unit`: `days` or `months`.
+- `users`: Users, by name.
+
+## ugos_recycle_plan_list
+
+List the scheduled cleanup plans of the recycle bins
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_recycle_plan_remove
+
+Delete a cleanup plan by id. The bins and their files stay
+
+- `all`: Cover every bin.
+- `every`: Empty the bins every this many days or months, with `unit` and
+`first_run`.
+- `first_run`: First run of a timed plan, `YYYY-MM-DD HH:MM:SS` in UTC.
+- `id`: The plan to replace or remove.
+- `name`: A label.
+- `retention_days`: Delete what is older than this many days (1 to 365), every day.
+- `shares`: Shares, by name.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `time`: Time of day of a retention plan, `HH:MM:SS`.
+- `unit`: `days` or `months`.
+- `users`: Users, by name.
+
+## ugos_recycle_restore
+
+Put files back where they were deleted from. Paths must be inside a #recycle folder
+
+- `force`: Go on although this deletes for good. Ask the user first.
+- `paths`: Paths inside a recycle bin.
+- `root`: Empty only: every bin of a root, `common` or `users`, instead of paths.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_recycle_status
+
+Show the two switches of the recycle bin page (desktop shortcut, recycle folder inside folders)
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
 ## ugos_san_group_create
 
 Make an initiator group with at least one initiator IQN
