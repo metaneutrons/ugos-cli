@@ -1837,6 +1837,21 @@ List USB devices available to a VM
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 - `vm` (required): VM display name or UUID.
 
+## ugos_user_avatar
+
+Set the avatar of an account, from an offered one or a picture file
+
+- `account` (required): Login name or uid.
+- `builtin`: One of the offered avatars, like `05.png`.
+- `file`: Absolute path of a picture on this machine, under 8 MB.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_user_avatars
+
+List the avatars UGOS offers
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
 ## ugos_user_create
 
 Make an account with a password, optional groups and role. The password is a parameter of this tool: gate or switch it off where a model should not handle passwords. An administrator can manage the NAS, so ask the user before giving that role
@@ -1861,10 +1876,79 @@ Delete a user account. Its home folder and the files in it go with it, so an acc
 which go with it.
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
+## ugos_user_import
+
+Read an .xls or .xlsx file of accounts and show the rows (without passwords); with commit, create them. Committing needs force: it creates accounts whose passwords are in the file, ask the user first
+
+- `change_password`: The accounts have to change their password at the first login.
+- `commit`: Create the accounts. Without this the rows are only read.
+- `file` (required): Absolute path of the `.xls` or `.xlsx` file on this machine.
+- `force`: Go on although this creates accounts whose passwords are in the file.
+Ask the user first.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_user_invite
+
+Invitations, with which people apply for an account: status, enable, disable, requests, processed, approve, reject. Enabling needs force (anyone with the link can apply), and so does approving an administrator: ask the user first
+
+- `action` (required): `status`, `enable`, `disable`, `requests`, `processed`, `approve` or
+`reject`.
+- `description`: Approving: a description.
+- `force`: Go on for `enable` (anyone with the link can apply) and for approving
+an administrator. Ask the user first.
+- `groups`: Approving: groups to join.
+- `id`: The application id, for `approve` and `reject`.
+- `no_home_dir`: Approving: give no home folder.
+- `role`: Approving: `users` (default) or `admin`.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
 ## ugos_user_list
 
 List user accounts with role, groups and status
 
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_user_otp_disable
+
+Switch off the second factor of an account. Refused unless force is given: ask the user first
+
+- `account` (required): Login name or uid.
+- `force`: Switching off the second factor: go on, the account then has none.
+Ask the user first.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_user_password_changed
+
+Show when an account last changed its password (Unix seconds)
+
+- `account` (required): Login name or uid.
+- `force`: Switching off the second factor: go on, the account then has none.
+Ask the user first.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_user_password_expiry
+
+Show the expiry of passwords, or change it. Expiry with a forced change is refused unless force is given: accounts are locked out until they change their password, ask the user first
+
+- `enable`: Whether passwords expire.
+- `exempt`: Accounts whose password does not expire; replaces the list.
+- `force`: Go on although accounts are locked out until they change their
+password. Ask the user first.
+- `force_change`: Force the change at expiry.
+- `max_days`: Days a password is valid, 1 to 999.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `warn_days`: Days of warning, 0 to 99.
+
+## ugos_user_password_rules
+
+Show the strength rules of passwords, or change them (shortest length, no user name, no common password, mixed case, digit, special character)
+
+- `digit`: A digit.
+- `min_length`: The shortest password, 6 to 127.
+- `mixed_case`: Upper and lower case.
+- `no_common`: No common password.
+- `no_username`: No user name in the password.
+- `special`: A special character.
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
 ## ugos_user_permissions

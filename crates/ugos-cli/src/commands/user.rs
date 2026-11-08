@@ -37,6 +37,9 @@ pub async fn user(
     if super::access::user_access(client, action, fmt, w)
         .await?
         .is_some()
+        || super::policy::user_policy(client, action, fmt, w)
+            .await?
+            .is_some()
     {
         return Ok(());
     }

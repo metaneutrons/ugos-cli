@@ -48,6 +48,7 @@ pub mod hw;
 pub mod logcenter;
 pub mod nas_storage;
 pub mod net;
+pub mod policy;
 pub mod recycle;
 pub mod san;
 pub mod update;

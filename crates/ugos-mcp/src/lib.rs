@@ -27,6 +27,7 @@ mod nas_files;
 mod nas_hw;
 mod nas_logs;
 mod nas_net;
+mod nas_policy;
 mod nas_recycle;
 mod nas_san;
 mod nas_update;
@@ -60,6 +61,9 @@ use crate::nas_logs::{
 use crate::nas_net::{
     BondCreateParam, FlowAddParam, FlowPositionParam, GatewayOrderParam, IfaceForceParam,
     NetDnsParam, NetProxyParam, NetSetParam, PortsParam, WifiParam,
+};
+use crate::nas_policy::{
+    AccountRefParam, AvatarParam, ExpiryParam, ImportParam, InviteParam, RulesParam,
 };
 use crate::nas_recycle::{
     BinParam, PlanParam, RecycleConfParam, RecycleLsParam, RecyclePathsParam,
@@ -3121,6 +3125,84 @@ impl UgosMcp {
     async fn ugos_user_quota_set(&self, Parameters(p): Parameters<QuotaSetParam>) -> String {
         match self.client(&p.target).await {
             Ok(c) => nas_access::quota_set(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    // ── Password policies, 2FA, avatars, invitations, imports ───────
+    #[tool(
+        description = "Show the strength rules of passwords, or change them (shortest length, no user name, no common password, mixed case, digit, special character)"
+    )]
+    async fn ugos_user_password_rules(&self, Parameters(p): Parameters<RulesParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_policy::rules(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Show the expiry of passwords, or change it. Expiry with a forced change is refused unless force is given: accounts are locked out until they change their password, ask the user first"
+    )]
+    async fn ugos_user_password_expiry(&self, Parameters(p): Parameters<ExpiryParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_policy::expiry(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show when an account last changed its password (Unix seconds)")]
+    async fn ugos_user_password_changed(
+        &self,
+        Parameters(p): Parameters<AccountRefParam>,
+    ) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_policy::password_changed(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Switch off the second factor of an account. Refused unless force is given: ask the user first"
+    )]
+    async fn ugos_user_otp_disable(&self, Parameters(p): Parameters<AccountRefParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_policy::otp_disable(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the avatars UGOS offers")]
+    async fn ugos_user_avatars(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_policy::avatars(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Set the avatar of an account, from an offered one or a picture file")]
+    async fn ugos_user_avatar(&self, Parameters(p): Parameters<AvatarParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_policy::avatar(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Read an .xls or .xlsx file of accounts and show the rows (without passwords); with commit, create them. Committing needs force: it creates accounts whose passwords are in the file, ask the user first"
+    )]
+    async fn ugos_user_import(&self, Parameters(p): Parameters<ImportParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_policy::import(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Invitations, with which people apply for an account: status, enable, disable, requests, processed, approve, reject. Enabling needs force (anyone with the link can apply), and so does approving an administrator: ask the user first"
+    )]
+    async fn ugos_user_invite(&self, Parameters(p): Parameters<InviteParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_policy::invite(c, &p).await,
             Err(e) => e,
         }
     }

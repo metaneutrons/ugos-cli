@@ -20,13 +20,19 @@ Reconstructed from the lazily loaded bundle of the control panel
 | POST | `user/edit` | plain, **sealed password** | `user update` |
 | POST | `user/check/delete` | plain | `user delete` |
 | DELETE | `user/delete` | plain, **password header** | `user delete` |
-| GET, POST | `user/config/password` | plain | not wired (password rules) |
+| GET, POST | `user/config/password` | plain | `user password-expiry` |
+| GET, POST | `user/config/global` | plain | `user password-rules` |
+| GET | `user/passwd/lastChangeTime/{uid}` | plain | `user password-changed` |
 | POST | `user/rule/password` | plain, **sealed password** | `UsersApi::user_check_password`, not used by the CLI (see below) |
 | GET, POST | `user/quota/{uid}` | plain | `user quota`, `user quota-set` |
 | GET | `user/check/quota` | plain | `user quota-set` (refuses when `false`) |
 | GET, POST | `user/permission/{uid}` | plain | `user permissions`, `user permit` |
 | GET, POST | `user/authorized/{uid}` | plain | not wired (app rights of domain users) |
-| | `user/search`, `user/import*`, `user/invite*`, `user/headpic/*`, `otp/disable` | plain | not wired |
+| POST | `otp/disable` | plain | `user otp-disable` |
+| GET, POST | `user/headpic/list`, `user/change/headpic/{uid}` | plain, multipart | `user avatars`, `user avatar` |
+| GET, POST, DELETE | `user/invite/*`, `user/priority_link` | plain | `user invite ...` |
+| GET, POST | `user/import`, `user/import/commit`, `user/import/state` | plain, multipart | `user import` |
+| POST | `user/search` | plain | not wired (a filter of the list) |
 | GET | `group/list` | plain | `group list` |
 | POST | `group/create`, `group/edit` | plain | `group create`, `group edit` |
 | POST | `group/name/check` | plain | not wired (the rules are checked locally and `group/create` refuses a taken name) |
@@ -238,6 +244,59 @@ The settings in `user/config/password` (`enable`, `force_change`, `max_days`,
 `warn_age`) read `enable: false` on the NAS tested, and the three rules
 applied nevertheless. What a policy that is switched on adds was not tried,
 since that changes a setting of the NAS.
+
+### The two global policies
+
+`user/config/global` holds the strength rules (`{disable_contain_key,
+disable_common_pwd, must_contain_case, must_contain_num,
+must_contain_special_char, min_length}`) and is what `user/rule/password`
+applies. `ugos-cli user password-rules` reads it and changes it, with a length of
+6 to 127. Changing it back and forth was run live.
+
+`user/config/password` is the expiry: `{enable, max_days, warn_age,
+force_change, white_list}`. `white_list` holds user names (the answer also has
+`white_uid_list`). The web UI sends `max_days` as 1 to 999 and `warn_age` as 0 to
+99 with the validity longer than the warning. With `enable` and `force_change`
+on, accounts are locked out until they change their password, which needs
+`--force`. `max_days` was changed and restored live, the switch itself was not
+turned on.
+
+## Two-factor authentication, avatars
+
+`POST otp/disable {uid}` switches off the second factor of an account, which
+needs `--force`. It was not run: no account of the NAS tested had one.
+
+`user/headpic/list` lists 24 offered avatars (`01.png` to `24.png`).
+`user/change/headpic/{uid}` is multipart with `icon` (an offered name, and
+`file` empty) or `file` (a picture, `icon` empty), pictures under 8 MB of `.jpg`,
+`.jpeg`, `.png`, `.gif`, `.bmp` or `.webp`. The answer's `icon_value` is the
+picture as a base64 data URL, so `ugos-cli` does not print it.
+
+## Invitations
+
+An administrator can open a link with which people apply for an account. `user/invite/state/{uid}`
+answers `{result: code}`, empty when invitations are off; `user/invite/switch`
+takes `{uid, enabled}`; `user/priority_link` lists the ports and addresses a link
+can be built from. Applications are `GET user/invite/list` (waiting) and
+`user/invite/agree/list` (processed), with `ID`, `username`, `email`, `reason`,
+`CreatedAt`. `POST user/invite/agree` takes `{id, account: {role, groups,
+email, description, enable_home_dir, dir_quota, unit}}` and makes the account
+with the applicant's own password; `DELETE user/invite/{ID}` rejects.
+
+Switching invitations on needs `--force` (anyone with the link can apply), and so
+does approving an administrator. **The NAS tested has invitations on**, so
+only the reads were run. Everything that changes was built from the bundle.
+
+## Import
+
+`POST user/import` is multipart with `file` (`.xls` or `.xlsx` under 8 MB) and
+answers the parsed rows `{username, password, description, email, role, groups,
+valid, err_tip}`. `POST user/import/commit` takes `{force_change_pwd,
+overwrite: false, list}` with those rows, passwords in the clear, and creates the
+accounts in the background; `GET user/import/state` says `is_running`. `ugos-cli
+user import FILE` only reads and shows the rows without passwords; `--commit
+--force` creates them, then waits for the end. **Not run**: no template file was
+at hand.
 
 ## The recycle bin
 
