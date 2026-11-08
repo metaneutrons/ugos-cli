@@ -83,7 +83,13 @@ ugos-cli user create anna --email anna@example.org --group family   # asks for t
 ugos-cli user update anna --description "Anna B." --disable
 ugos-cli user update anna --expires 2027-01-31
 ugos-cli user delete anna            # refuses a home folder with files, unless --force
+ugos-cli user permissions anna       # what anna may do on each share
+ugos-cli user permit anna media=read docs=write
+ugos-cli user password-rules --min-length 10
+ugos-cli user invite status          # the sign-up link, its applications
 ugos-cli group list
+ugos-cli group create family --member anna --member ben
+ugos-cli group permit family media=read
 
 # Browse the NAS
 ugos-cli fs ls /volume1/download
@@ -106,7 +112,53 @@ ugos-cli share update media --hide-in-network
 ugos-cli share acl show media
 ugos-cli share acl set media user:anna=rw group:family=read
 ugos-cli share delete media                          # deletes the folder's files too
-ugos-cli smb status
+
+# File services: SMB, FTP, NFS, rsync and WebDAV
+ugos-cli smb status                  # state, settings, discovery services
+ugos-cli smb set workgroup=HOME encryption=force
+ugos-cli smb discovery --bonjour on --time-machine media
+ugos-cli ftp settings                # what a setting is called and takes
+ugos-cli ftp start port=2121         # FTPS; plain FTP needs --force
+ugos-cli nfs status
+ugos-cli webdav start http-port=5005 https-port=5006
+ugos-cli rsync start account=backup  # asks for the password
+
+# Hardware, power, time and terminal
+ugos-cli hw fan show
+ugos-cli hw power show
+ugos-cli hw ups show
+ugos-cli time show
+ugos-cli time set --timezone Europe/Berlin
+ugos-cli terminal show               # SSH and Telnet; switching on needs --force
+ugos-cli lang set auto
+
+# Network, and the Storage Manager (read only)
+ugos-cli net list
+ugos-cli net set eth0 --ipv4 dhcp
+ugos-cli net bond create --help
+ugos-cli pool list
+ugos-cli disk smart nvme1
+
+# SAN Manager: iSCSI
+ugos-cli san lun create vmstore --size 500G --volume "Volume 1" --thin
+ugos-cli san group create hosts --iqn iqn.1998-01.com.vmware:esx1
+ugos-cli san target create vmtarget --lun vmstore
+ugos-cli san target delete vmtarget --with-lun --force   # deletes the data
+
+# Recycle bins, file versions, the Log Center
+ugos-cli recycle list
+ugos-cli recycle restore "/volume1/media/#recycle/film.mkv"
+ugos-cli version set media --enable on --keep 5
+ugos-cli version history /volume1/media/notes.txt
+ugos-cli logcenter notify set --level critical
+ugos-cli logcenter export ./log.csv
+
+# Firmware, configuration backup, thumbnails
+ugos-cli update status
+ugos-cli update install --force      # restarts the NAS
+ugos-cli backup save ./backup_restore.ugb
+ugos-cli index status
+ugos-cli system about
 
 # Let the NAS fetch a file straight from the internet
 ugos-cli download add https://example.org/big.iso
@@ -231,21 +283,25 @@ Multiple NAS targets are supported:
 }
 ```
 
-The server also covers shared folders and user accounts. Reading is open:
-`ugos_share_list`, `ugos_share_show`, `ugos_share_acl_show`, `ugos_smb_status`,
-`ugos_user_list`, `ugos_user_show` and `ugos_group_list`. Changing goes through
-the same checks as `ugos-cli` and is read back, so a request UGOS answered with
-success and did not carry out comes back as an error: `ugos_share_create`,
-`ugos_share_update`, `ugos_share_acl_set`, `ugos_share_delete`,
-`ugos_user_update` and `ugos_user_delete`. Three things are left to the CLI on
-purpose:
+The server covers what the CLI covers: shared folders, user accounts, groups
+and their permissions, the file services, hardware and time, the network, the
+SAN Manager, recycle bins, file versions, the Log Center, firmware and
+backup. Reading is open. Everything that changes goes through the same checks
+as `ugos-cli` and is read back, so a request UGOS answered with success and did
+not carry out comes back as an error.
 
-- **Passwords.** A tool parameter passes through the model and its logs, so no
-  tool creates an account or sets a password. Use `ugos-cli user create` and
-  `user update --new-password`.
-- **Roles.** No tool makes an account an administrator.
-- **`--force`.** The delete tools refuse a share or a home folder that holds
-  files, and a refusal stays one. The message names what the user would run.
+**The tools do what the CLI does, including what is dangerous.** Passwords (for
+`ugos_user_create`, `ugos_user_update`, rsync, CHAP) and roles are parameters of
+the tools, and so is `force`. That means they pass through the model and its
+logs. Switch off or gate the tools a model should not have: an MCP client can
+allow tools one by one, and the delete, reset, restore, install, empty and
+password tools are the ones to look at first.
+
+What `--force` is for in the CLI, `force` is for here, with the same guard in
+front of it. A tool refuses what restarts the NAS, deletes data, cuts
+connections, opens a way in or cannot be undone, and says so in a message that
+tells the model to **ask the user and repeat with `force`**. A model that
+repeats it without asking has been told not to.
 
 ### Agent skill
 
@@ -490,9 +546,18 @@ notes are kept because the reasoning is easy to lose and expensive to redo.
 | [api-system.md](docs/api-system.md) | Machine info, monitoring, processes, services |
 | [api-snapshot.md](docs/api-snapshot.md) | Filesystem snapshots of shares and homes |
 | [api-shares.md](docs/api-shares.md) | Shared folders, their access rules, and the SMB service |
-| [api-users.md](docs/api-users.md) | User accounts: creating, changing and deleting them |
+| [api-users.md](docs/api-users.md) | Accounts, groups, permissions, password policies, invitations, import |
+| [api-storage.md](docs/api-storage.md) | The Storage Manager: pools, volumes, disks (read only) |
+| [api-network.md](docs/api-network.md) | Interfaces, DNS, gateways, bonds, bridges, Wi-Fi, traffic control |
+| [api-hardware.md](docs/api-hardware.md) | Buzzer, CPU, fans, LEDs, power, UPS, GPU, time, language, SSH and Telnet |
+| [api-fileservices.md](docs/api-fileservices.md) | SMB, FTP, NFS, rsync and WebDAV |
+| [api-san.md](docs/api-san.md) | iSCSI targets, LUNs, initiator groups |
+| [api-recycle.md](docs/api-recycle.md) | Recycle bins and their cleanup plans |
+| [api-versions.md](docs/api-versions.md) | The File Version Explorer |
+| [api-logcenter.md](docs/api-logcenter.md) | The event and transfer log, archiving, notifications |
+| [api-update.md](docs/api-update.md) | Firmware, configuration backup, resets, about, thumbnails |
 | [packaging.md](docs/packaging.md) | Release channels, signing and reproducibility |
-| [api-backup.md](docs/api-backup.md) | Why no backup commands exist |
+| [api-backup.md](docs/api-backup.md) | There is no data backup app; the configuration backup is in api-update.md |
 
 ## Implementation Status
 
@@ -509,17 +574,27 @@ notes are kept because the reasoning is easy to lose and expensive to redo.
 | **PCI passthrough** (`passthrough`) | list devices |
 | **VNC** | list links, generate noVNC link |
 | **OVA** | export, parse |
-| **Log** | system log across all modules, with filters |
+| **Log** (`log`) | system log across all modules, the transfer log, filters, time range |
 | **VM log** (`vm log`) | KVM audit log, list operators |
-| **User** | list, show, create, update (email, description, role, groups, home folder, password, disable, expiry), delete; the MCP server has all but create, password and role |
-| **Group** | list (read only) |
+| **User** | list, show, create, update (email, description, role, groups, home folder, password, disable, expiry), delete, share permissions, quota per volume, password rules and expiry, second factor off, avatars, invitations, import |
+| **Group** | list, create, edit, delete, share permissions |
 | **Host** (`info`, `overview`) | CPU cores and memory; load plus every VM at once |
 | **System** | hardware and firmware info, live CPU/memory/disk/network/fan readings, processes, services |
 | **Download** | queue a URL for the NAS to fetch, list, check, status, remove |
 | **Files** (`fs`) | list a directory, list volumes, upload, download, create, rename, delete |
 | **Filesystem snapshots** (`snapshot`) | list folders, list, create, edit, delete, clone |
 | **Shared folders** (`share`) | list, show, create, update (quota, visibility), delete, show and set access rules |
-| **SMB service** (`smb`) | show state, workgroup, protocol codes and discovery services |
+| **File services** (`smb`, `ftp`, `nfs`, `rsync`, `webdav`) | status, settings, start, set, stop; SMB discovery services and Time Machine targets, SMB cache |
+| **Hardware** (`hw`, `time`, `lang`, `terminal`, `system hostname|finder`) | buzzer, CPU mode, fans, LEDs, display, power and schedule, UPS, memory compression, GPU mode, time and servers, language, SSH and Telnet |
+| **Network** (`net`) | interfaces, DNS, gateways, proxy, bonds, bridges, Wi-Fi, traffic control |
+| **Storage Manager** (`pool`, `volume`, `disk`) | pools, volumes, disks, SMART, test plans (read only) |
+| **SAN Manager** (`san`) | iSCSI setting, targets, LUNs, initiator groups |
+| **Recycle bins** (`recycle`) | switches, bins, list, restore, empty, delete for good, cleanup plans |
+| **File versions** (`version`) | folder settings, listing at a time, history, copy a version, deleted files |
+| **Log Center** (`logcenter`) | archive policy and viewer, notifications, file manager logging, clear, export |
+| **Firmware** (`update`) | status, settings, install, install from a file, signing keys |
+| **Configuration backup** (`backup`) | save, restore, network reset, factory reset |
+| **Machine** (`system about|ports|reboot|poweroff`, `index`) | model and serial, ports in use, restart, power off, the thumbnail service |
 | **Docker container** (`docker`) | list, show, create, start, stop, restart, kill, remove, update, clone, batch-operate, logs |
 | **Docker image** | list, search, download, delete, export, load (URL/path) |
 | **Docker registry** | list/add/delete/switch mirror, HTTP proxy get/set |
@@ -548,18 +623,36 @@ by analogy with `StopProject` and the container-level start/restart pattern
 but have **not** been live-verified — confirm before relying on them for
 anything critical.
 
+### Written, not run against a NAS
+
+These are built from the web UI's own code and unit tests, guarded by `--force`,
+and **have not been run on a real NAS**, because that cannot be undone or the
+NAS tested had nothing to run them against. Check them on a machine you can
+afford to lose before relying on them:
+
+- firmware install and install from a file, restoring a configuration backup,
+  the network reset and the factory reset, reboot and power off
+- UPS settings, GPU mode, memory compression off, setting the clock by hand,
+  switching SSH from off, Telnet, a custom fan curve
+- rsync start (the old password could be lost if UGOS reads an empty one
+  differently), the SMB cache clear, a changed FTP port
+- per-account quotas (the NAS offers none; the unit is read from the bundle),
+  the second factor, switching invitations on or off, approving an applicant,
+  importing accounts
+- clearing the log for good (the call was run for a time before the first
+  entry, which removes nothing), archiving
+
 ### Not Yet Implemented
 
 | Resource | Notes |
 |----------|-------|
-| SMB start, stop and settings | Each interrupts every connected client, which cannot be tried safely on a NAS in use. The endpoints are in [docs/api-shares.md](docs/api-shares.md). NFS, FTP, WebDAV and rsync are not wired either |
-| User quota, permissions, creating and editing groups, import and invitations | `user quota` is per volume and `dir_quota` of an edit has no effect; the rest is read from the bundle only. See [docs/api-users.md](docs/api-users.md) |
 | Image rename | `RenameImage` answers `successful` and renames nothing; field names unknown |
 | OVA import (one step) | `ova parse` reads an OVA into a VM spec; creating the VM from it is still a manual second step |
-| Backup | There is no backup API. The only three `backup_restore` paths appear solely in the UI's encryption whitelist, nothing calls them, and the group has no status or listing endpoint — see [docs/api-backup.md](docs/api-backup.md) |
+| Data backup | UGOS has no data backup app. The `backup_restore` calls are the configuration backup, wired as `backup`. See [docs/api-backup.md](docs/api-backup.md) |
 | Snapshot restore | `snapshot/snapshot/restore` rolls a folder back; destructive and untestable without risking real data. `snapshot clone` covers recovery without it — see [docs/api-snapshot.md](docs/api-snapshot.md) |
-| Log deletion | `DeleteLogs` is destructive and was not probed |
-| Non-KVM modules | Photo, video, music, etc. |
+| Recycle search, version download, thumbnail quality | The calls are described in the docs; the first two have a replacement (`recycle ls`, `version copy` and `fs get`), the quality values are not in the bundle |
+| Storage Manager changes | Pools, volumes and disks are read only |
+| Non-KVM modules | Photo, video, music, antivirus, the vault and the like |
 
 ## Authentication
 
@@ -601,7 +694,8 @@ needs handling by hand, and why requests are not all encrypted.
 
 | Model | UGOS Version | Notes |
 |-------|--------------|-------|
-| DXP480T Plus | 1.18.1.0098 | Everything in this README is verified against this machine |
+| DXP480T Plus | 1.20.0.0142 | Reads and every write that can be undone, run against this machine. What was not run is listed above |
+| DXP480T Plus | 1.18.1.0098 | The KVM, Docker, files, shares and first account commands |
 | DXP480T Plus | 1.14.1.0107 | Earlier verification |
 | DXP4800 Plus | 1.14.x | Reported working, not verified here |
 

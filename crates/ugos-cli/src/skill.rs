@@ -23,9 +23,11 @@ pub const NAME: &str = "ugos-cli";
 
 /// What the skill is for, which an AI tool reads to decide whether to load it.
 const DESCRIPTION: &str = "Manage a UGREEN NAS running UGOS through ugos-cli: virtual \
-machines, Docker containers, files, shared folders and their access rules, user accounts \
-and groups, snapshots, downloads and hardware readings. Use it whenever a task involves a \
-UGOS device, instead of virsh, qemu, docker over SSH or the web UI.";
+machines, Docker containers, files, shared folders and their access rules, file services \
+(SMB, FTP, NFS, rsync, WebDAV), accounts, groups and permissions, the network, hardware, \
+power and time, iSCSI, recycle bins, file versions, snapshots, logs, firmware, backup of \
+the configuration and downloads. Use it whenever a task involves a UGOS device, instead of \
+virsh, qemu, docker over SSH or the web UI.";
 
 /// The hand-written guidance.
 const BODY: &str = include_str!("../skill/body.md");

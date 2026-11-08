@@ -1,8 +1,10 @@
 # ugos-cli
 
 Manage a UGREEN NAS running UGOS from the command line: virtual machines,
-Docker containers, files, shared folders and their access rules, user accounts
-and groups, snapshots, downloads and hardware readings.
+Docker containers, files, shared folders and their access rules, file services
+(SMB, FTP, NFS, rsync, WebDAV), user accounts, groups and permissions, the
+network, hardware, power and time, iSCSI, recycle bins, file versions,
+snapshots, logs, firmware, configuration backup and downloads.
 
 Reach for `ugos-cli` for anything on a UGOS device. Do not use `virsh`, `qemu`,
 `docker` over SSH or the web UI for a task `ugos-cli` covers, and do not edit
@@ -31,8 +33,15 @@ the user asked for exactly that.
 ## Reading is safe, writing is not
 
 Everything that lists or shows (`vm list`, `docker ps`, `fs ls`, `system stat`,
-`snapshot list`, `share list`, `share acl show`, `smb status`, `user list`,
-`user show`, `group list`, `log`) changes nothing and can be run freely. Use `-o json` when you are going to parse the output.
+`snapshot list`, `share list`, `share acl show`, `smb status`, `ftp status`,
+`user list`, `user show`, `user permissions`, `group list`, `net list`,
+`pool list`, `disk smart`, `hw fan show`, `time show`, `san lun list`,
+`recycle list`, `version folders`, `logcenter modules`, `update status`,
+`system about`, `log`) changes nothing and can be run freely. A few commands
+that read also write when given arguments: `user password-rules`,
+`user password-expiry`, `update config`, `smb discovery`, `logcenter filemgr`
+show without arguments and change with them. Use `-o json` when you are going
+to parse the output.
 
 Ask the user before running any command that changes or removes something:
 
@@ -46,6 +55,22 @@ Ask the user before running any command that changes or removes something:
 - `user create`, `user update` (it can disable an account, change its role or
   set a new password), and `user delete` (it deletes the home folder and the
   files in it)
+- `user permit`, `group create`, `group edit`, `group delete`, `group permit`,
+  `user otp-disable`, `user invite enable`, `user invite approve`,
+  `user import --commit`, `user password-expiry`
+- `smb start`, `smb set`, `smb stop`, and the same for `ftp`, `nfs`, `rsync` and
+  `webdav` (a start with settings re-applies the whole service and can interrupt
+  connected clients), `smb clear-cache`
+- `net set`, `net dns`, `net gateway`, `net proxy`, `net bond`, `net bridge`,
+  `net wifi` and `net flow` (a wrong address or gateway cuts the session off),
+  every `hw` command that sets something, `time set`, `terminal set`,
+  `system reboot`, `system poweroff`
+- `san target`, `san lun` and `san group` with `create`, `edit` or `delete`,
+  and `san setting set`
+- `recycle empty`, `recycle delete`, `recycle restore`, `version set`,
+  `version clear-deleted`, `logcenter clear`, `logcenter archive set`
+- `update install`, `update upload`, `update key`, `backup restore`,
+  `backup reset-network`, `backup reset-factory`
 - `download add`, `download rm`
 
 The list is not complete. If a command creates, starts, stops, changes or
@@ -59,9 +84,15 @@ request without touching the NAS. Use it first.
 
 The password of a new or changed account is never an option. `user create` and
 `user update --new-password` ask for it on the terminal, or take it from
-`UGOS_NEW_PASSWORD`; `--new-password-stdin` reads it from stdin. Do not make up
-a password and put it in a command line or a file. The MCP server has no tool
-for a password or a role at all, on purpose.
+`UGOS_NEW_PASSWORD`; `--new-password-stdin` reads it from stdin. rsync takes
+`UGOS_RSYNC_PASSWORD` and the CHAP passwords of iSCSI `UGOS_CHAP_PASSWORD` and
+`UGOS_CHAP_MUTUAL_PASSWORD`, the same way. Do not make up a password and put
+it in a command line or a file.
+
+The MCP server has tools for all of this, and its tools do take passwords,
+roles and `force` as parameters. It is for the user to gate or switch off the
+tools they do not want a model to have, so a tool being there is no permission.
+The rules above hold for the tools as they do for the CLI.
 
 ## Where to look
 
@@ -95,5 +126,20 @@ for a password or a role at all, on purpose.
   share's content). They refuse while there are any. `--force` is for the user to
   decide, never to add on your own after a refusal. They also refuse the account
   you are logged in with and the only administrator.
+- The same holds for every `--force` of this tool: it stands for a confirmation
+  the web UI asks, and a refusal that ends in `pass --force to go on` is a
+  question for the user. Examples: plain FTP, SMB1 and NFS being switched on, a
+  new IQN while initiators are connected, emptying a recycle bin, installing
+  firmware, clearing the log, a factory reset. In the MCP server the refusal says
+  to ask the user and repeat with `force`.
+- A deleted account's home folder does not land in a recycle bin, and a file
+  deleted for good from one cannot come back. `recycle delete` and `recycle empty`
+  refuse any path that is not inside a `#recycle` folder.
+- A service that is off cannot be changed: UGOS keeps settings only when they
+  come with `start`. `ftp set` on a stopped service says so; use `ftp start` with
+  the settings.
+- Some changes take a moment: a new LUN is `creating`, a deleted target stays
+  listed for a few seconds. The commands wait and read back; if one says UGOS
+  said yes but the object did not change, report that instead of retrying.
 - An edit to an account must send its email address back, or UGOS blanks it.
   The CLI does that; if it says it cannot read the address, give `--email`.
