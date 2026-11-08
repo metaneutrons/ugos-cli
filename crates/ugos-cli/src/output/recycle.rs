@@ -178,7 +178,7 @@ mod tests {
     use super::{BinRow, ChoiceRow, FileRow, PlanRow, conf_rows};
 
     #[test]
-    fn bins_files_plans_and_switches_are_shown() {
+    fn a_bin_is_shown() {
         let bin = RecycleBin {
             name: "docs".into(),
             status: true,
@@ -198,6 +198,10 @@ mod tests {
             ..RecycleBin::default()
         });
         assert_eq!(user.admin_only, "-");
+    }
+
+    #[test]
+    fn a_file_and_the_switches_are_shown() {
         let file = FileRow::from(&RecycleFile {
             file_type: 1,
             size: -3,
@@ -207,6 +211,11 @@ mod tests {
             (file.kind.as_str(), file.size, file.by.as_str()),
             ("folder", 0, "-")
         );
+        assert_eq!(conf_rows(&RecycleConf::default()).len(), 2);
+    }
+
+    #[test]
+    fn plans_and_choices_are_shown() {
         let all = PlanRow::from(&Plan {
             is_select_all: true,
             default_task_name: "auto".into(),
@@ -240,6 +249,5 @@ mod tests {
             .id,
             4
         );
-        assert_eq!(conf_rows(&RecycleConf::default()).len(), 2);
     }
 }

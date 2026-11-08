@@ -111,18 +111,13 @@ async fn files(
     output::print_list(w, &table, fmt)
 }
 
-/// Run a `recycle` subcommand.
-pub async fn recycle(
+async fn settings_cmd(
     client: &UgosClient,
     action: &RecycleAction,
     fmt: OutputFormat,
     w: &mut impl Write,
 ) -> Result<()> {
     match action {
-        RecycleAction::Status => {
-            let c = recycle::conf(client).await?;
-            show(w, fmt, &c, &rows::conf_rows(&c))
-        }
         RecycleAction::Config { desktop, folder } => {
             let c = recycle::set_conf(client, desktop.map(OnOff::flag), folder.map(OnOff::flag))
                 .await?;
@@ -148,6 +143,20 @@ pub async fn recycle(
                 .map_err(with_force_hint)?;
             output::print_list(w, &[rows::BinRow::from(&b)], fmt)
         }
+        _ => {
+            let c = recycle::conf(client).await?;
+            show(w, fmt, &c, &rows::conf_rows(&c))
+        }
+    }
+}
+
+async fn content_cmd(
+    client: &UgosClient,
+    action: &RecycleAction,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
+    match action {
         RecycleAction::Ls { path, root } => {
             let at = match (path, root) {
                 (Some(p), _) => Place::Path(p.clone()),
@@ -176,6 +185,23 @@ pub async fn recycle(
             writeln!(w, "Deleted for good")?;
             Ok(())
         }
+        _ => Ok(()),
+    }
+}
+
+/// Run a `recycle` subcommand.
+pub async fn recycle(
+    client: &UgosClient,
+    action: &RecycleAction,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
+    match action {
+        RecycleAction::Ls { .. }
+        | RecycleAction::Restore { .. }
+        | RecycleAction::Empty { .. }
+        | RecycleAction::Delete { .. } => content_cmd(client, action, fmt, w).await,
         RecycleAction::Plan { action } => plan_cmd(client, action, fmt, w).await,
+        _ => settings_cmd(client, action, fmt, w).await,
     }
 }
