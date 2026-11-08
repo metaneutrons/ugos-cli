@@ -1,5 +1,22 @@
 # Changelog
 
+## [0.23.0](https://github.com/metaneutrons/ugos-cli/compare/v0.22.0...v0.23.0) (2026-11-08)
+
+
+### Features
+
+* **cli:** manage file versions, their history and deleted files ([#132](https://github.com/metaneutrons/ugos-cli/issues/132)) ([dad75f0](https://github.com/metaneutrons/ugos-cli/commit/dad75f0354b96236e589446fd7cdc990059c4039))
+* **cli:** manage firmware updates, configuration backup, resets, about and thumbnails ([#129](https://github.com/metaneutrons/ugos-cli/issues/129)) ([faf477a](https://github.com/metaneutrons/ugos-cli/commit/faf477abdb48e1e9bcbfb321b5859174088490a1))
+* **cli:** manage groups, share permissions and quotas of accounts ([#134](https://github.com/metaneutrons/ugos-cli/issues/134)) ([4a03414](https://github.com/metaneutrons/ugos-cli/commit/4a034149f57aa422e61562d1bff46108fb85d307))
+* **cli:** manage hardware, power, time, language and terminal settings ([#127](https://github.com/metaneutrons/ugos-cli/issues/127)) ([a28641f](https://github.com/metaneutrons/ugos-cli/commit/a28641f849abf2ed6e0035dbd0ca3e2dbec6936e))
+* **cli:** manage iSCSI targets, LUNs, groups and the setting of the SAN Manager ([#130](https://github.com/metaneutrons/ugos-cli/issues/130)) ([65f862d](https://github.com/metaneutrons/ugos-cli/commit/65f862d1afe0bf0733df42b76d892176a697b83a))
+* **cli:** manage password policies, two-factor, avatars, invitations and imports of accounts ([#135](https://github.com/metaneutrons/ugos-cli/issues/135)) ([a1f652d](https://github.com/metaneutrons/ugos-cli/commit/a1f652df1cfccdb3ee1ba1cf2c5b9837f7a604d7))
+* **cli:** manage the file services SMB, FTP, NFS, rsync and WebDAV ([#128](https://github.com/metaneutrons/ugos-cli/issues/128)) ([b1ca355](https://github.com/metaneutrons/ugos-cli/commit/b1ca3555dc773c6d80ede2438b9e4f8f16a78fdc))
+* **cli:** manage the Log Center: archive policy, notifications, clearing and export ([#133](https://github.com/metaneutrons/ugos-cli/issues/133)) ([9bba3fc](https://github.com/metaneutrons/ugos-cli/commit/9bba3fc53d6e647cfc7fc69f4876b1a93df82f22))
+* **cli:** manage the network settings of the NAS ([#126](https://github.com/metaneutrons/ugos-cli/issues/126)) ([f402c85](https://github.com/metaneutrons/ugos-cli/commit/f402c85990b12682fab37cb83cabf3e352dac8de))
+* **cli:** manage the recycle bins and their cleanup plans ([#131](https://github.com/metaneutrons/ugos-cli/issues/131)) ([2b409b9](https://github.com/metaneutrons/ugos-cli/commit/2b409b9705c1f47c09ca49f4994cb9f38ab6546a))
+* **cli:** read the Storage Manager: pools, volumes and disks ([#124](https://github.com/metaneutrons/ugos-cli/issues/124)) ([955b70d](https://github.com/metaneutrons/ugos-cli/commit/955b70d79554a09e54c239d0b021a6979dfd5fd3))
+
 ## [0.22.0](https://github.com/metaneutrons/ugos-cli/compare/v0.21.0...v0.22.0) (2026-11-07)
 
 
