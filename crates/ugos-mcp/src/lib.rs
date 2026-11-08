@@ -25,6 +25,7 @@ mod nas;
 mod nas_files;
 mod nas_hw;
 mod nas_net;
+mod nas_san;
 mod nas_update;
 
 use tokio::sync::OnceCell;
@@ -47,6 +48,10 @@ use crate::nas_hw::{
 use crate::nas_net::{
     BondCreateParam, FlowAddParam, FlowPositionParam, GatewayOrderParam, IfaceForceParam,
     NetDnsParam, NetProxyParam, NetSetParam, PortsParam, WifiParam,
+};
+use crate::nas_san::{
+    GroupCreateParam, GroupEditParam, LunCreateParam, LunEditParam, SanDeleteParam, SanNameParam,
+    SanSettingParam, SanTargetParam, TargetCreateParam, TargetEditParam,
 };
 use crate::nas_update::{
     FileParam as UpdateFileParam, PauseParam, ProgressParam, RegenerateParam, RestoreParam,
@@ -2442,6 +2447,188 @@ impl UgosMcp {
     async fn ugos_system_poweroff(&self, Parameters(p): Parameters<ForceParam>) -> String {
         match self.client(&p.target).await {
             Ok(c) => nas_update::power(c, &p, true).await,
+            Err(e) => e,
+        }
+    }
+
+    // ── SAN Manager ─────────────────────────────────────────────────
+    #[tool(description = "Show the iSCSI port, IQN prefix and default CHAP")]
+    async fn ugos_san_setting(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_san::setting_show(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Change the iSCSI port, IQN prefix or default CHAP. A new port restarts the service and new credentials affect connected initiators: refused unless force is given, ask the user first"
+    )]
+    async fn ugos_san_setting_set(&self, Parameters(p): Parameters<SanSettingParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_san::setting_set(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the iSCSI targets with their LUNs, CHAP and state")]
+    async fn ugos_san_target_list(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_san::target_list(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show one iSCSI target")]
+    async fn ugos_san_target_show(&self, Parameters(p): Parameters<SanNameParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_san::target_show(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show the next free target name and IQN")]
+    async fn ugos_san_target_predict(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_san::target_predict(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "List the initiators connected to a target (name), or to all (empty name)"
+    )]
+    async fn ugos_san_target_connections(
+        &self,
+        Parameters(p): Parameters<SanTargetParam>,
+    ) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_san::target_connections(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Make an iSCSI target and map a LUN to it, with optional CHAP")]
+    async fn ugos_san_target_create(&self, Parameters(p): Parameters<TargetCreateParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_san::target_create(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Change a target: name, IQN, several connections, CHAP, digests. Refused while initiators are connected unless force is given: ask the user first"
+    )]
+    async fn ugos_san_target_edit(&self, Parameters(p): Parameters<TargetEditParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_san::target_edit(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Switch an iSCSI target on")]
+    async fn ugos_san_target_enable(&self, Parameters(p): Parameters<SanNameParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_san::target_enable(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Switch an iSCSI target off. Connected initiators lose it: refused unless force is given, ask the user first"
+    )]
+    async fn ugos_san_target_disable(&self, Parameters(p): Parameters<SanTargetParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_san::target_disable(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Delete an iSCSI target; with_lun also destroys the mapped LUN and its data. Refused unless force is given: ask the user first"
+    )]
+    async fn ugos_san_target_delete(&self, Parameters(p): Parameters<SanDeleteParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_san::target_delete(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the LUNs with size, use, volume, target and state")]
+    async fn ugos_san_lun_list(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_san::lun_list(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show one LUN")]
+    async fn ugos_san_lun_show(&self, Parameters(p): Parameters<SanNameParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_san::lun_show(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Make a LUN of a size in whole GB or TB on a volume, thin or thick")]
+    async fn ugos_san_lun_create(&self, Parameters(p): Parameters<LunCreateParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_san::lun_create(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Change a LUN: name, description, a larger size, force unit access, access by group. A larger size cannot be undone and access changes what initiators see: refused unless force is given, ask the user first"
+    )]
+    async fn ugos_san_lun_edit(&self, Parameters(p): Parameters<LunEditParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_san::lun_edit(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Delete a LUN and the data on it. Refused unless force is given: ask the user first"
+    )]
+    async fn ugos_san_lun_delete(&self, Parameters(p): Parameters<SanDeleteParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_san::lun_delete(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the initiator groups")]
+    async fn ugos_san_group_list(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_san::group_list(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Make an initiator group with at least one initiator IQN")]
+    async fn ugos_san_group_create(&self, Parameters(p): Parameters<GroupCreateParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_san::group_create(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Change a group: name, description, add or remove initiators. Refused while LUNs are bound to it unless force is given: ask the user first"
+    )]
+    async fn ugos_san_group_edit(&self, Parameters(p): Parameters<GroupEditParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_san::group_edit(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Delete an initiator group. Refused while LUNs are bound to it unless force is given: ask the user first"
+    )]
+    async fn ugos_san_group_delete(&self, Parameters(p): Parameters<SanDeleteParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_san::group_delete(c, &p).await,
             Err(e) => e,
         }
     }

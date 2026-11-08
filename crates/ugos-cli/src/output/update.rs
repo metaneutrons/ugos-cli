@@ -257,3 +257,149 @@ impl From<&PregenRange> for RangeRow {
         }
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use serde_json::json;
+    use ugos_client::ops::update::backup::RestoreService;
+    use ugos_client::types::update::{
+        BackupInfo, FirmwareConfig, FirmwareStatus, ManualStatus, PregenRange, RemoteFirmware,
+        ServicePorts, TaskProgress, ThumbStatus, VersionFlag,
+    };
+
+    use super::{
+        PortRow, RangeRow, RestoreRow, about_rows, backup_rows, firmware_config_rows,
+        firmware_rows, manual_rows, progress_rows, thumb_rows,
+    };
+
+    fn value(rows: &[super::FieldRow], name: &str) -> String {
+        rows.iter()
+            .find(|r| r.field == name)
+            .map(|r| r.value.clone())
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn firmware_is_shown_with_the_update_that_was_found() {
+        let status = FirmwareStatus {
+            current_version: "1.20".into(),
+            current_stat: 2,
+            current_stage: "download".into(),
+            process: 100,
+            error_code: 1500,
+            error_msg: "bad".into(),
+            remote_base: Some(RemoteFirmware {
+                version: "1.21".into(),
+                version_type: 1,
+                bytes: 3 << 20,
+                desc: "a\nb".into(),
+                ..RemoteFirmware::default()
+            }),
+            ..FirmwareStatus::default()
+        };
+        let rows = firmware_rows(
+            &status,
+            &VersionFlag {
+                has_version: true,
+                ..VersionFlag::default()
+            },
+        );
+        assert_eq!(value(&rows, "State"), "update available");
+        assert_eq!(value(&rows, "Found"), "1.21");
+        assert_eq!(value(&rows, "Important"), "yes");
+        assert_eq!(value(&rows, "Size"), "3 MB");
+        assert_eq!(value(&rows, "Changes"), "a b");
+        assert_eq!(value(&rows, "Error"), "1500 bad");
+        let plain = firmware_rows(&FirmwareStatus::default(), &VersionFlag::default());
+        assert_eq!(value(&plain, "State"), "check failed");
+    }
+
+    #[test]
+    fn the_update_settings_are_shown() {
+        let auto = FirmwareConfig {
+            auto_update: 1,
+            custom_interval_time: true,
+            interval_time: 6,
+            unit: 2,
+            ..FirmwareConfig::default()
+        };
+        let rows = firmware_config_rows(&auto);
+        assert_eq!(value(&rows, "When found"), "install important updates");
+        assert_eq!(value(&rows, "Check every"), "6 days");
+        let default = firmware_config_rows(&FirmwareConfig::default());
+        assert_eq!(value(&default, "Check every"), "UGOS decides");
+    }
+
+    #[test]
+    fn backups_progress_and_manual_installs_are_shown() {
+        let none = backup_rows(&BackupInfo::default(), false);
+        assert_eq!(value(&none, "Latest backup"), "none");
+        let info = BackupInfo {
+            last_backup_time: 86_400,
+            account: "me".into(),
+            ..BackupInfo::default()
+        };
+        assert_eq!(value(&backup_rows(&info, true), "Account"), "me");
+        assert_eq!(value(&progress_rows(None), "Task"), "none is running");
+        let p = TaskProgress {
+            status: "proccessing".into(),
+            total: 4,
+            completed: 1,
+        };
+        assert_eq!(value(&progress_rows(Some(&p)), "Done"), "1 of 4");
+        let manual = manual_rows(&ManualStatus {
+            current_stage: "install".into(),
+            process: -1,
+            error_code: 0,
+        });
+        assert_eq!(value(&manual, "Progress"), "0%");
+    }
+
+    #[test]
+    fn services_ports_and_ranges_are_shown() {
+        let service = RestoreService {
+            path: "a/b".into(),
+            names: vec!["x".into(), "y".into()],
+        };
+        assert_eq!(RestoreRow::from(&service).names, "x, y");
+        let port = ServicePorts {
+            name: "SMB".into(),
+            ports: "445".into(),
+            kind: 1,
+            ..ServicePorts::default()
+        };
+        let row = PortRow::from(&port);
+        assert_eq!(
+            (row.tcp.as_str(), row.udp.as_str(), row.kind.as_str()),
+            ("445", "-", "system")
+        );
+        let range = PregenRange {
+            id: 2,
+            status: 1,
+            dirs: vec!["/a".into()],
+            ..PregenRange::default()
+        };
+        assert_eq!(RangeRow::from(&range).choosable, "yes");
+    }
+
+    #[test]
+    fn the_thumbnail_service_and_the_machine_are_shown() {
+        let paused = ThumbStatus {
+            status: 3,
+            count_down_time: 60,
+            error_string: "e".into(),
+            ..ThumbStatus::default()
+        };
+        let rows = thumb_rows(&paused);
+        assert_eq!(value(&rows, "State"), "paused");
+        assert_eq!(value(&rows, "Resumes in"), "60 s");
+        assert_eq!(value(&rows, "Error"), "e");
+        let machine = json!({"common": {"nas_name": "n", "beta": false, "run_time": 5},
+            "hardware": {"cpu": [{"model": "M", "core": 2, "thread": 4}]}});
+        let about = about_rows(&machine, 0);
+        assert_eq!(value(&about, "Name"), "n");
+        assert_eq!(value(&about, "Beta"), "false");
+        assert_eq!(value(&about, "CPU"), "M (2 cores, 4 threads)");
+    }
+}

@@ -20,7 +20,27 @@ fn make_server() -> UgosMcp {
 }
 
 /// Every tool the server registers.
-const EXPECTED_TOOLS: [&str; 187] = [
+const EXPECTED_TOOLS: [&str; 207] = [
+    "ugos_san_setting",
+    "ugos_san_setting_set",
+    "ugos_san_target_list",
+    "ugos_san_target_show",
+    "ugos_san_target_predict",
+    "ugos_san_target_connections",
+    "ugos_san_target_create",
+    "ugos_san_target_edit",
+    "ugos_san_target_enable",
+    "ugos_san_target_disable",
+    "ugos_san_target_delete",
+    "ugos_san_lun_list",
+    "ugos_san_lun_show",
+    "ugos_san_lun_create",
+    "ugos_san_lun_edit",
+    "ugos_san_lun_delete",
+    "ugos_san_group_list",
+    "ugos_san_group_create",
+    "ugos_san_group_edit",
+    "ugos_san_group_delete",
     "ugos_update_status",
     "ugos_update_config",
     "ugos_update_install",

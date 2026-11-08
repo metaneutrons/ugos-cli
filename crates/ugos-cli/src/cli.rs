@@ -3,6 +3,7 @@
 mod fileserver;
 mod hw;
 mod net;
+mod san;
 mod update;
 
 pub use self::fileserver::{
@@ -17,6 +18,10 @@ pub use self::hw::{
 pub use self::net::{
     BondAction, BridgeAction, DnsArgs, FlowAction, GatewayAction, Ipv6Arg, NetAction, ProxyAction,
     SetArgs, WifiCommand,
+};
+pub use self::san::{
+    AccessMode, ChapArgs, ChapMode, LunAction, LunCreateArgs, LunEditArgs, SanAction,
+    SanGroupAction, SettingAction, TargetAction, TargetCreateArgs, TargetEditArgs,
 };
 pub use self::update::{
     AutoUpdate, BackupAction, ForceArgs, IndexAction, RestoreArgs, UpdateAction, UpdateConfigArgs,
@@ -219,6 +224,11 @@ pub enum Resource {
     Smb {
         #[command(subcommand)]
         action: SmbAction,
+    },
+    /// SAN Manager: iSCSI targets, LUNs, initiator groups and the setting.
+    San {
+        #[command(subcommand)]
+        action: SanAction,
     },
     /// Firmware updates.
     Update {
@@ -1744,6 +1754,16 @@ mod tests {
                 action: SmbAction::Discovery(_)
             }
         ));
+    }
+
+    #[test]
+    fn the_command_definitions_are_consistent() {
+        // Catches a flag that clashes with a global one, which clap only
+        // reports when the command is parsed.
+        Cli::command().debug_assert();
+        let (_, cli) =
+            parse(&["ugos-cli", "san", "setting", "set", "--iscsi-port", "3262"]).unwrap();
+        assert!(matches!(cli.command, Resource::San { .. }));
     }
 
     #[test]
