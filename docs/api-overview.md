@@ -26,6 +26,7 @@ Base URL: `https://<nas-ip>:9443/ugreen/v1/`
 | **SAN Manager** | com.ugreen.iscsi | iSCSI targets, LUNs, initiator groups, global setting | [api-san.md](api-san.md) |
 | **Recycle bins** | com.ugreen.filetrash | Bins of shares and user folders, restore, empty, delete for good, cleanup plans | [api-recycle.md](api-recycle.md) |
 | **File Version Explorer** | com.ugreen.versionmgr | Version settings of folders, history, copy, deleted files | [api-versions.md](api-versions.md) |
+| **Log Center** | com.ugreen.logmgr | Event and transfer log, archive policy and viewer, notifications, clearing, export | [api-logcenter.md](api-logcenter.md) |
 | **Firmware, backup, about, thumbnails** | com.ugreen.ctlmgr | Update status and config, configuration backup and restore, resets, about, index service; risky writes marked untested | [api-update.md](api-update.md) |
 | **Backup** | — | No data backup app; the configuration backup is above | [api-backup.md](api-backup.md) |
 
@@ -38,7 +39,7 @@ Base URL: `https://<nas-ip>:9443/ugreen/v1/`
 | Music | `music/` | Upload, playlist sharing |
 | Network | `network/iface/`, `network/auth/` | NAS network config (not KVM networks) |
 | User | `user/` | Listing implemented (`ugos user list`); password, avatar, wallpaper untouched |
-| Log | `log/` | Query implemented (`ugos log list`); `DeleteLogs` deliberately left out |
+| Log | `log/` | Query, clearing, archiving, notifications, export: see [api-logcenter.md](api-logcenter.md) |
 | Firmware | `firmware/`, `upgrader/` | System updates, manual firmware upload |
 | Security | `security/ssl/` | SSL certificate import |
 | Sync | `sync/syncthing/`, `web/sync/` | Syncthing integration |

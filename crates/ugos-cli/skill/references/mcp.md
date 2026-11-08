@@ -631,6 +631,122 @@ Search KVM audit logs
 - `page_size`: Page size (default: 20).
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
+## ugos_logcenter_archive_add
+
+Add a .ulog archive on the NAS to the viewer (path)
+
+- `id`: The archive id, for open and remove.
+- `path`: Path of a `.ulog` file, for add.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_logcenter_archive_files
+
+List the archives in the viewer
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_logcenter_archive_open
+
+Make an archive the active log source (id)
+
+- `id`: The archive id, for open and remove.
+- `path`: Path of a `.ulog` file, for add.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_logcenter_archive_records
+
+List the archives that were made (page from 0)
+
+- `page`: The page, from 0.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_logcenter_archive_remove
+
+Remove an archive from the viewer (id); the file stays
+
+- `id`: The archive id, for open and remove.
+- `path`: Path of a `.ulog` file, for add.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_logcenter_archive_set
+
+Change the log archive policy. Archiving moves entries out of the log: refused while on unless force is given, ask the user first. UGOS keeps the triggers only while archiving is on
+
+- `enable`: Run archiving or not.
+- `entries`: Archive at this many entries: 0, 1000000, 5000000 or 10000000.
+- `force`: Go on although archiving moves entries out of the log. Ask the user
+first.
+- `mb`: Archive at this many MB: 0, 500 or 1024.
+- `months`: Archive entries older than this many months: 0, 3, 6 or 12.
+- `path`: The folder for the archives.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_logcenter_archive_show
+
+Show the log archive policy (triggers, folder)
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_logcenter_clear
+
+Clear the event or transfer log for good: all, older than N days, or before a time. Refused unless force is given: ask the user first
+
+- `all`: Everything.
+- `before`: Entries older than this time, `YYYY-MM-DD HH:MM:SS` in UTC.
+- `force`: Go on: cleared entries cannot be retrieved. Ask the user first.
+- `older_than_days`: Entries older than this many days.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `transfer`: The transfer log instead of the event log.
+
+## ugos_logcenter_export
+
+Save the log to a CSV or HTML file on this machine
+
+- `file` (required): Absolute path to write on this machine.
+- `from`: From this time on, `YYYY-MM-DD HH:MM:SS` in UTC.
+- `html`: HTML instead of CSV.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `to`: Up to this time, `YYYY-MM-DD HH:MM:SS` in UTC.
+- `transfer`: The transfer log instead of the event log.
+
+## ugos_logcenter_filemgr
+
+Read or set whether file manager operations are logged
+
+- `on`: On or off; just read when not given.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_logcenter_modules
+
+List the users and modules that appear in the event log, or the transfer log
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `transfer`: The transfer log instead of the event log.
+
+## ugos_logcenter_notify_records
+
+List the notifications that were sent (page from 0)
+
+- `page`: The page, from 0.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_logcenter_notify_set
+
+Change the notification policy: levels, modules, users, keyword
+
+- `enable`: Notify or not.
+- `keyword`: A keyword or expression.
+- `levels`: Levels: `info`, `warning`, `critical`.
+- `modules`: Modules, like `login`.
+- `operators`: User names.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_logcenter_notify_show
+
+Show the policy for notifications on matching log entries
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
 ## ugos_net_bond_candidates
 
 List the ports that could join a bond
@@ -1482,6 +1598,22 @@ Check which VMs use a storage volume
 - `name` (required): Storage volume name.
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 - `uuid` (required): Storage volume UUID.
+
+## ugos_syslog
+
+Query the log of the NAS across all modules: filters for module, level, user, keyword and time, the event or the transfer log, newest first or oldest first
+
+- `from`: From this time on, `YYYY-MM-DD HH:MM:SS` in UTC.
+- `keyword`: Free text.
+- `level`: A level: `info`, `warning` or `critical`.
+- `module`: A module, like `login`.
+- `oldest_first`: Oldest first.
+- `operator`: A user.
+- `page`: The page, from 1.
+- `size`: Entries per page, 20 when not given.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `to`: Up to this time, `YYYY-MM-DD HH:MM:SS` in UTC.
+- `transfer`: The transfer log (Samba, FTP, `WebDAV`, file manager).
 
 ## ugos_system_about
 

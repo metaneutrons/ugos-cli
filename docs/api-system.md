@@ -97,6 +97,9 @@ The log spans every module, so a Download Center task and a login appear side
 by side. This is a different log from the KVM app's own audit trail
 (`kvm/logs/PageSearchLogs`), which the CLI exposes as `vm log`.
 
+Archiving, notifications, clearing and export of this log, and the transfer
+log, are in [api-logcenter.md](api-logcenter.md).
+
 ## Users (`user/`)
 
 Creating, changing and deleting accounts is in [api-users.md](api-users.md).

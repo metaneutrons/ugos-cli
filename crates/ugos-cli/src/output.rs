@@ -44,6 +44,7 @@ macro_rules! table_row {
 // come after it.
 pub mod fileserver;
 pub mod hw;
+pub mod logcenter;
 pub mod nas_storage;
 pub mod net;
 pub mod recycle;

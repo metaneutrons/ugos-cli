@@ -4,6 +4,7 @@ mod clock;
 mod fileserver;
 mod hw;
 mod hw_power;
+mod logcenter;
 mod nas_storage;
 mod net;
 mod net_links;
@@ -28,6 +29,7 @@ use ugos_client::api::snapshot::SnapshotApi;
 use ugos_client::api::syslog::{LogFilter, SysLogApi};
 use ugos_client::api::system::SystemApi;
 use ugos_client::ops::fileserver::Service;
+use ugos_client::ops::hw::parse::unix_utc;
 use ugos_client::types::docker::RegistryCredentials;
 use ugos_client::types::snapshot::FolderType;
 
@@ -83,6 +85,7 @@ pub async fn run(
         Resource::Webdav { action } => {
             fileserver::service(client, Service::Webdav, action, fmt, w).await
         }
+        Resource::Logcenter { action } => logcenter::logcenter(client, action, fmt, w).await,
         Resource::Version { action } => versions::version(client, action, fmt, w).await,
         Resource::Recycle { action } => recycle::recycle(client, action, fmt, w).await,
         Resource::San { action } => san::san(client, action, fmt, w).await,
@@ -379,6 +382,10 @@ async fn syslog(
         keyword: args.keyword.as_deref(),
         page: args.page,
         size: args.size,
+        transfer: args.transfer,
+        from: args.from.as_deref().map(unix_utc).transpose()?,
+        to: args.to.as_deref().map(unix_utc).transpose()?,
+        ascending: args.oldest_first,
     };
     let page = client.syslog(&filter).await?;
     match fmt {

@@ -24,6 +24,7 @@ mod manage;
 mod nas;
 mod nas_files;
 mod nas_hw;
+mod nas_logs;
 mod nas_net;
 mod nas_recycle;
 mod nas_san;
@@ -46,6 +47,10 @@ use crate::nas_files::{
 use crate::nas_hw::{
     BuzzerParam, FanCurveParam, FinderParam, ForceParam, GpuParam, LedParam, ModeParam,
     PositionParam, PowerParam, ScheduleParam, ScreenParam, TerminalParam, TimeParam, UpsParam,
+};
+use crate::nas_logs::{
+    ArchiveRefParam, ArchiveSetParam, ClearParam, ExportParam, FilemgrParam, NotifySetParam,
+    RecordsParam, SyslogParam, TransferParam,
 };
 use crate::nas_net::{
     BondCreateParam, FlowAddParam, FlowPositionParam, GatewayOrderParam, IfaceForceParam,
@@ -2864,6 +2869,162 @@ impl UgosMcp {
     ) -> String {
         match self.client(&p.target).await {
             Ok(c) => nas_versions::calendar(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    // ── System log and Log Center ───────────────────────────────────
+    #[tool(
+        description = "Query the log of the NAS across all modules: filters for module, level, user, keyword and time, the event or the transfer log, newest first or oldest first"
+    )]
+    async fn ugos_syslog(&self, Parameters(p): Parameters<SyslogParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_logs::syslog(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "List the users and modules that appear in the event log, or the transfer log"
+    )]
+    async fn ugos_logcenter_modules(&self, Parameters(p): Parameters<TransferParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_logs::modules(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show the log archive policy (triggers, folder)")]
+    async fn ugos_logcenter_archive_show(
+        &self,
+        Parameters(p): Parameters<TargetOnlyParam>,
+    ) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_logs::archive_show(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Change the log archive policy. Archiving moves entries out of the log: refused while on unless force is given, ask the user first. UGOS keeps the triggers only while archiving is on"
+    )]
+    async fn ugos_logcenter_archive_set(
+        &self,
+        Parameters(p): Parameters<ArchiveSetParam>,
+    ) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_logs::archive_set(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the archives that were made (page from 0)")]
+    async fn ugos_logcenter_archive_records(
+        &self,
+        Parameters(p): Parameters<RecordsParam>,
+    ) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_logs::archive_records(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the archives in the viewer")]
+    async fn ugos_logcenter_archive_files(
+        &self,
+        Parameters(p): Parameters<TargetOnlyParam>,
+    ) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_logs::archive_files(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Add a .ulog archive on the NAS to the viewer (path)")]
+    async fn ugos_logcenter_archive_add(
+        &self,
+        Parameters(p): Parameters<ArchiveRefParam>,
+    ) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_logs::archive_add(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Make an archive the active log source (id)")]
+    async fn ugos_logcenter_archive_open(
+        &self,
+        Parameters(p): Parameters<ArchiveRefParam>,
+    ) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_logs::archive_open(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Remove an archive from the viewer (id); the file stays")]
+    async fn ugos_logcenter_archive_remove(
+        &self,
+        Parameters(p): Parameters<ArchiveRefParam>,
+    ) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_logs::archive_remove(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show the policy for notifications on matching log entries")]
+    async fn ugos_logcenter_notify_show(
+        &self,
+        Parameters(p): Parameters<TargetOnlyParam>,
+    ) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_logs::notify_show(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Change the notification policy: levels, modules, users, keyword")]
+    async fn ugos_logcenter_notify_set(&self, Parameters(p): Parameters<NotifySetParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_logs::notify_set(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the notifications that were sent (page from 0)")]
+    async fn ugos_logcenter_notify_records(
+        &self,
+        Parameters(p): Parameters<RecordsParam>,
+    ) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_logs::notify_records(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Read or set whether file manager operations are logged")]
+    async fn ugos_logcenter_filemgr(&self, Parameters(p): Parameters<FilemgrParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_logs::filemgr(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Clear the event or transfer log for good: all, older than N days, or before a time. Refused unless force is given: ask the user first"
+    )]
+    async fn ugos_logcenter_clear(&self, Parameters(p): Parameters<ClearParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_logs::clear(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Save the log to a CSV or HTML file on this machine")]
+    async fn ugos_logcenter_export(&self, Parameters(p): Parameters<ExportParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_logs::export(c, &p).await,
             Err(e) => e,
         }
     }

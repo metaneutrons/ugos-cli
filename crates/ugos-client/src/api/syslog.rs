@@ -19,6 +19,15 @@ pub struct LogFilter<'a> {
     pub page: u32,
     /// Entries per page.
     pub size: u32,
+    /// `1` for the transfer log (Samba, FTP, `WebDAV`, file manager) instead
+    /// of the event log.
+    pub transfer: bool,
+    /// Only entries from this time on, Unix seconds.
+    pub from: Option<i64>,
+    /// Only entries up to this time, Unix seconds.
+    pub to: Option<i64>,
+    /// Oldest first.
+    pub ascending: bool,
 }
 
 /// System log and account listings.
@@ -55,6 +64,19 @@ impl SysLogApi for UgosClient {
             if let Some(v) = value {
                 params.push((key, v));
             }
+        }
+        let from = filter.from.map(|t| t.to_string());
+        let to = filter.to.map(|t| t.to_string());
+        if let Some(v) = &from {
+            params.push(("from_time", v));
+        }
+        if let Some(v) = &to {
+            params.push(("to_time", v));
+        }
+        params.push(("visualizer", "false"));
+        params.push(("order", if filter.ascending { "up" } else { "down" }));
+        if filter.transfer {
+            params.push(("log_type", "1"));
         }
         self.get_with_params("log/query", &params).await
     }
