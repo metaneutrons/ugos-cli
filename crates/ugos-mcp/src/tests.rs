@@ -20,7 +20,15 @@ fn make_server() -> UgosMcp {
 }
 
 /// Every tool the server registers.
-const EXPECTED_TOOLS: [&str; 255] = [
+const EXPECTED_TOOLS: [&str; 263] = [
+    "ugos_user_password_rules",
+    "ugos_user_password_expiry",
+    "ugos_user_password_changed",
+    "ugos_user_otp_disable",
+    "ugos_user_avatars",
+    "ugos_user_avatar",
+    "ugos_user_import",
+    "ugos_user_invite",
     "ugos_user_create",
     "ugos_group_create",
     "ugos_group_edit",

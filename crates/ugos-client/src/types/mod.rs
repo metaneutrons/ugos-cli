@@ -9,6 +9,7 @@ pub mod hw;
 pub mod kvm;
 pub mod logcenter;
 pub mod net;
+pub mod policy;
 pub mod recycle;
 pub mod san;
 pub mod shares;

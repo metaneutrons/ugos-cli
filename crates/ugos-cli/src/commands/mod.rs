@@ -9,6 +9,7 @@ mod logcenter;
 mod nas_storage;
 mod net;
 mod net_links;
+mod policy;
 mod recycle;
 mod san;
 mod secret;

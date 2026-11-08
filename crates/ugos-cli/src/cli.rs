@@ -4,6 +4,7 @@ mod fileserver;
 mod hw;
 mod logcenter;
 mod net;
+mod policy;
 mod recycle;
 mod san;
 mod update;
@@ -24,6 +25,9 @@ pub use self::logcenter::{
 pub use self::net::{
     BondAction, BridgeAction, DnsArgs, FlowAction, GatewayAction, Ipv6Arg, NetAction, ProxyAction,
     SetArgs, WifiCommand,
+};
+pub use self::policy::{
+    ApproveArgs, AvatarArgs, ImportArgs, InviteAction, PasswordExpiryArgs, PasswordRulesArgs,
 };
 pub use self::recycle::{PlanAction, PlanArgs, PlanUnit, RecycleAction, RecycleRoot};
 pub use self::san::{
@@ -566,6 +570,34 @@ pub enum UserAction {
         /// `UGOS_NEW_PASSWORD`.
         #[arg(long, conflicts_with = "new_password_stdin")]
         new_password: bool,
+    },
+    /// The strength rules of passwords. Without arguments they are shown.
+    PasswordRules(PasswordRulesArgs),
+    /// The expiry of passwords. Without arguments it is shown.
+    PasswordExpiry(PasswordExpiryArgs),
+    /// When the account last changed its password.
+    PasswordChanged {
+        /// Login name or numeric uid.
+        account: String,
+    },
+    /// Switch off the second factor of an account.
+    OtpDisable {
+        /// Login name or numeric uid.
+        account: String,
+        /// Go on: the account then has no second factor.
+        #[arg(long)]
+        force: bool,
+    },
+    /// The avatars UGOS offers.
+    Avatars,
+    /// Set the avatar of an account.
+    Avatar(AvatarArgs),
+    /// Create accounts from a spreadsheet.
+    Import(ImportArgs),
+    /// Invitations: a link with which people apply for an account.
+    Invite {
+        #[command(subcommand)]
+        action: InviteAction,
     },
     /// What the account may do on each share.
     Permissions {
