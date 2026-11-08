@@ -262,3 +262,136 @@ impl From<&Connection> for ConnectionRow {
         }
     }
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use ugos_client::types::san::{
+        ChapInfo, Connection, Group, GroupAccess, Lun, LunTarget, Setting, Target, TargetLun,
+    };
+
+    use super::{
+        ConnectionRow, GroupRow, LunRow, TargetRow, gib, lun_rows, setting_rows, target_rows,
+    };
+
+    fn target() -> Target {
+        Target {
+            id: 3,
+            name: "t1".into(),
+            iqn: "iqn.x:t1".into(),
+            luns: vec![TargetLun {
+                lun_id: 1,
+                lun_name: "l1".into(),
+            }],
+            chap_type: "custom".into(),
+            chap_info: ChapInfo {
+                kind: 2,
+                userid: "u".into(),
+                mutual_userid: "m".into(),
+            },
+            enable_head_crc: true,
+            multi_conn: true,
+            status: 2,
+            ..Target::default()
+        }
+    }
+
+    fn lun() -> Lun {
+        Lun {
+            id: 1,
+            name: "l1".into(),
+            kind: "thin".into(),
+            volume_label: "Volume 1".into(),
+            size: 2 << 40,
+            used_size: -1,
+            status: 8,
+            group_access: vec![GroupAccess {
+                group_name: "g".into(),
+                access_mode: "ro".into(),
+                ..GroupAccess::default()
+            }],
+            targets: vec![LunTarget {
+                target_id: 3,
+                target_name: "t1".into(),
+            }],
+            ..Lun::default()
+        }
+    }
+
+    #[test]
+    fn sizes_are_shown_in_gb_or_tb() {
+        assert_eq!(gib(1 << 30), "1 GB");
+        assert_eq!(gib(2 << 40), "2 TB");
+        assert_eq!(gib(3 << 29), "1 GB");
+        assert_eq!(gib(-1), "-");
+    }
+
+    #[test]
+    fn a_target_is_shown_in_a_row_and_in_detail() {
+        let row = TargetRow::from(&target());
+        assert_eq!(
+            (row.luns.as_str(), row.state.as_str(), row.chap.as_str()),
+            ("l1", "off", "custom")
+        );
+        let rows = target_rows(&target());
+        let value = |name: &str| {
+            rows.iter()
+                .find(|r| r.field == name)
+                .map(|r| r.value.clone())
+        };
+        assert_eq!(value("Several connections").as_deref(), Some("yes"));
+        assert_eq!(value("CHAP user").as_deref(), Some("u"));
+        assert_eq!(value("Target CHAP user").as_deref(), Some("m"));
+        let bare = TargetRow::from(&Target::default());
+        assert_eq!(bare.luns, "-");
+    }
+
+    #[test]
+    fn a_lun_is_shown_in_a_row_and_in_detail() {
+        let row = LunRow::from(&lun());
+        assert_eq!(
+            (row.size.as_str(), row.state.as_str(), row.target.as_str()),
+            ("2 TB", "expanding", "t1")
+        );
+        let rows = lun_rows(&lun());
+        let access = rows.iter().find(|r| r.field == "Access").unwrap();
+        assert_eq!(access.value, "g (ro)");
+        let free = lun_rows(&Lun::default());
+        assert_eq!(
+            free.iter().find(|r| r.field == "Access").unwrap().value,
+            "all groups"
+        );
+    }
+
+    #[test]
+    fn groups_settings_and_connections_are_shown() {
+        let group = Group {
+            id: 1,
+            name: "g".into(),
+            initiator_iqns: vec!["a".into(), "b".into()],
+            ..Group::default()
+        };
+        assert_eq!(GroupRow::from(&group).initiators, "a, b");
+        let setting = Setting {
+            port: 3260,
+            kind: 2,
+            userid: "u".into(),
+            ..Setting::default()
+        };
+        let rows = setting_rows(&setting);
+        assert_eq!(
+            rows.iter()
+                .find(|r| r.field == "Default CHAP")
+                .unwrap()
+                .value,
+            "mutual"
+        );
+        assert!(rows.iter().any(|r| r.field == "CHAP user"));
+        let conn = Connection {
+            label: "t1".into(),
+            ip: "10.0.0.2".into(),
+            ..Connection::default()
+        };
+        assert_eq!(ConnectionRow::from(&conn).ip, "10.0.0.2");
+    }
+}

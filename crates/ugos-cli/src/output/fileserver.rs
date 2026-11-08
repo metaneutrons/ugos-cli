@@ -123,3 +123,81 @@ pub fn setting_rows(service: Service) -> Vec<SettingRow> {
         })
         .collect()
 }
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod tests {
+    use serde_json::json;
+    use ugos_client::ops::fileserver::{Config, Service};
+    use ugos_client::types::shares::{AdvancedShare, SmbAdvanced};
+
+    use super::{advanced_rows, config_rows, setting_rows};
+
+    fn cfg(value: &serde_json::Value) -> Config {
+        value.as_object().unwrap().clone()
+    }
+
+    fn value(rows: &[super::FieldRow], name: &str) -> String {
+        rows.iter()
+            .find(|r| r.field == name)
+            .map(|r| r.value.clone())
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn smb_is_shown_with_codes_and_protocols_named() {
+        let config = cfg(&json!({
+            "status": true, "nas_name": "n", "work_group": "WG", "smb_protocols": [1, 2],
+            "encrypt_mode": 2, "enable_log": true, "wins_server": ""
+        }));
+        let rows = config_rows(Service::Smb, &config);
+        assert_eq!(value(&rows, "Service"), "running");
+        assert_eq!(value(&rows, "Server name"), "n");
+        assert_eq!(value(&rows, "protocols"), "smb1, smb2");
+        assert_eq!(value(&rows, "encryption"), "force");
+        assert_eq!(value(&rows, "log"), "yes");
+        assert_eq!(value(&rows, "wins"), "-");
+        assert_eq!(value(&rows, "signing"), "-");
+    }
+
+    #[test]
+    fn a_stopped_service_and_plain_values_are_shown() {
+        let rows = config_rows(Service::Ftp, &cfg(&json!({"port": 2121, "timeout": 300})));
+        assert_eq!(value(&rows, "Service"), "stopped");
+        assert_eq!(value(&rows, "port"), "2121");
+    }
+
+    #[test]
+    fn discovery_and_settings_are_listed() {
+        let advanced = SmbAdvanced {
+            wsdd2: true,
+            shares: vec![AdvancedShare {
+                name: "tm".into(),
+                time_backup: true,
+                ..AdvancedShare::default()
+            }],
+            ..SmbAdvanced::default()
+        };
+        let rows = advanced_rows(&advanced);
+        assert_eq!(value(&rows, "WS-Discovery (Windows)"), "yes");
+        assert_eq!(value(&rows, "Time Machine targets"), "tm");
+        assert_eq!(
+            value(
+                &advanced_rows(&SmbAdvanced::default()),
+                "Time Machine targets"
+            ),
+            "none"
+        );
+        for service in [
+            Service::Smb,
+            Service::Ftp,
+            Service::Nfs,
+            Service::Rsync,
+            Service::Webdav,
+        ] {
+            let list = setting_rows(service);
+            assert_eq!(list.len(), service.fields().len());
+            assert!(list.iter().all(|r| !r.takes.is_empty()));
+        }
+    }
+}
