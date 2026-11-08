@@ -1,5 +1,6 @@
 //! Command dispatch — maps CLI actions to API calls and output.
 
+pub mod access;
 mod clock;
 mod fileserver;
 mod hw;

@@ -22,13 +22,17 @@ Reconstructed from the lazily loaded bundle of the control panel
 | DELETE | `user/delete` | plain, **password header** | `user delete` |
 | GET, POST | `user/config/password` | plain | not wired (password rules) |
 | POST | `user/rule/password` | plain, **sealed password** | `UsersApi::user_check_password`, not used by the CLI (see below) |
-| GET, POST | `user/quota/{uid}` | plain | not wired (quota per volume) |
-| GET, POST | `user/permission/{uid}`, `user/authorized/{uid}` | plain | not wired |
+| GET, POST | `user/quota/{uid}` | plain | `user quota`, `user quota-set` |
+| GET | `user/check/quota` | plain | `user quota-set` (refuses when `false`) |
+| GET, POST | `user/permission/{uid}` | plain | `user permissions`, `user permit` |
+| GET, POST | `user/authorized/{uid}` | plain | not wired (app rights of domain users) |
 | | `user/search`, `user/import*`, `user/invite*`, `user/headpic/*`, `otp/disable` | plain | not wired |
 | GET | `group/list` | plain | `group list` |
-| POST | `group/name/check`, `group/create`, `group/edit` | plain | not wired |
-| DELETE | `group/delete` | plain | not wired |
-| GET | `group/info/{gid}` | plain | not wired |
+| POST | `group/create`, `group/edit` | plain | `group create`, `group edit` |
+| POST | `group/name/check` | plain | not wired (the rules are checked locally and `group/create` refuses a taken name) |
+| DELETE | `group/delete` | plain | `group delete` |
+| GET | `group/info/{gid}` | plain | `group edit` |
+| GET, POST | `group/permission/{gid}` | plain | `group permissions`, `group permit` |
 
 All of them are `v1`.
 
@@ -168,16 +172,50 @@ sends only those back in `groups`. UGOS accepts the full list as well (the
 built-in groups follow the role and the home folder anyway), which is what
 `ugos-cli` sends.
 
-### group/create, group/delete
-- **Create**: POST `{groupname, description, users: [{name}]}`, answered
-  `{result: gid}`. `group/name/check` takes `{name}` and answers `{}` for a
-  free name.
-- **Delete**: DELETE with the JSON body `[gid]`, answered `{}`
+### Groups: create, edit, delete
 
-Neither is wired; both were used once to learn the shape above, on a throwaway
-group that was deleted again. Joining a group is a field of the account, not
-of the group: an account created with `groups: [{name}]` shows up in the
-group's `users` at once, and leaves it when the account is deleted.
+- **Create**: POST `{groupname, description, users: [{name}]}`, answered
+  `{result: gid}`. A group name is 1 to 64 characters, not only digits, not
+  `root`, `admin`, `administrator` or `none` (any case), without a leading `-`
+  or spaces at its ends. A description is up to 64.
+- **Info**: GET `group/info/{gid}` answers `{groupname, description, users:
+  [{name}]}`.
+- **Edit**: POST `{gid, groupname, description, users: [{name}]}`. The
+  member list is the **whole** list, so `ugos-cli` reads it, edits it and sends
+  it back. A group **can be renamed**, which was verified live, and so can the
+  members be changed.
+- **Delete**: DELETE with the JSON body `[gid]`, answered `{}`. `ugos-cli`
+  asks for `--force` when the group has members.
+
+Joining a group is also a field of the account: an account created with
+`groups: [{name}]` shows up in the group's `users` at once, and leaves it when
+the account is deleted.
+
+## Share permissions
+
+`user/permission/{uid}` and `group/permission/{gid}` answer `{result: [{id,
+name, path, permission, permission_mask, ...}]}`, one row per share.
+`permission` is what was set (`-1` nothing, `0` none, `4`/`5` read, `6`/`7`
+write; the web UI writes only `0`, `5`, `7` and `-1`), `permission_mask` is what
+counts after the groups. The write is a POST of `{list: [{path, permission}]}`
+and takes any subset of the shares: the web UI sends the changed rows for an
+account and all rows for a group, and both were verified live to accept one row.
+An administrator always gets read and write, which the web UI enforces by
+turning read into write; `ugos-cli` refuses read for an administrator instead.
+`inherit` is `-1`.
+
+## Quotas
+
+`user/check/quota` says whether this NAS offers quotas per account at all.
+**The NAS tested answers `false`**, and the web UI hides the tab. `user/quota/{uid}`
+still answered, with `btrfs` and `ext4` rows `{path, hard, max_value, used}`;
+`max_value` was the volume's size in bytes. The write is a POST with a **bare
+array** `[{path, hard}]`, with `hard` in **KiB** according to the web UI's own
+conversion (1 MB is 1024) and `0` for none. `ugos-cli` sends KiB and refuses
+when the NAS offers no quotas. **The write was not run against a NAS**, so the
+unit of `hard` is the reading of the bundle, not a measurement. The limit of the
+home folder (`dir_quota`, `unit` of `user/create`) is another thing and was
+found to be ignored on edit.
 
 ## Password rules
 
@@ -219,6 +257,4 @@ Treat the deletion as final.
 - What the web UI's delete dialog says about the account's data, and what
   `delHomeFolder` does. The text of the dialog is not in the bundle that was
   read.
-- What `group/edit` and the per-user permissions do. They are read from the
-  bundle only.
 - What a password policy that is switched on adds to the three rules.

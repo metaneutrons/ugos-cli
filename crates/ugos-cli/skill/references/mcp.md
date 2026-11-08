@@ -307,10 +307,53 @@ user first.
 - `service` (required): `smb`, `ftp`, `nfs`, `rsync` or `webdav`.
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
+## ugos_group_create
+
+Make a group with optional members
+
+- `description`: A description, up to 64 characters.
+- `members`: Accounts to put in it.
+- `name` (required): Name: not only digits, not `admin`, no leading `-`, up to 64.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_group_delete
+
+Delete a group. Refused while it has members unless force is given: ask the user first
+
+- `force`: Deleting: go on although the group has members. Ask the user first.
+- `group` (required): Name or gid.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_group_edit
+
+Change a group: name, description, add or remove members
+
+- `add`: Accounts to add.
+- `description`: A new description.
+- `group` (required): Name or gid.
+- `new_name`: A new name.
+- `remove`: Accounts to remove.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
 ## ugos_group_list
 
 List the groups an administrator made, with their members. The built-in groups are not listed
 
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_group_permissions
+
+Show what a group may do on each share
+
+- `name` (required): Login name or uid for an account, name or gid for a group.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_group_permit
+
+Set what a group may do on shares (none, read, write or inherit)
+
+- `name` (required): Login name or uid for an account, name or gid for a group.
+- `shares` (required): Share by `none`, `read`, `write` or `inherit`, like `{"docs": "read"}`.
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
 ## ugos_host_info
@@ -1794,6 +1837,21 @@ List USB devices available to a VM
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 - `vm` (required): VM display name or UUID.
 
+## ugos_user_create
+
+Make an account with a password, optional groups and role. The password is a parameter of this tool: gate or switch it off where a model should not handle passwords. An administrator can manage the NAS, so ask the user before giving that role
+
+- `deny_password_change`: Forbid the account to change its own password.
+- `description`: A description.
+- `email`: Email address.
+- `groups`: Groups to join.
+- `name` (required): Login name.
+- `no_home_dir`: Give the account no home folder.
+- `password` (required): The password of the account.
+- `role`: `user` (default) or `admin`. An administrator can manage the NAS: ask
+the user first.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
 ## ugos_user_delete
 
 Delete a user account. Its home folder and the files in it go with it, so an account with files or snapshots is refused unless force is given; ask the user first
@@ -1808,6 +1866,38 @@ which go with it.
 List user accounts with role, groups and status
 
 - `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_user_permissions
+
+Show what an account may do on each share
+
+- `name` (required): Login name or uid for an account, name or gid for a group.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_user_permit
+
+Set what an account may do on shares (none, read, write or inherit). An administrator always gets read and write
+
+- `name` (required): Login name or uid for an account, name or gid for a group.
+- `shares` (required): Share by `none`, `read`, `write` or `inherit`, like `{"docs": "read"}`.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_user_quota
+
+Show the limits of an account per volume. Only on a NAS that offers them
+
+- `name` (required): Login name or uid for an account, name or gid for a group.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_user_quota_set
+
+Set or remove the limit of an account on a volume, in whole MB, GB or TB. Only on a NAS that offers quotas; not run against a NAS here
+
+- `account` (required): Login name or uid.
+- `limit` (required): A whole number of MB, GB or TB, like `500M`, `100G` or `2T`; `none`
+removes the limit.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `volume` (required): The volume, like `volume1`.
 
 ## ugos_user_show
 
@@ -1829,7 +1919,11 @@ Change a user account: email, description, groups, home folder, password rule, d
 - `enable`: Enable a disabled account, or lift an expiry.
 - `expires`: Let the account expire on a date, `YYYY-MM-DD`.
 - `home_dir`: Give (`true`) or take away (`false`) the home folder.
+- `password`: A new password for the account. The tool takes it as a parameter, so
+gate or switch off the tool where a model should not handle passwords.
 - `remove_groups`: Groups to leave. The built-in groups cannot be left.
+- `role`: A new role, `admin` or `user`. Giving or taking away administrator
+rights changes who can manage the NAS: ask the user first.
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
 ## ugos_version_calendar

@@ -1,5 +1,6 @@
 //! Shared and domain-specific types for UGOS API responses.
 
+pub mod access;
 pub mod common;
 pub mod docker;
 pub mod download;

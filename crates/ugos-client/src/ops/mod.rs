@@ -12,6 +12,7 @@ macro_rules! refuse {
     };
 }
 
+pub mod access;
 pub mod fileserver;
 pub mod hw;
 pub mod logcenter;

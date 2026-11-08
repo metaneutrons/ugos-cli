@@ -408,6 +408,55 @@ pub enum DiskAction {
 pub enum GroupAction {
     /// List the groups, with their members. Built-in groups are not listed.
     List,
+    /// Make a group.
+    Create {
+        /// Name: not only digits, not `admin`, no leading `-`, up to 64.
+        name: String,
+        /// A description, up to 64 characters.
+        #[arg(long, default_value = "")]
+        description: String,
+        /// An account to put in it; repeat for several.
+        #[arg(long = "member")]
+        members: Vec<String>,
+    },
+    /// Change a group. Only what is given changes.
+    Edit {
+        /// Name or gid.
+        group: String,
+        /// A new name.
+        #[arg(long)]
+        new_name: Option<String>,
+        /// A new description.
+        #[arg(long)]
+        description: Option<String>,
+        /// An account to add; repeat for several.
+        #[arg(long = "add")]
+        add: Vec<String>,
+        /// An account to remove; repeat for several.
+        #[arg(long = "remove")]
+        remove: Vec<String>,
+    },
+    /// Delete a group.
+    Delete {
+        /// Name or gid.
+        group: String,
+        /// Delete although the group has members.
+        #[arg(long)]
+        force: bool,
+    },
+    /// What the group may do on each share.
+    Permissions {
+        /// Name or gid.
+        group: String,
+    },
+    /// Set what the group may do on shares.
+    Permit {
+        /// Name or gid.
+        group: String,
+        /// `share=none`, `share=read`, `share=write` or `share=inherit`.
+        #[arg(required = true, value_name = "SHARE=LEVEL")]
+        rules: Vec<String>,
+    },
 }
 
 /// Role of an account.
@@ -517,6 +566,34 @@ pub enum UserAction {
         /// `UGOS_NEW_PASSWORD`.
         #[arg(long, conflicts_with = "new_password_stdin")]
         new_password: bool,
+    },
+    /// What the account may do on each share.
+    Permissions {
+        /// Login name or numeric uid.
+        account: String,
+    },
+    /// Set what the account may do on shares.
+    Permit {
+        /// Login name or numeric uid.
+        account: String,
+        /// `share=none`, `share=read`, `share=write` or `share=inherit`.
+        #[arg(required = true, value_name = "SHARE=LEVEL")]
+        rules: Vec<String>,
+    },
+    /// The limits of an account per volume. Only on a NAS that offers them.
+    Quota {
+        /// Login name or numeric uid.
+        account: String,
+    },
+    /// Set the limit of an account on a volume.
+    QuotaSet {
+        /// Login name or numeric uid.
+        account: String,
+        /// The volume, like `volume1`.
+        volume: String,
+        /// A whole number of MB, GB or TB, like `500M`, `100G`, `2T`; `none`
+        /// removes the limit.
+        limit: String,
     },
     /// Delete an account.
     Delete {

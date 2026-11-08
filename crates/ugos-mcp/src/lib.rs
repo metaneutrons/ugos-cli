@@ -22,6 +22,7 @@ use rmcp::{
 };
 mod manage;
 mod nas;
+mod nas_access;
 mod nas_files;
 mod nas_hw;
 mod nas_logs;
@@ -41,6 +42,10 @@ use crate::manage::{
     ShareParam, ShareUpdateParam, UserUpdateParam,
 };
 use crate::nas::NameParam;
+use crate::nas_access::{
+    AccessGroupCreateParam, AccessGroupEditParam, AccessGroupRefParam, OwnerParam, PermitParam,
+    QuotaSetParam, UserCreateParam,
+};
 use crate::nas_files::{
     DiscoveryParam, ForceOnlyParam, ServiceChangeParam, ServiceParam, ServiceStopParam,
 };
@@ -3025,6 +3030,97 @@ impl UgosMcp {
     async fn ugos_logcenter_export(&self, Parameters(p): Parameters<ExportParam>) -> String {
         match self.client(&p.target).await {
             Ok(c) => nas_logs::export(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    // ── Accounts, groups, permissions, quotas ───────────────────────
+    #[tool(
+        description = "Make an account with a password, optional groups and role. The password is a parameter of this tool: gate or switch it off where a model should not handle passwords. An administrator can manage the NAS, so ask the user before giving that role"
+    )]
+    async fn ugos_user_create(&self, Parameters(p): Parameters<UserCreateParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_access::user_create(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Make a group with optional members")]
+    async fn ugos_group_create(&self, Parameters(p): Parameters<AccessGroupCreateParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_access::group_create(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Change a group: name, description, add or remove members")]
+    async fn ugos_group_edit(&self, Parameters(p): Parameters<AccessGroupEditParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_access::group_edit(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Delete a group. Refused while it has members unless force is given: ask the user first"
+    )]
+    async fn ugos_group_delete(&self, Parameters(p): Parameters<AccessGroupRefParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_access::group_delete(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show what a group may do on each share")]
+    async fn ugos_group_permissions(&self, Parameters(p): Parameters<OwnerParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_access::permissions(c, &p, true).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Set what a group may do on shares (none, read, write or inherit)")]
+    async fn ugos_group_permit(&self, Parameters(p): Parameters<PermitParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_access::permit(c, &p, true).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show what an account may do on each share")]
+    async fn ugos_user_permissions(&self, Parameters(p): Parameters<OwnerParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_access::permissions(c, &p, false).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Set what an account may do on shares (none, read, write or inherit). An administrator always gets read and write"
+    )]
+    async fn ugos_user_permit(&self, Parameters(p): Parameters<PermitParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_access::permit(c, &p, false).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Show the limits of an account per volume. Only on a NAS that offers them"
+    )]
+    async fn ugos_user_quota(&self, Parameters(p): Parameters<OwnerParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_access::quota(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Set or remove the limit of an account on a volume, in whole MB, GB or TB. Only on a NAS that offers quotas; not run against a NAS here"
+    )]
+    async fn ugos_user_quota_set(&self, Parameters(p): Parameters<QuotaSetParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_access::quota_set(c, &p).await,
             Err(e) => e,
         }
     }
