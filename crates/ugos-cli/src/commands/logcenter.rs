@@ -53,6 +53,17 @@ async fn archive_cmd(
                 .map_err(with_force_hint)?;
             show(w, fmt, &c, &rows::archive_rows(&c))
         }
+        _ => viewer_cmd(client, action, fmt, w).await,
+    }
+}
+
+async fn viewer_cmd(
+    client: &UgosClient,
+    action: &ArchiveAction,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
+    match action {
         ArchiveAction::Records { page } => {
             let p = logcenter::archive_records(client, *page).await?;
             let table: Vec<rows::ArchiveRecordRow> = p.list.iter().map(Into::into).collect();
@@ -78,6 +89,7 @@ async fn archive_cmd(
             writeln!(w, "Archive {id} is removed from the viewer")?;
             Ok(())
         }
+        _ => Ok(()),
     }
 }
 

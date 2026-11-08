@@ -106,18 +106,8 @@ fn one_of(value: i64, allowed: &[i64], what: &str) -> Result<()> {
     }
 }
 
-/// Change the archive policy and read it back.
-///
-/// # Errors
-///
-/// Returns [`UgosError::NeedsForce`] when archiving is on afterwards: it moves
-/// entries out of the log.
-pub async fn set_archive(
-    client: &UgosClient,
-    change: &ArchiveChange,
-    force: bool,
-) -> Result<ArchiveConfig> {
-    let mut next = archive_config(client).await?;
+/// The archive policy as it would be, checked.
+fn archive_next(mut next: ArchiveConfig, change: &ArchiveChange) -> Result<ArchiveConfig> {
     next.status = change.status.unwrap_or(next.status);
     if let Some(v) = change.data_mb {
         one_of(v, &[0, 500, 1024], "the data size in MB")?;
@@ -142,6 +132,21 @@ pub async fn set_archive(
             "archiving needs a trigger: size, entries or months",
         ));
     }
+    Ok(next)
+}
+
+/// Change the archive policy and read it back.
+///
+/// # Errors
+///
+/// Returns [`UgosError::NeedsForce`] when archiving is on afterwards: it moves
+/// entries out of the log.
+pub async fn set_archive(
+    client: &UgosClient,
+    change: &ArchiveChange,
+    force: bool,
+) -> Result<ArchiveConfig> {
+    let next = archive_next(archive_config(client).await?, change)?;
     if next.status && !force {
         return Err(UgosError::NeedsForce(
             "archiving moves the entries it archives out of the current log".into(),
@@ -265,22 +270,15 @@ pub struct NotifyChange {
     pub operators: Option<Vec<String>>,
 }
 
-/// Change the notification policy and read it back.
-///
-/// # Errors
-///
-/// Refuses an unknown level or module, and a policy without any filter.
-pub async fn set_notify(client: &UgosClient, change: &NotifyChange) -> Result<NotifyConfig> {
-    let mut next = notify_config(client).await?;
+/// The notification policy as it would be, checked.
+fn notify_next(mut next: NotifyConfig, change: &NotifyChange) -> Result<NotifyConfig> {
     next.status = change.status.unwrap_or(next.status);
     if let Some(k) = &change.keyword {
         next.keywords = vec![k.clone()];
     }
     if let Some(levels) = &change.levels {
-        if let Some(bad) = levels
-            .iter()
-            .find(|l| !["info", "warning", "critical"].contains(&l.as_str()))
-        {
+        let known = |l: &String| ["info", "warning", "critical"].contains(&l.as_str());
+        if let Some(bad) = levels.iter().find(|l| !known(l)) {
             return Err(refused(format!(
                 "{bad:?} is no level: info, warning or critical"
             )));
@@ -299,6 +297,16 @@ pub async fn set_notify(client: &UgosClient, change: &NotifyChange) -> Result<No
     if let Some(operators) = &change.operators {
         next.operators.clone_from(operators);
     }
+    Ok(next)
+}
+
+/// Change the notification policy and read it back.
+///
+/// # Errors
+///
+/// Refuses an unknown level or module, and a policy without any filter.
+pub async fn set_notify(client: &UgosClient, change: &NotifyChange) -> Result<NotifyConfig> {
+    let next = notify_next(notify_config(client).await?, change)?;
     let keyword = next.keywords.first().cloned().unwrap_or_default();
     if next.status
         && keyword.is_empty()
