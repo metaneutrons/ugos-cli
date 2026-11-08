@@ -21,6 +21,7 @@ use ugos_client::ops::shares::{
     share_settings, update_share,
 };
 use ugos_client::ops::users::{Expiry, UserChanges, delete_user, parse_date, today, update_user};
+use ugos_client::types::users::{ROLE_ADMIN, ROLE_USER};
 
 // ── Parameter types ─────────────────────────────────────────────────
 
@@ -165,6 +166,14 @@ pub struct UserUpdateParam {
     /// Let the account expire on a date, `YYYY-MM-DD`.
     #[serde(default)]
     pub expires: Option<String>,
+    /// A new role, `admin` or `user`. Giving or taking away administrator
+    /// rights changes who can manage the NAS: ask the user first.
+    #[serde(default)]
+    pub role: Option<String>,
+    /// A new password for the account. The tool takes it as a parameter, so
+    /// gate or switch off the tool where a model should not handle passwords.
+    #[serde(default)]
+    pub password: Option<String>,
     /// Target NAS name or host. Required when multiple targets are configured.
     #[serde(default)]
     pub target: String,
@@ -297,13 +306,18 @@ pub async fn user_update(client: &UgosClient, p: &UserUpdateParam) -> String {
     let change = UserChanges {
         email: p.email.clone(),
         description: p.description.clone(),
-        role: None,
+        role: match p.role.as_deref() {
+            None => None,
+            Some("admin") => Some(ROLE_ADMIN.to_owned()),
+            Some("user") => Some(ROLE_USER.to_owned()),
+            Some(_) => return "error: the role is admin or user".into(),
+        },
         add_groups: p.add_groups.clone(),
         remove_groups: p.remove_groups.clone(),
         home_dir: p.home_dir,
         deny_password_change: p.deny_password_change,
         expiry,
-        password: None,
+        password: p.password.clone().filter(|v| !v.is_empty()),
     };
     json(update_user(client, &p.account, &change).await)
 }

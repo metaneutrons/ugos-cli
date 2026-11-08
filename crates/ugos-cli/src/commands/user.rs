@@ -34,6 +34,12 @@ pub async fn user(
     fmt: OutputFormat,
     w: &mut impl Write,
 ) -> Result<()> {
+    if super::access::user_access(client, action, fmt, w)
+        .await?
+        .is_some()
+    {
+        return Ok(());
+    }
     match action {
         UserAction::List => list(client, fmt, w).await,
         UserAction::Me => show_account(&client.current_user().await?, fmt, w),
@@ -70,6 +76,8 @@ pub async fn user(
                 .map_err(with_force_hint)?;
             output::print_success(w, &format!("Deleted account '{}'", found.username), fmt)
         }
+        // Handled above, by `user_access`.
+        _ => Ok(()),
     }
 }
 

@@ -16,6 +16,12 @@ pub async fn group(
     fmt: OutputFormat,
     w: &mut impl Write,
 ) -> Result<()> {
+    if crate::commands::access::group_access(client, action, fmt, w)
+        .await?
+        .is_some()
+    {
+        return Ok(());
+    }
     match action {
         GroupAction::List => {
             let groups = client.group_list().await?;
@@ -27,5 +33,6 @@ pub async fn group(
                 OutputFormat::Json => output::print_json(w, &groups),
             }
         }
+        _ => Ok(()),
     }
 }
