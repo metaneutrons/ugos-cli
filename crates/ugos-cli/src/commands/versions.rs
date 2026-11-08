@@ -69,6 +69,39 @@ async fn browse(
     }
 }
 
+async fn restore_cmd(
+    client: &UgosClient,
+    action: &VersionAction,
+    w: &mut impl Write,
+) -> Result<()> {
+    match action {
+        VersionAction::Copy {
+            path,
+            version: number,
+            to,
+            clash: c,
+            force,
+        } => {
+            versions::copy_version(client, path, number, to, clash(*c), *force, now())
+                .await
+                .map_err(with_force_hint)?;
+            writeln!(w, "Copy started into {to}")?;
+        }
+        VersionAction::RestoreDeleted { paths } => {
+            versions::restore_deleted(client, paths, now()).await?;
+            writeln!(w, "Restored to where the items were deleted from")?;
+        }
+        VersionAction::ClearDeleted { paths, force } => {
+            versions::clear_deleted(client, paths, *force, now())
+                .await
+                .map_err(with_force_hint)?;
+            writeln!(w, "The versions of the deleted items are dropped")?;
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
 /// Run a `version` subcommand.
 pub async fn version(
     client: &UgosClient,
@@ -104,31 +137,9 @@ pub async fn version(
             writeln!(w, "History migration: {percent}%")?;
             Ok(())
         }
-        VersionAction::Copy {
-            path,
-            version: number,
-            to,
-            clash: c,
-            force,
-        } => {
-            versions::copy_version(client, path, number, to, clash(*c), *force, now())
-                .await
-                .map_err(with_force_hint)?;
-            writeln!(w, "Copy started into {to}")?;
-            Ok(())
-        }
-        VersionAction::RestoreDeleted { paths } => {
-            versions::restore_deleted(client, paths, now()).await?;
-            writeln!(w, "Restored to where the items were deleted from")?;
-            Ok(())
-        }
-        VersionAction::ClearDeleted { paths, force } => {
-            versions::clear_deleted(client, paths, *force, now())
-                .await
-                .map_err(with_force_hint)?;
-            writeln!(w, "The versions of the deleted items are dropped")?;
-            Ok(())
-        }
+        VersionAction::Copy { .. }
+        | VersionAction::RestoreDeleted { .. }
+        | VersionAction::ClearDeleted { .. } => restore_cmd(client, action, w).await,
         _ => browse(client, action, fmt, w).await,
     }
 }
