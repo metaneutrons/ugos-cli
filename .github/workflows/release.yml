@@ -392,7 +392,7 @@ jobs:
           fi
           ls -1 ./payload
       - uses: anchore/sbom-action/download-syft@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
-      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
       - name: One SBOM and signature bundle per payload
         run: |
           set -euo pipefail
@@ -436,7 +436,7 @@ jobs:
         with:
           name: signed-payloads
           path: ./payload
-      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
       - name: Count, then verify signatures and attestations
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -623,7 +623,7 @@ jobs:
           # dot back before the push; what is signed and attested is the
           # content, not the name.
           install -m 0644 ./aurwork/.SRCINFO ./meta/ugos-cli.SRCINFO
-      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
       - name: Sign the metadata
         run: |
           set -euo pipefail
@@ -668,7 +668,7 @@ jobs:
         with:
           name: channel-metadata
           path: ./release
-      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
       - name: Form the list, verify everything, then write SHA256SUMS
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
