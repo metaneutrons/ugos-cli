@@ -1178,6 +1178,50 @@ impl UgosMcp {
         }
     }
 
+    #[tool(
+        description = "List the Docker networks with driver, subnet, gateway and attached containers"
+    )]
+    async fn ugos_docker_network_ls(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_docker::networks(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "Show a Docker network by name or ID and the containers attached to it")]
+    async fn ugos_docker_network_show(
+        &self,
+        Parameters(p): Parameters<nas_docker::NetworkParam>,
+    ) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_docker::network(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Show which containers and compose projects have a newer image, and the image update settings (reminder, scheduled check)"
+    )]
+    async fn ugos_docker_updates(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_docker::updates(c).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Change the image update settings of the Docker app: the reminder, the scheduled check and its time of day. The days of the schedule stay as they are"
+    )]
+    async fn ugos_docker_updates_set(
+        &self,
+        Parameters(p): Parameters<nas_docker::UpdatesSetParam>,
+    ) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_docker::updates_set(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
     #[tool(description = "Clone a Docker container")]
     async fn ugos_docker_clone(&self, Parameters(p): Parameters<ContainerCloneParam>) -> String {
         match self.client(&p.target).await {

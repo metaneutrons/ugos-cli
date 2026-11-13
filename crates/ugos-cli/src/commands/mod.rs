@@ -3,6 +3,7 @@
 pub mod access;
 mod clock;
 mod dockerlog;
+mod dockernet;
 mod fileserver;
 mod hw;
 mod hw_power;
@@ -984,6 +985,10 @@ async fn docker(
             let (text, cut) = dockerview::container_log(client, id, *lines).await?;
             dockerlog::container_log_out(w, &text, cut, fmt)?;
         }
+        DockerAction::NetworkLs
+        | DockerAction::NetworkShow { .. }
+        | DockerAction::Updates
+        | DockerAction::UpdatesSet { .. } => dockernet::run(client, action, fmt, w).await?,
         DockerAction::Oplog { .. } => dockerlog::docker_oplog(client, action, fmt, w).await?,
         DockerAction::Clone { id, name } => {
             client.container_clone(id, name).await?;

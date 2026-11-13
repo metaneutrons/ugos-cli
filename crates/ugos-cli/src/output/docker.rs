@@ -3,10 +3,11 @@
 
 use serde::Serialize;
 use tabled::Tabled;
+use ugos_client::ops::dockerupdates::UpdateStatus;
 use ugos_client::ops::dockerview::ContainerView;
-use ugos_client::types::docker::{ContainerStats, OpLog};
+use ugos_client::types::docker::{ContainerStats, Network, NetworkMember, OpLog};
 
-use super::format_bytes;
+use super::{FieldRow, field, format_bytes, format_unix, yes_no};
 
 /// A container in `docker ps`.
 #[derive(Serialize)]
@@ -194,4 +195,128 @@ mod tests {
             port_type: String::new(),
         };
     }
+}
+
+// ── Networks and updates ────────────────────────────────────────────
+
+/// A network in `docker network-ls`.
+#[derive(Serialize)]
+pub struct NetworkRow {
+    pub id: String,
+    pub name: String,
+    pub driver: String,
+    pub subnet: String,
+    pub gateway: String,
+    pub containers: String,
+}
+
+table_row! {
+  NetworkRow {
+    id => "ID",
+    name => "Name",
+    driver => "Driver",
+    subnet => "Subnet",
+    gateway => "Gateway",
+    containers => "Containers",
+  }
+}
+
+/// UGOS writes `--` where a network has no address.
+fn address(text: &str) -> String {
+    if text == "--" {
+        String::new()
+    } else {
+        text.to_owned()
+    }
+}
+
+impl From<&Network> for NetworkRow {
+    fn from(n: &Network) -> Self {
+        Self {
+            id: n.network_id.chars().take(12).collect(),
+            name: n.network_name.clone(),
+            driver: n.driver.clone(),
+            subnet: address(&n.ipv4_subnet),
+            gateway: address(&n.ipv4_gateway),
+            containers: n.container_names.len().to_string(),
+        }
+    }
+}
+
+/// A container attached to a network.
+#[derive(Serialize)]
+pub struct MemberRow {
+    pub id: String,
+    pub name: String,
+    pub state: String,
+}
+
+table_row! {
+  MemberRow {
+    id => "ID",
+    name => "Name",
+    state => "State",
+  }
+}
+
+impl From<&NetworkMember> for MemberRow {
+    fn from(m: &NetworkMember) -> Self {
+        Self {
+            id: m.container_id.chars().take(12).collect(),
+            name: m.container_name.clone(),
+            state: m.running.clone(),
+        }
+    }
+}
+
+/// The details of one network.
+pub fn network_rows(n: &Network) -> Vec<FieldRow> {
+    let mut rows = vec![
+        field("Name", n.network_name.clone()),
+        field("ID", n.network_id.clone()),
+        field("Driver", n.driver.clone()),
+        field("IPv4 subnet", address(&n.ipv4_subnet)),
+        field("IPv4 gateway", address(&n.ipv4_gateway)),
+        field("IPv6", yes_no(n.ipv6_flag)),
+    ];
+    if n.ipv6_flag {
+        rows.push(field("IPv6 subnet", address(&n.ipv6_subnet)));
+        rows.push(field("IPv6 gateway", address(&n.ipv6_gateway)));
+    }
+    if !n.network_card.is_empty() {
+        let card = if n.network_card_invalid {
+            format!("{} (gone)", n.network_card)
+        } else {
+            n.network_card.clone()
+        };
+        rows.push(field("Network card", card));
+    }
+    rows.push(field("IP masquerading", yes_no(!n.disable_ip_masquerade)));
+    rows.push(field("Created", format_unix(n.create)));
+    rows
+}
+
+/// What is outdated, and the settings.
+pub fn update_rows(s: &UpdateStatus) -> Vec<FieldRow> {
+    let names = |list: &[String]| {
+        if list.is_empty() {
+            "none".to_owned()
+        } else {
+            list.join(", ")
+        }
+    };
+    let c = &s.config;
+    vec![
+        field(
+            "Containers with an update",
+            format!("{} ({})", s.container_count, names(&s.containers)),
+        ),
+        field(
+            "Projects with an update",
+            format!("{} ({})", s.project_count, names(&s.projects)),
+        ),
+        field("Reminder", yes_no(c.update_reminder)),
+        field("Scheduled check", yes_no(c.is_plan)),
+        field("Time of the check", c.plan_settings.date.clone()),
+    ]
 }

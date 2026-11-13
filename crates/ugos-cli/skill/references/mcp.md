@@ -179,6 +179,19 @@ List Docker registry mirror sources
 
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
+## ugos_docker_network_ls
+
+List the Docker networks with driver, subnet, gateway and attached containers
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_docker_network_show
+
+Show a Docker network by name or ID and the containers attached to it
+
+- `name` (required): Network name, or its ID or the first characters of it.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
 ## ugos_docker_oplog
 
 Show what was done in the Docker app (who deployed, started or removed what), not the output of a container. Filter by user, failures and text
@@ -277,6 +290,21 @@ Stop a Docker container
 
 - `id` (required): Container ID.
 - `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_docker_updates
+
+Show which containers and compose projects have a newer image, and the image update settings (reminder, scheduled check)
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_docker_updates_set
+
+Change the image update settings of the Docker app: the reminder, the scheduled check and its time of day. The days of the schedule stay as they are
+
+- `plan`: Look for updates on a schedule.
+- `reminder`: Remind when an update exists.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `time`: Time of day of the schedule, `HH:MM`.
 
 ## ugos_fileservice_set
 

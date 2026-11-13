@@ -7,6 +7,8 @@ use rmcp::schemars;
 use serde::Serialize;
 use ugos_client::UgosClient;
 use ugos_client::error::UgosError;
+use ugos_client::ops::dockernet;
+use ugos_client::ops::dockerupdates::{self, ConfigChange};
 use ugos_client::ops::dockerview::{self, OpLogQuery};
 
 use crate::manage::failure;
@@ -78,4 +80,57 @@ pub async fn oplog(client: &UgosClient, p: &OplogParam) -> String {
 /// The users that appear in the log of the Docker app.
 pub async fn oplog_users(client: &UgosClient) -> String {
     json(dockerview::oplog_users(client).await)
+}
+
+/// A network by name or ID.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct NetworkParam {
+    /// Network name, or its ID or the first characters of it.
+    pub name: String,
+    /// Target NAS name or host. Required when multiple targets are configured.
+    #[serde(default)]
+    pub target: String,
+}
+
+/// The Docker networks.
+pub async fn networks(client: &UgosClient) -> String {
+    json(dockernet::list(client).await)
+}
+
+/// One network with the containers attached to it.
+pub async fn network(client: &UgosClient, p: &NetworkParam) -> String {
+    json(dockernet::show(client, &p.name).await)
+}
+
+/// What is outdated, and the update settings.
+pub async fn updates(client: &UgosClient) -> String {
+    json(dockerupdates::status(client).await)
+}
+
+/// A change to the image update settings.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct UpdatesSetParam {
+    /// Remind when an update exists.
+    #[serde(default)]
+    pub reminder: Option<bool>,
+    /// Look for updates on a schedule.
+    #[serde(default)]
+    pub plan: Option<bool>,
+    /// Time of day of the schedule, `HH:MM`.
+    #[serde(default)]
+    pub time: Option<String>,
+    /// Target NAS name or host. Required when multiple targets are configured.
+    #[serde(default)]
+    pub target: String,
+}
+
+/// Change the image update settings. The days of the schedule stay as they
+/// are.
+pub async fn updates_set(client: &UgosClient, p: &UpdatesSetParam) -> String {
+    let change = ConfigChange {
+        reminder: p.reminder,
+        plan: p.plan,
+        time: p.time.clone(),
+    };
+    json(dockerupdates::set_config(client, &change).await)
 }
