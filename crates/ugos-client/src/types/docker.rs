@@ -354,3 +354,107 @@ impl std::fmt::Debug for RegistryCredentials {
             .finish()
     }
 }
+
+// ── Live figures, logs ──────────────────────────────────────────────
+
+/// One published port of a container, as the overview lists it.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PortMap {
+    /// Port inside the container.
+    #[serde(default)]
+    pub container_port: String,
+    /// Port on the NAS.
+    #[serde(default)]
+    pub nas_port: String,
+    /// `tcp` or `udp`.
+    #[serde(default)]
+    pub port_type: String,
+}
+
+/// Live figures of a container from `ShowContainerDetailListV2`.
+///
+/// `ContainerListV2` carries no CPU and memory, this call does.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContainerStats {
+    /// Container ID.
+    #[serde(default)]
+    pub container_id: String,
+    /// CPU use in percent.
+    #[serde(default)]
+    pub cpu_usage: f64,
+    /// Memory in use, in bytes.
+    #[serde(default)]
+    pub mem_usage: u64,
+    /// Memory of the NAS, in bytes.
+    #[serde(default)]
+    pub total_memory: u64,
+    /// Bytes received.
+    #[serde(default)]
+    pub downstream_traffic: u64,
+    /// Bytes sent.
+    #[serde(default)]
+    pub upstream_traffic: u64,
+    /// `running`, `exited` and so on.
+    #[serde(default)]
+    pub status: String,
+    /// The container is in a restart loop.
+    #[serde(default)]
+    pub restarting: bool,
+    /// A newer image than the one in use exists.
+    #[serde(default)]
+    pub img_has_update: bool,
+    /// The image is gone from the NAS.
+    #[serde(default)]
+    pub image_not_exist: bool,
+    /// Addresses the published ports answer on.
+    #[serde(default, rename = "nasIPs", deserialize_with = "null_vec_as_empty")]
+    pub nas_ips: Vec<String>,
+    /// Published ports.
+    #[serde(default, deserialize_with = "null_vec_as_empty")]
+    pub port_mapping: Vec<PortMap>,
+}
+
+/// What `ShowContainerLogs` answers with.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ContainerLog {
+    /// The log, one string with line breaks.
+    #[serde(default)]
+    pub message: String,
+    /// UGOS cut the log off at its limit.
+    #[serde(default)]
+    pub upper_limit: bool,
+}
+
+/// One entry of the Docker app's own log (who did what in the app).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpLog {
+    /// What was done.
+    #[serde(default)]
+    pub content: String,
+    /// `YYYY-MM-DD HH:MM:SS`, NAS time.
+    #[serde(default)]
+    pub create_time: String,
+    /// `1` info, `2` failure.
+    #[serde(default)]
+    pub level: i64,
+    /// Who did it (`system` for the NAS itself).
+    #[serde(default)]
+    pub operator: String,
+}
+
+/// A page of the Docker app's log.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct OpLogPage {
+    /// The entries, newest first unless asked otherwise. UGOS sends `null`
+    /// when nothing matches.
+    #[serde(default)]
+    pub logs: Option<Vec<OpLog>>,
+    /// How many entries match in all.
+    #[serde(default)]
+    pub total: u64,
+}

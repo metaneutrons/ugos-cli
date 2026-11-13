@@ -107,7 +107,7 @@ pub struct Cli {
 }
 
 /// Output format selection.
-#[derive(Debug, Clone, Copy, ValueEnum)]
+#[derive(Debug, Clone, Copy, ValueEnum, PartialEq, Eq)]
 pub enum OutputFormat {
     /// Human-readable table.
     Table,
@@ -1532,13 +1532,44 @@ pub enum DockerAction {
         /// Mirror ID.
         id: i64,
     },
-    /// Show container logs.
+    /// Show the log of a container.
+    ///
+    /// UGOS has no way to ask for a number of lines: it answers with the log
+    /// up to its own limit, and the last `--lines` are cut from that.
     Logs {
         /// Container ID.
         id: String,
-        /// Number of log lines.
+        /// Number of lines, counted from the end.
         #[arg(long, default_value = "100")]
-        lines: u32,
+        lines: usize,
+    },
+    /// Show what was done in the Docker app: who deployed, started or
+    /// removed what (not the output of a container, see `logs`).
+    Oplog {
+        /// Only this user (`system` is the NAS itself).
+        #[arg(long)]
+        user: Option<String>,
+        /// Only failures.
+        #[arg(long)]
+        failed: bool,
+        /// Only entries that contain this text.
+        #[arg(long)]
+        contains: Option<String>,
+        /// Oldest first.
+        #[arg(long)]
+        oldest_first: bool,
+        /// How many entries (newest first, or oldest with `--oldest-first`).
+        #[arg(long, default_value = "50")]
+        limit: u32,
+        /// Page of `--limit` entries, from 1.
+        #[arg(long, default_value = "1")]
+        page: u32,
+        /// List the users that appear in the log instead.
+        #[arg(long, conflicts_with_all = ["export"])]
+        users: bool,
+        /// Print the whole log as the tab-separated text UGOS exports.
+        #[arg(long)]
+        export: bool,
     },
     /// Clone a container.
     Clone {

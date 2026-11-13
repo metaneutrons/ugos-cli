@@ -20,7 +20,7 @@ fn make_server() -> UgosMcp {
 }
 
 /// Every tool the server registers.
-const EXPECTED_TOOLS: [&str; 263] = [
+const EXPECTED_TOOLS: [&str; 265] = [
     "ugos_user_password_rules",
     "ugos_user_password_expiry",
     "ugos_user_password_changed",
@@ -225,6 +225,8 @@ const EXPECTED_TOOLS: [&str; 263] = [
     "ugos_docker_restart",
     "ugos_docker_rm",
     "ugos_docker_logs",
+    "ugos_docker_oplog",
+    "ugos_docker_oplog_users",
     "ugos_docker_clone",
     "ugos_docker_batch",
     "ugos_docker_images",

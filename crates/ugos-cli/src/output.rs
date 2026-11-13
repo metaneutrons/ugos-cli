@@ -5,7 +5,7 @@ use std::io::Write;
 use anyhow::Result;
 use serde::Serialize;
 use tabled::{Table, Tabled};
-use ugos_client::types::docker::{ComposeProject, Container, DockerImage, Mirror};
+use ugos_client::types::docker::{ComposeProject, DockerImage, Mirror};
 use ugos_client::types::kvm::{
     HostInfo, ImageInfo, LogEntry, NetworkDetail, NetworkSummary, Snapshot, StorageInfo, UsbDevice,
     VmDetail, VmSummary, VncLink,
@@ -43,6 +43,7 @@ macro_rules! table_row {
 // Row types of the NAS administration commands. They use `table_row!`, so they
 // come after it.
 pub mod access;
+pub mod docker;
 pub mod fileserver;
 pub mod hw;
 pub mod logcenter;
@@ -1358,41 +1359,6 @@ pub fn acl_rows(acl: &ugos_client::types::shares::PathAcl) -> Vec<AclRow> {
 }
 
 // ── Docker ──────────────────────────────────────────────────────────
-
-/// Table row for Docker containers.
-#[derive(Serialize)]
-pub struct ContainerRow {
-    pub id: String,
-    pub name: String,
-    pub image: String,
-    pub status: String,
-    pub cpu: String,
-    pub memory: String,
-}
-
-table_row! {
-  ContainerRow {
-    id => "ID",
-    name => "Name",
-    image => "Image",
-    status => "Status",
-    cpu => "CPU%",
-    memory => "Memory",
-  }
-}
-
-impl From<&Container> for ContainerRow {
-    fn from(c: &Container) -> Self {
-        Self {
-            id: c.container_id.chars().take(12).collect(),
-            name: c.name.clone(),
-            image: format!("{}:{}", c.image_name, c.version),
-            status: c.status.clone(),
-            cpu: String::new(),
-            memory: String::new(),
-        }
-    }
-}
 
 /// Table row for Docker images.
 #[derive(Serialize)]

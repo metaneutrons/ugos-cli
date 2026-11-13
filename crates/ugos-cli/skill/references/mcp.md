@@ -145,7 +145,7 @@ List local Docker images
 
 ## ugos_docker_logs
 
-Get Docker container logs
+Get the last lines of a Docker container's log (what the container wrote). UGOS cuts the log at its own limit, `cut_by_ugos` says so
 
 - `id` (required): Container ID.
 - `lines`: Number of log lines (default: 100).
@@ -179,6 +179,24 @@ List Docker registry mirror sources
 
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
+## ugos_docker_oplog
+
+Show what was done in the Docker app (who deployed, started or removed what), not the output of a container. Filter by user, failures and text
+
+- `contains`: Only entries that contain this text.
+- `failed`: Only failures.
+- `limit`: Entries per page (default: 50).
+- `oldest_first`: Oldest first (default: newest first).
+- `page`: Page, from 1 (default: 1).
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `user`: Only this user (`system` is the NAS itself).
+
+## ugos_docker_oplog_users
+
+List the users that appear in the log of the Docker app
+
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
 ## ugos_docker_overview
 
 Get Docker engine overview (container/image counts, CPU/memory usage)
@@ -200,7 +218,7 @@ Set Docker HTTP proxy configuration
 
 ## ugos_docker_ps
 
-List Docker containers
+List Docker containers with CPU, memory, traffic, published ports, restart loops and whether a newer image exists
 
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 

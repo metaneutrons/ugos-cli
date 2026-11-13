@@ -59,7 +59,14 @@ All endpoints require authentication (see api-auth.md).
 
 ### ShowContainerDetailListV2
 - **Method**: POST
-- **Body**: (container filter params)
+- **Body**: `{pageNum, pageSize}` (same page as `ContainerListV2`)
+- **Response**: `{result: [...]}`, `null` when empty. Per container: `containerId`,
+  `cpuUsage` (percent), `memUsage` and `totalMemory` (bytes), `downstreamTraffic` and
+  `upstreamTraffic` (bytes), `status`, `restarting`, `imgHasUpdate`, `imageNotExist`,
+  `nasIPs` (`null` or list), `portMapping` (`null` or `[{containerPort, nasPort, portType}]`),
+  `volumes`, `progress`.
+- `ContainerListV2` carries no CPU and memory: `docker ps` joins the two by `containerId`.
+  A stopped container has `cpuUsage` 0, which is not a measurement, so the CLI shows `-`.
 
 ### GetContainerById
 - **Method**: GET
@@ -194,7 +201,13 @@ All endpoints require authentication (see api-auth.md).
 
 ### ShowContainerLogs
 - **Method**: POST
-- **Body**: Log query params
+- **Body**: `{containerId}`. A `tail` field is ignored: asking for 1, 50 or 500 lines
+  gave the same 153 lines (verified live). `ugos-cli` cuts the last lines itself.
+- **Response**: `{result: {message, stream, time, upperLimit}}`. `message` is the whole log
+  as one string, `upperLimit` is true when UGOS stopped at its limit. `stream` and `time`
+  came back empty.
+- The web UI does not use this for its log view. It opens a WebSocket instead, see
+  `ShowContainerLogsFollow` below.
 
 ## Container Export/Import
 
@@ -614,6 +627,33 @@ documented above, just with `projectName` set instead of `""`.
 - **Body**: Update config
 
 ## Logs (`docker/log/`)
+
+This is the log of the Docker app itself (who deployed, started or removed what), not
+the output of a container.
+
+### PageSearchLogs
+- **Method**: POST
+- **Body**: `{pageNum, pageSize, operator, level, content, createTimeSort}`. All filters
+  verified live: `operator` is an exact user (`system` is the NAS), `level` is `0` all,
+  `1` info, `2` failure (`3` matches nothing), `content` is a substring match,
+  `createTimeSort` is `asc` or `desc`.
+- A `startTime`/`endTime` in `YYYY-MM-DD HH:MM:SS` is accepted and ignored. Other formats
+  error. The export has `fromTime`/`toTime` fields (printed as `all`), their request
+  names are not known.
+- **Response**: `{curPage, logs: [{content, createTime, level, operator}], total}`.
+  `logs` is `null`, not `[]`, when nothing matches.
+
+### GetAllOperator
+- **Method**: GET
+- **Response**: `{result: ["system", "fabian"]}`
+
+### ExportLogs
+- **Method**: GET (a file download, `ugk=<token>` in the browser)
+- **Params**: `pageNum=1&pageSize=20&level=0&exportType=txt`. The page size does not
+  limit the export: it holds the whole log.
+- **Response**: `text/plain`. A header (`content: all`, `fromTime`, `toTime`, `level`,
+  `operator`), a blank line, then `create_time<TAB>level<TAB>operator<TAB>content` with
+  level as text (`info`).
 
 ### DeleteLogs
 - **Method**: GET
