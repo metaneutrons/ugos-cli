@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.24.0](https://github.com/metaneutrons/ugos-cli/compare/v0.23.0...v0.24.0) (2026-11-13)
+
+
+### Features
+
+* **cli:** follow container logs and read the logs of compose projects ([#145](https://github.com/metaneutrons/ugos-cli/issues/145)) ([9badb47](https://github.com/metaneutrons/ugos-cli/commit/9badb4759334105a0477daa5462303eb5cb73e86))
+* **cli:** run commands in containers and open a shell, list and end terminals ([#146](https://github.com/metaneutrons/ugos-cli/issues/146)) ([1e8ec1a](https://github.com/metaneutrons/ugos-cli/commit/1e8ec1aff55001bd124fbd9e53c331c5593a2450))
+* **cli:** show container logs, the Docker app's log and live figures of containers ([#140](https://github.com/metaneutrons/ugos-cli/issues/140)) ([ca91590](https://github.com/metaneutrons/ugos-cli/commit/ca91590136a0408bf1f61a395b59fb5fd3fbfc47))
+* **cli:** show Docker networks and image updates, and change the update settings ([#144](https://github.com/metaneutrons/ugos-cli/issues/144)) ([544e4b9](https://github.com/metaneutrons/ugos-cli/commit/544e4b95980512f40405b95217d2e1581a580a78))
+* **cli:** show which containers use each local image ([#147](https://github.com/metaneutrons/ugos-cli/issues/147)) ([49b6c64](https://github.com/metaneutrons/ugos-cli/commit/49b6c64e0d5371a870a76785ddd711ea33b059bb))
+
+
+### Bug Fixes
+
+* **deps:** update rmcp to 3.10 for RUSTSEC-2026-0462 ([#141](https://github.com/metaneutrons/ugos-cli/issues/141)) ([bff9446](https://github.com/metaneutrons/ugos-cli/commit/bff94462f7a42db2cf171adcc3bbca1afafeba75))
+
 ## [0.23.0](https://github.com/metaneutrons/ugos-cli/compare/v0.22.0...v0.23.0) (2026-11-08)
 
 
