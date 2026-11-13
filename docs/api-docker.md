@@ -251,6 +251,10 @@ All endpoints require authentication (see api-auth.md).
 
 ### GetUpdateContainerCount
 - **Method**: GET
+- **Response**: `{result: <n>}`, containers with a newer image. `GetUpdateProjectCount` in
+  `docker/compose/` is the same for compose projects. Both gave 0 on picard when last read
+  (5 and 3 an hour earlier, before projects were redeployed), so the positive case is only
+  as verified as the earlier read.
 
 ### UpdateContainerImage
 - **Method**: POST
@@ -620,11 +624,35 @@ documented above, just with `projectName` set instead of `""`.
 - **Body**: Sort config
 
 ### GetContainerImageUpdateConfig
-- **Method**: GET
+- **Method**: GET (`docker/user/`)
+- **Response**: `{isPlan, planSettings: {date: "06:00", day: [1], planType: 2}, updateReminder}`.
+  `isPlan` is the scheduled check, `date` its time of day. What `day` and `planType` mean is
+  not known beyond the values read, so `ugos-cli` passes them through untouched.
 
 ### SetContainerImageUpdateConfig
-- **Method**: POST
-- **Body**: Update config
+- **Method**: POST (`docker/user/`)
+- **Body**: the same object. Verified live: the whole object has to be sent (read, change,
+  send), the answer is `{}` and the change shows on the next read. The reminder and the
+  time were changed and restored.
+
+## Networks (`docker/network/`)
+
+### ShowLocalList
+- **Method**: GET
+- **Response**: `{result: [{networkId, networkName, driver, ipv4Subnet, ipv4Gateway,
+  ipv6Subnet, ipv6Gateway, ipv6Flag, ipv4Flag, networkCard, networkCardInvalid,
+  disableIPMasquerade, create, containerNames}]}`. `--` stands for no address. `driver` is
+  `bridge`, `host`, `null` or `ipvlan`. `containerNames` lists the attached containers.
+
+### ShowLocalContainerAndNetwork
+- **Method**: GET
+- **Params**: `networkId=<full id>` (without it: error 9999)
+- **Response**: `{result: [{containerId, containerName, flag, running}]}`. It lists every
+  container on the NAS (97 on picard). `flag` is true for the ones attached to this
+  network: for `host`, `traefik`, `ipvlan-lan` and `vellum_internal` the flagged names are
+  exactly `containerNames` of `ShowLocalList`. `running` is `Running` or `exited`.
+- The web UI uses this for its dialog to attach containers. Nothing here changes a network:
+  no endpoint for creating, deleting or attaching was in the capture.
 
 ## Logs (`docker/log/`)
 

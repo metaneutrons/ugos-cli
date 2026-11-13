@@ -1571,6 +1571,30 @@ pub enum DockerAction {
         #[arg(long)]
         export: bool,
     },
+    /// List the Docker networks.
+    NetworkLs,
+    /// Show a Docker network and the containers attached to it.
+    NetworkShow {
+        /// Network name, or its ID or the first characters of it.
+        name: String,
+    },
+    /// Show which containers and projects have a newer image, and the update
+    /// settings.
+    Updates,
+    /// Change the image update settings of the Docker app.
+    ///
+    /// The days of the schedule are kept as they are.
+    UpdatesSet {
+        /// Remind when an update exists.
+        #[arg(long, value_enum)]
+        reminder: Option<OnOff>,
+        /// Look for updates on a schedule.
+        #[arg(long, value_enum)]
+        plan: Option<OnOff>,
+        /// Time of day of the schedule, `HH:MM`.
+        #[arg(long)]
+        time: Option<String>,
+    },
     /// Clone a container.
     Clone {
         /// Source container ID.

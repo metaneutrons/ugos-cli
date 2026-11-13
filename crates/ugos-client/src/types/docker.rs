@@ -458,3 +458,111 @@ pub struct OpLogPage {
     #[serde(default)]
     pub total: u64,
 }
+
+// ── Networks, updates ───────────────────────────────────────────────
+
+/// A Docker network from `ShowLocalList`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Network {
+    /// Network ID.
+    #[serde(default)]
+    pub network_id: String,
+    /// Network name.
+    #[serde(default)]
+    pub network_name: String,
+    /// `bridge`, `host`, `null`, `ipvlan` and so on.
+    #[serde(default)]
+    pub driver: String,
+    /// IPv4 subnet, `--` when there is none.
+    #[serde(default)]
+    pub ipv4_subnet: String,
+    /// IPv4 gateway, `--` when there is none.
+    #[serde(default)]
+    pub ipv4_gateway: String,
+    /// IPv6 subnet, `--` when there is none.
+    #[serde(default)]
+    pub ipv6_subnet: String,
+    /// IPv6 gateway, `--` when there is none.
+    #[serde(default)]
+    pub ipv6_gateway: String,
+    /// IPv6 is switched on.
+    #[serde(default)]
+    pub ipv6_flag: bool,
+    /// The network card an ipvlan or macvlan network sits on.
+    #[serde(default)]
+    pub network_card: String,
+    /// The network card is gone.
+    #[serde(default)]
+    pub network_card_invalid: bool,
+    /// IP masquerading is off.
+    #[serde(default, rename = "disableIPMasquerade")]
+    pub disable_ip_masquerade: bool,
+    /// Creation time, Unix seconds.
+    #[serde(default)]
+    pub create: i64,
+    /// Containers attached to it.
+    #[serde(default, deserialize_with = "null_vec_as_empty")]
+    pub container_names: Vec<String>,
+}
+
+/// A container with its membership of one network, from
+/// `ShowLocalContainerAndNetwork`. The call lists every container on the NAS,
+/// `flag` says whether it is attached to the network asked about.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct NetworkMember {
+    /// Container ID.
+    #[serde(default)]
+    pub container_id: String,
+    /// Container name.
+    #[serde(default)]
+    pub container_name: String,
+    /// Attached to the network.
+    #[serde(default)]
+    pub flag: bool,
+    /// `Running`, `exited` and so on.
+    #[serde(default)]
+    pub running: String,
+}
+
+/// When and how often UGOS looks for newer images.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct PlanSettings {
+    /// Time of day, `HH:MM`.
+    #[serde(default)]
+    pub date: String,
+    /// Days, as the web UI numbers them. What the numbers mean is not known
+    /// beyond `1`, so they are passed through untouched.
+    #[serde(default)]
+    pub day: Vec<i64>,
+    /// How the days are read (`2` on picard). Passed through untouched.
+    #[serde(default)]
+    pub plan_type: i64,
+}
+
+/// The image update settings of the Docker app.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateConfig {
+    /// UGOS checks for updates on a schedule.
+    #[serde(default)]
+    pub is_plan: bool,
+    /// The schedule.
+    #[serde(default)]
+    pub plan_settings: PlanSettings,
+    /// UGOS shows a reminder when an update exists.
+    #[serde(default)]
+    pub update_reminder: bool,
+}
+
+impl Default for PlanSettings {
+    fn default() -> Self {
+        Self {
+            date: "06:00".to_owned(),
+            day: vec![1],
+            plan_type: 2,
+        }
+    }
+}
