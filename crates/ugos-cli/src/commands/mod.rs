@@ -4,6 +4,7 @@ pub mod access;
 mod clock;
 mod dockerlog;
 mod dockernet;
+mod dockershell;
 mod fileserver;
 mod hw;
 mod hw_power;
@@ -996,6 +997,10 @@ async fn docker(
         | DockerAction::NetworkShow { .. }
         | DockerAction::Updates
         | DockerAction::UpdatesSet { .. } => dockernet::run(client, action, fmt, w).await?,
+        DockerAction::TerminalLs { .. }
+        | DockerAction::TerminalRm { .. }
+        | DockerAction::Exec { .. }
+        | DockerAction::Shell { .. } => dockershell::run(client, action, fmt, w).await?,
         DockerAction::Oplog { .. } => dockerlog::docker_oplog(client, action, fmt, w).await?,
         DockerAction::Clone { id, name } => {
             client.container_clone(id, name).await?;

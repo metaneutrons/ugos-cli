@@ -9,6 +9,7 @@ use ugos_client::UgosClient;
 use ugos_client::error::UgosError;
 use ugos_client::ops::dockernet;
 use ugos_client::ops::dockerstream;
+use ugos_client::ops::dockerterm;
 use ugos_client::ops::dockerupdates::{self, ConfigChange};
 use ugos_client::ops::dockerview::{self, OpLogQuery};
 
@@ -161,4 +162,104 @@ pub async fn project_logs(client: &UgosClient, p: &ProjectLogsParam) -> String {
             .await
             .map(|log| serde_json::json!({ "log": log })),
     )
+}
+
+/// A container, by ID or name.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct ContainerRefParam {
+    /// Container ID, the first characters of it, or its name.
+    pub id: String,
+    /// Target NAS name or host. Required when multiple targets are configured.
+    #[serde(default)]
+    pub target: String,
+}
+
+/// The terminals open in a container.
+pub async fn terminals(client: &UgosClient, p: &ContainerRefParam) -> String {
+    let listed = async {
+        let full = dockerview::resolve(client, &p.id).await?;
+        dockerterm::list(client, &full).await
+    }
+    .await;
+    json(listed)
+}
+
+/// A terminal to end.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct TerminalRmParam {
+    /// Container ID, the first characters of it, or its name.
+    pub id: String,
+    /// The terminal, from `ugos_docker_terminals`.
+    pub uuid: String,
+    /// End it although someone is connected to it. Ask the user first.
+    #[serde(default)]
+    pub force: bool,
+    /// Target NAS name or host. Required when multiple targets are configured.
+    #[serde(default)]
+    pub target: String,
+}
+
+/// End a terminal.
+pub async fn terminal_rm(client: &UgosClient, p: &TerminalRmParam) -> String {
+    let done = async {
+        let full = dockerview::resolve(client, &p.id).await?;
+        dockerterm::remove(client, &full, &p.uuid, p.force).await
+    }
+    .await;
+    done.map_or_else(|e| failure(&e), |()| format!("Ended terminal {}", p.uuid))
+}
+
+const fn default_timeout() -> u64 {
+    60
+}
+
+/// A command to run in a container.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct ExecParam {
+    /// Container ID, the first characters of it, or its name.
+    pub id: String,
+    /// The command, as one string. The shell of the container reads it, so
+    /// quoting and pipes work as in a terminal.
+    pub command: String,
+    /// Shell to start in the container (default: the one UGOS suggests,
+    /// `/bin/bash`).
+    #[serde(default)]
+    pub shell: Option<String>,
+    /// Give up after this many seconds (default: 60).
+    #[serde(default = "default_timeout")]
+    pub timeout_seconds: u64,
+    /// Target NAS name or host. Required when multiple targets are configured.
+    #[serde(default)]
+    pub target: String,
+}
+
+/// The most output a tool call takes.
+const EXEC_MAX_BYTES: usize = 1024 * 1024;
+
+/// Run a command in a container. This runs code in the container with the
+/// rights of its shell (usually root): the caller has to be sure the user
+/// wants that.
+pub async fn exec(client: &UgosClient, p: &ExecParam) -> String {
+    let result = async {
+        let full = dockerview::resolve(client, &p.id).await?;
+        let shell = match &p.shell {
+            Some(shell) => shell.clone(),
+            None => dockerterm::suggested(client)
+                .await?
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| "/bin/bash".to_owned()),
+        };
+        dockerterm::run(
+            client,
+            &full,
+            &shell,
+            &p.command,
+            std::time::Duration::from_secs(p.timeout_seconds),
+            EXEC_MAX_BYTES,
+        )
+        .await
+    }
+    .await;
+    json(result)
 }
