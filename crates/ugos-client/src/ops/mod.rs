@@ -13,6 +13,7 @@ macro_rules! refuse {
 }
 
 pub mod access;
+pub mod dockerimages;
 pub mod dockernet;
 pub mod dockerstream;
 pub mod dockerterm;

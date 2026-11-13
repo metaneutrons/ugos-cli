@@ -7,6 +7,7 @@ use rmcp::schemars;
 use serde::Serialize;
 use ugos_client::UgosClient;
 use ugos_client::error::UgosError;
+use ugos_client::ops::dockerimages;
 use ugos_client::ops::dockernet;
 use ugos_client::ops::dockerstream;
 use ugos_client::ops::dockerterm;
@@ -262,4 +263,9 @@ pub async fn exec(client: &UgosClient, p: &ExecParam) -> String {
     }
     .await;
     json(result)
+}
+
+/// The local images with the containers that use them.
+pub async fn images(client: &UgosClient) -> String {
+    json(dockerimages::images(client, 1, 500).await)
 }

@@ -1103,13 +1103,12 @@ impl UgosMcp {
         }
     }
 
-    #[tool(description = "List local Docker images")]
+    #[tool(
+        description = "List local Docker images with size and the names of the containers that use each one (an empty list means unused)"
+    )]
     async fn ugos_docker_images(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
         match self.client(&p.target).await {
-            Ok(c) => match c.docker_image_list(1, 100).await {
-                Ok(r) => serde_json::to_string_pretty(&r).unwrap_or_default(),
-                Err(e) => format!("error: {e}"),
-            },
+            Ok(c) => nas_docker::images(c).await,
             Err(e) => e,
         }
     }

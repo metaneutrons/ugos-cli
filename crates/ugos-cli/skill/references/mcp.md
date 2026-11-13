@@ -151,7 +151,7 @@ Load a Docker image from a URL
 
 ## ugos_docker_images
 
-List local Docker images
+List local Docker images with size and the names of the containers that use each one (an empty list means unused)
 
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 

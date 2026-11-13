@@ -382,7 +382,11 @@ pty gives them.
 
 ### ObtainAllImages
 - **Method**: POST
-- **Body**: Filter params
+- **Body**: `{pageNum, pageSize, name}` (from the web app's own code)
+- **Response**: `{count, page, page_size, next, previous, summaries: [...]}`, a Docker Hub
+  listing: `name`, `short_description`, `star_count`, `pull_count`, `isOfficial`,
+  `linkUrl`, `created_at`. 200 results on picard. Not used: `SearchImage` gives the
+  same for `docker search`.
 
 ### ObtainCommonImags
 - **Method**: POST
@@ -390,7 +394,10 @@ pty gives them.
 
 ### ObtainPrivateIsOfficial
 - **Method**: POST
-- **Body**: Image check params
+- **Body**: `{info: [...]}` (the images of a page, from the web app's code)
+- **Response**: `{result: [{imageId, imageName, imageVersion, isOfficial, description}]}`,
+  `[]` on picard. Only fills in the "official" flag and a description for images from
+  private registries. Not used.
 
 ### GetCommonList
 - **Method**: POST
@@ -398,7 +405,11 @@ pty gives them.
 
 ### QueryAllContaners
 - **Method**: POST
-- **Body**: Image filter (which containers use this image)
+- **Body**: `{list: [{imageId, imageRef}, ...]}`. The shape comes from the web app's code,
+  the first guesses (`imageId`, `imageIds`, `id`) all answered `{}`.
+- **Response**: `{result: [{imageId, imageName, imageVersion, names: [container names]}]}`.
+  Only images that are in use appear: 63 of 170 on picard, one call for all of them.
+  `result` is `null` or missing when none is used. `docker images` joins it by `imageId`.
 
 ### DeleteImage
 - **Method**: POST

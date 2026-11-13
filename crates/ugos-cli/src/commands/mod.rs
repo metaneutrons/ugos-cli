@@ -913,9 +913,8 @@ async fn docker(
             output::print_success(w, &format!("Removed {id}"), fmt)?;
         }
         DockerAction::Images { page, page_size } => {
-            let result = client.docker_image_list(*page, *page_size).await?;
-            let images = result.result.unwrap_or_default();
-            let rows: Vec<output::DockerImageRow> = images.iter().map(Into::into).collect();
+            let views = ugos_client::ops::dockerimages::images(client, *page, *page_size).await?;
+            let rows: Vec<output::docker::LocalImageRow> = views.iter().map(Into::into).collect();
             output::print_list(w, &rows, fmt)?;
         }
         DockerAction::Search { name } => {
