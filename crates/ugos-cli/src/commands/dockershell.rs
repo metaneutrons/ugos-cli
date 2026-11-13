@@ -53,25 +53,7 @@ pub async fn run(
                 .map_err(with_force_hint)?;
             output::print_success(w, &format!("Ended terminal {uuid}"), fmt)
         }
-        DockerAction::Exec {
-            id,
-            shell,
-            timeout,
-            command,
-        } => {
-            let full = dockerview::resolve(client, id).await?;
-            let shell = shell_of(client, shell.as_ref()).await?;
-            let result = dockerterm::run(
-                client,
-                &full,
-                &shell,
-                &command.join(" "),
-                Duration::from_secs(*timeout),
-                EXEC_MAX_BYTES,
-            )
-            .await?;
-            exec_out(w, &result, fmt)
-        }
+        DockerAction::Exec { .. } => exec(client, action, fmt, w).await,
         DockerAction::Shell { id, shell } => {
             let full = dockerview::resolve(client, id).await?;
             let shell = shell_of(client, shell.as_ref()).await?;
@@ -79,6 +61,35 @@ pub async fn run(
         }
         _ => bail!("not a terminal command"),
     }
+}
+
+async fn exec(
+    client: &UgosClient,
+    action: &DockerAction,
+    fmt: OutputFormat,
+    w: &mut impl Write,
+) -> Result<()> {
+    let DockerAction::Exec {
+        id,
+        shell,
+        timeout,
+        command,
+    } = action
+    else {
+        bail!("not an exec command");
+    };
+    let full = dockerview::resolve(client, id).await?;
+    let shell = shell_of(client, shell.as_ref()).await?;
+    let result = dockerterm::run(
+        client,
+        &full,
+        &shell,
+        &command.join(" "),
+        Duration::from_secs(*timeout),
+        EXEC_MAX_BYTES,
+    )
+    .await?;
+    exec_out(w, &result, fmt)
 }
 
 fn exec_out(w: &mut impl Write, result: &dockerterm::ExecResult, fmt: OutputFormat) -> Result<()> {
@@ -157,6 +168,34 @@ async fn interactive(
     outcome
 }
 
+/// Key and window events of the terminal, read on a thread of their own
+/// because reading them blocks.
+fn read_events() -> tokio::sync::mpsc::UnboundedReceiver<Event> {
+    let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+    let _reader = std::thread::spawn(move || {
+        while let Ok(ev) = event::read() {
+            if tx.send(ev).is_err() {
+                break;
+            }
+        }
+    });
+    rx
+}
+
+/// Pass a key or a new window size on to the terminal.
+async fn send_event(conn: &mut dockerterm::Connection, event: &Event) -> Result<()> {
+    match event {
+        Event::Key(key) => {
+            if let Some(text) = key_text(key) {
+                conn.input(&text).await?;
+            }
+        }
+        Event::Resize(cols, rows) => conn.resize(*cols, *rows).await?,
+        _ => {}
+    }
+    Ok(())
+}
+
 async fn session(
     client: &UgosClient,
     container: &str,
@@ -167,14 +206,7 @@ async fn session(
     let mut conn = dockerterm::Connection::connect(client, container, uuid, page).await?;
     let (cols, rows) = crossterm::terminal::size().unwrap_or((120, 40));
     conn.resize(cols, rows).await?;
-    let (tx, mut keys) = tokio::sync::mpsc::unbounded_channel();
-    let _reader = std::thread::spawn(move || {
-        while let Ok(ev) = event::read() {
-            if tx.send(ev).is_err() {
-                break;
-            }
-        }
-    });
+    let mut keys = read_events();
     let _raw = RawMode::on()?;
     let mut beat = tokio::time::interval(Duration::from_secs(50));
     let _ = beat.tick().await;
@@ -185,13 +217,7 @@ async fn session(
     loop {
         tokio::select! {
             ev = keys.recv() => match ev {
-                Some(Event::Key(key)) => {
-                    if let Some(text) = key_text(&key) {
-                        conn.input(&text).await?;
-                    }
-                }
-                Some(Event::Resize(c, r)) => conn.resize(c, r).await?,
-                Some(_) => {}
+                Some(event) => send_event(&mut conn, &event).await?,
                 None => break,
             },
             out = conn.next_output() => match out? {
