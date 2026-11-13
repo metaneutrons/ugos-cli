@@ -101,6 +101,11 @@ pub enum UgosError {
     #[error("{0}")]
     NeedsForce(String),
 
+    /// A WebSocket could not be opened, or broke. The text never carries the
+    /// address, which holds the session token.
+    #[error("WebSocket: {0}")]
+    Socket(String),
+
     /// VM or resource not found by display name.
     #[error("{kind} not found: {name}")]
     NotFound {

@@ -8,6 +8,7 @@ use serde::Serialize;
 use ugos_client::UgosClient;
 use ugos_client::error::UgosError;
 use ugos_client::ops::dockernet;
+use ugos_client::ops::dockerstream;
 use ugos_client::ops::dockerupdates::{self, ConfigChange};
 use ugos_client::ops::dockerview::{self, OpLogQuery};
 
@@ -133,4 +134,31 @@ pub async fn updates_set(client: &UgosClient, p: &UpdatesSetParam) -> String {
         time: p.time.clone(),
     };
     json(dockerupdates::set_config(client, &change).await)
+}
+
+const fn default_lines() -> usize {
+    100
+}
+
+/// The log of a compose project.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct ProjectLogsParam {
+    /// Project name.
+    pub name: String,
+    /// Number of lines, counted from the end (default: 100).
+    #[serde(default = "default_lines")]
+    pub lines: usize,
+    /// Target NAS name or host. Required when multiple targets are configured.
+    #[serde(default)]
+    pub target: String,
+}
+
+/// The last lines of a compose project's log, every service, each line with
+/// the service's name in front.
+pub async fn project_logs(client: &UgosClient, p: &ProjectLogsParam) -> String {
+    json(
+        dockerstream::project_tail(client, &p.name, p.lines)
+            .await
+            .map(|log| serde_json::json!({ "log": log })),
+    )
 }

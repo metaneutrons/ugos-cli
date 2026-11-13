@@ -35,6 +35,7 @@ pub mod ops;
 pub mod tls;
 mod totp;
 pub mod types;
+pub mod ws;
 
 #[cfg(test)]
 mod test_support;
