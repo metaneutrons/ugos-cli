@@ -2,6 +2,7 @@
 
 pub mod access;
 mod clock;
+mod dockerlog;
 mod fileserver;
 mod hw;
 mod hw_power;
@@ -30,6 +31,7 @@ use ugos_client::api::kvm::KvmApi;
 use ugos_client::api::snapshot::SnapshotApi;
 use ugos_client::api::syslog::{LogFilter, SysLogApi};
 use ugos_client::api::system::SystemApi;
+use ugos_client::ops::dockerview;
 use ugos_client::ops::fileserver::Service;
 use ugos_client::ops::hw::parse::unix_utc;
 use ugos_client::types::docker::RegistryCredentials;
@@ -853,9 +855,8 @@ async fn docker(
             output::print_success(w, &format!("Docker engine: {status}"), fmt)?;
         }
         DockerAction::Ps { page, page_size } => {
-            let result = client.container_list(*page, *page_size).await?;
-            let containers = result.result.unwrap_or_default();
-            let rows: Vec<output::ContainerRow> = containers.iter().map(Into::into).collect();
+            let views = dockerview::containers(client, *page, *page_size).await?;
+            let rows: Vec<output::docker::ContainerRow> = views.iter().map(Into::into).collect();
             output::print_list(w, &rows, fmt)?;
         }
         DockerAction::Start { id } => {
@@ -980,9 +981,10 @@ async fn docker(
             output::print_success(w, &format!("Switched to mirror {id}"), fmt)?;
         }
         DockerAction::Logs { id, lines } => {
-            let logs = client.container_logs(id, *lines).await?;
-            output::print_json(w, &logs)?;
+            let (text, cut) = dockerview::container_log(client, id, *lines).await?;
+            dockerlog::container_log_out(w, &text, cut, fmt)?;
         }
+        DockerAction::Oplog { .. } => dockerlog::docker_oplog(client, action, fmt, w).await?,
         DockerAction::Clone { id, name } => {
             client.container_clone(id, name).await?;
             output::print_success(w, &format!("Cloned {id} as {name}"), fmt)?;

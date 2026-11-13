@@ -56,13 +56,6 @@ pub trait DockerApi {
     /// Remove a container.
     fn container_remove(&self, id: &str) -> impl Future<Output = Result<()>> + Send;
 
-    /// Get container logs.
-    fn container_logs(
-        &self,
-        id: &str,
-        lines: u32,
-    ) -> impl Future<Output = Result<serde_json::Value>> + Send;
-
     /// Update a container.
     fn container_update(&self, spec: &ContainerDetail) -> impl Future<Output = Result<()>> + Send;
 
@@ -283,11 +276,6 @@ impl DockerApi for UgosClient {
         let body = serde_json::json!({"containerId": id});
         let _: serde_json::Value = self.post("docker/container/RemoveContainer", &body).await?;
         Ok(())
-    }
-
-    async fn container_logs(&self, id: &str, lines: u32) -> Result<serde_json::Value> {
-        let body = serde_json::json!({"containerId": id, "tail": lines});
-        self.post("docker/container/ShowContainerLogs", &body).await
     }
 
     async fn container_update(&self, spec: &ContainerDetail) -> Result<()> {

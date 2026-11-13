@@ -23,6 +23,7 @@ use rmcp::{
 mod manage;
 mod nas;
 mod nas_access;
+mod nas_docker;
 mod nas_files;
 mod nas_hw;
 mod nas_logs;
@@ -1019,13 +1020,12 @@ impl UgosMcp {
         }
     }
 
-    #[tool(description = "List Docker containers")]
+    #[tool(
+        description = "List Docker containers with CPU, memory, traffic, published ports, restart loops and whether a newer image exists"
+    )]
     async fn ugos_docker_ps(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
         match self.client(&p.target).await {
-            Ok(c) => match c.container_list(1, 100).await {
-                Ok(r) => serde_json::to_string_pretty(&r).unwrap_or_default(),
-                Err(e) => format!("error: {e}"),
-            },
+            Ok(c) => nas_docker::containers(c).await,
             Err(e) => e,
         }
     }
@@ -1150,13 +1150,30 @@ impl UgosMcp {
         }
     }
 
-    #[tool(description = "Get Docker container logs")]
+    #[tool(
+        description = "Get the last lines of a Docker container's log (what the container wrote). UGOS cuts the log at its own limit, `cut_by_ugos` says so"
+    )]
     async fn ugos_docker_logs(&self, Parameters(p): Parameters<ContainerLogsParam>) -> String {
         match self.client(&p.target).await {
-            Ok(c) => match c.container_logs(&p.id, p.lines).await {
-                Ok(v) => serde_json::to_string_pretty(&v).unwrap_or_default(),
-                Err(e) => format!("error: {e}"),
-            },
+            Ok(c) => nas_docker::log(c, &p.id, p.lines as usize).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "Show what was done in the Docker app (who deployed, started or removed what), not the output of a container. Filter by user, failures and text"
+    )]
+    async fn ugos_docker_oplog(&self, Parameters(p): Parameters<nas_docker::OplogParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_docker::oplog(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the users that appear in the log of the Docker app")]
+    async fn ugos_docker_oplog_users(&self, Parameters(p): Parameters<TargetOnlyParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_docker::oplog_users(c).await,
             Err(e) => e,
         }
     }
