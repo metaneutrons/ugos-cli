@@ -1542,6 +1542,23 @@ pub enum DockerAction {
         /// Number of lines, counted from the end.
         #[arg(long, default_value = "100")]
         lines: usize,
+        /// Keep running and print what the container writes from now on, until
+        /// Ctrl-C. The first lines come from the same stream the web UI reads.
+        #[arg(short, long)]
+        follow: bool,
+    },
+    /// Show the log of a compose project: every service, each line with the
+    /// service's name in front.
+    ProjectLogs {
+        /// Project name.
+        name: String,
+        /// Number of lines, counted from the end.
+        #[arg(long, default_value = "100")]
+        lines: usize,
+        /// Keep running and print what the project writes from now on, until
+        /// Ctrl-C.
+        #[arg(short, long)]
+        follow: bool,
     },
     /// Show what was done in the Docker app: who deployed, started or
     /// removed what (not the output of a container, see `logs`).

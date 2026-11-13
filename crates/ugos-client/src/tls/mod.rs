@@ -306,6 +306,26 @@ fn config_with(verifier: Arc<dyn ServerCertVerifier>) -> Result<rustls::ClientCo
     Ok(config)
 }
 
+/// The TLS configuration for a policy, for connections that do not go through
+/// `reqwest` (the `WebSocket`s).
+///
+/// # Errors
+///
+/// Returns [`UgosError::Encryption`] if the configuration cannot be built.
+pub(crate) fn client_config(policy: &TlsPolicy) -> Result<rustls::ClientConfig> {
+    let provider = Arc::new(ring::default_provider());
+    match policy {
+        TlsPolicy::Insecure => config_with(Arc::new(LearningVerifier {
+            seen: Arc::new(Mutex::new(None)),
+            provider,
+        })),
+        TlsPolicy::Pinned(expected) => config_with(Arc::new(PinnedVerifier {
+            expected: *expected,
+            provider,
+        })),
+    }
+}
+
 /// Build an HTTP client that enforces the given TLS policy.
 ///
 /// # Errors

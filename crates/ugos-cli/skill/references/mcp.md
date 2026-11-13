@@ -216,6 +216,14 @@ Get Docker engine overview (container/image counts, CPU/memory usage)
 
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
+## ugos_docker_project_logs
+
+Get the last lines of the log of a Docker compose project: every service, each line with the service's name in front
+
+- `lines`: Number of lines, counted from the end (default: 100).
+- `name` (required): Project name.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
 ## ugos_docker_proxy_get
 
 Get Docker HTTP proxy configuration

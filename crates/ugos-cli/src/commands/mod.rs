@@ -981,9 +981,16 @@ async fn docker(
             client.mirror_switch(*id).await?;
             output::print_success(w, &format!("Switched to mirror {id}"), fmt)?;
         }
-        DockerAction::Logs { id, lines } => {
+        DockerAction::Logs {
+            id,
+            lines,
+            follow: false,
+        } => {
             let (text, cut) = dockerview::container_log(client, id, *lines).await?;
             dockerlog::container_log_out(w, &text, cut, fmt)?;
+        }
+        DockerAction::Logs { follow: true, .. } | DockerAction::ProjectLogs { .. } => {
+            dockerlog::stream_logs(client, action, fmt, w).await?;
         }
         DockerAction::NetworkLs
         | DockerAction::NetworkShow { .. }

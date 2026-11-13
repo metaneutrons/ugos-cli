@@ -25,6 +25,9 @@ pub struct UgosClient {
     public_key: Arc<RwLock<Option<rsa::RsaPublicKey>>>,
     /// Serialises re-authentication so one expiry causes one login.
     reauth: Arc<tokio::sync::Mutex<()>>,
+    /// How the certificate is checked, kept for the `WebSocket`s, which do not
+    /// go through `reqwest`.
+    tls: crate::tls::TlsPolicy,
 }
 
 impl UgosClient {
@@ -54,6 +57,7 @@ impl UgosClient {
             session: Arc::new(RwLock::new(session)),
             public_key: Arc::new(RwLock::new(None)),
             reauth: Arc::new(tokio::sync::Mutex::new(())),
+            tls: tls.clone(),
         })
     }
 
@@ -80,6 +84,7 @@ impl UgosClient {
             session: Arc::new(RwLock::new(session)),
             public_key: Arc::new(RwLock::new(None)),
             reauth: Arc::new(tokio::sync::Mutex::new(())),
+            tls: tls.clone(),
         })
     }
 
@@ -98,7 +103,25 @@ impl UgosClient {
             session: Arc::new(RwLock::new(session)),
             public_key: Arc::new(RwLock::new(None)),
             reauth: Arc::new(tokio::sync::Mutex::new(())),
+            tls: crate::tls::TlsPolicy::Insecure,
         })
+    }
+
+    /// The origin of the NAS (`host`, `port`), the TLS policy and the session
+    /// token, for a WebSocket.
+    pub(crate) async fn socket_target(
+        &self,
+    ) -> Result<(String, u16, crate::tls::TlsPolicy, String)> {
+        let url = reqwest::Url::parse(&self.base_url)
+            .map_err(|e| UgosError::Refused(format!("the NAS address is not usable: {e}")))?;
+        let host = url
+            .host_str()
+            .ok_or_else(|| UgosError::Refused("the NAS address has no host".into()))?
+            .trim_matches(['[', ']'])
+            .to_owned();
+        let port = url.port_or_known_default().unwrap_or(443);
+        let token = self.session.read().await.token.clone();
+        Ok((host, port, self.tls.clone(), token))
     }
 
     /// The current session token.

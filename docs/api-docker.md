@@ -209,6 +209,48 @@ All endpoints require authentication (see api-auth.md).
 - The web UI does not use this for its log view. It opens a WebSocket instead, see
   `ShowContainerLogsFollow` below.
 
+## WebSockets (logs and terminal)
+
+The web UI reads container and project logs and runs the terminal over WebSockets. They
+sit beside the HTTP API: `wss://<nas>:<port>/ugreen/v1/docker/...`, with the session
+token in the query string as `ugk=<token>` (a browser cannot set headers on a WebSocket).
+Verified live: **the ordinary session token works as `ugk`**, and the connection goes
+through the same pinned certificate check as every other request. The address is a
+credential, so errors never print it.
+
+Frames are JSON text: `{"type": ..., "data": {"code", "msg", "text", "columns", "rows"},
+"role": {...}}`. `data.code` `200` carries `text`, `2001` is a ping from the NAS that must
+be answered, `2002` is ignored.
+
+### ShowContainerLogsFollow
+- **URL**: `docker/container/ShowContainerLogsFollow?containerId=<full id>&rawData=true`
+- The NAS sends the backlog at once (205 frames in 0.24 s in the capture), then every line
+  the container writes. `type` is `docker-log`. There is no parameter for a number of
+  lines. Frames can end in the middle of a line.
+- The ping is answered with `{"type": "docker-log", "data": {"code": 2001, "msg": "",
+  "text": ""}}`.
+
+### GetProjectLogs
+- **URL**: `docker/compose/GetProjectLogs?projectName=<name>`
+- The NAS sends nothing until the client has sent
+  `{"type": "docker-project-log", "data": {"code": 200, "msg": "", "text": "", "columns":
+  80, "rows": 24}}`. Then `type` is `compose-log`, one frame per burst of lines from any
+  service, each line prefixed `\u001b[36mservice-1  | \u001b[0m` (a colour per service).
+  The ping is answered with `{"type": "compose-log", "data": {"code": 2001, "msg": "pong",
+  "text": ""}}`.
+- `ugos-cli` takes the backlog as everything up to the first pause of 0.7 s, cuts the last
+  lines itself, and takes out the colour codes and `\r`.
+
+### Ws (terminal)
+- Seen in the capture, not implemented: `AddTerminal` (POST, encrypted body, answers with
+  a `uuid`), then `docker/container/Ws?containerId=&uuid=&pageID=` (WebSocket,
+  `type: docker-terminal`: the client sends keystrokes as `text` with `columns`/`rows`, the
+  NAS sends output as `text`, a heartbeat with `code` 2223 every 60 s), then `DelTerminal`
+  (POST). `GetTerminalList?containerId=&processCheck=true` lists the open terminals and
+  `RecommendedTerminalCommands` answers `["/bin/bash"]`. The body of `AddTerminal` is not
+  known: it is encrypted in the capture and guesses with `command`, `cmd`, `shell` and
+  `terminal` failed with 9999 on two containers (one had no shell).
+
 ## Container Export/Import
 
 ### ExportContainer

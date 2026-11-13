@@ -1222,6 +1222,19 @@ impl UgosMcp {
         }
     }
 
+    #[tool(
+        description = "Get the last lines of the log of a Docker compose project: every service, each line with the service's name in front"
+    )]
+    async fn ugos_docker_project_logs(
+        &self,
+        Parameters(p): Parameters<nas_docker::ProjectLogsParam>,
+    ) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_docker::project_logs(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
     #[tool(description = "Clone a Docker container")]
     async fn ugos_docker_clone(&self, Parameters(p): Parameters<ContainerCloneParam>) -> String {
         match self.client(&p.target).await {
