@@ -177,13 +177,23 @@ ugos-cli docker ps
 ugos-cli docker show nginx
 ugos-cli docker create nginx --image nginx:latest --publish 8080:80
 ugos-cli docker start nginx
-ugos-cli docker logs nginx
+ugos-cli docker logs nginx --lines 50
+ugos-cli docker logs nginx --follow          # until Ctrl-C
+ugos-cli docker exec nginx nginx -t          # a command in the container, its exit status is ours
+ugos-cli docker shell nginx                  # an interactive terminal, like the web UI
 
-# Docker images and compose projects
-ugos-cli docker images
+# Docker images, networks, updates and compose projects
+ugos-cli docker images                       # with the containers that use each image
 ugos-cli docker pull redis:7
+ugos-cli docker network-ls
+ugos-cli docker network-show traefik
+ugos-cli docker updates                      # what has a newer image
 ugos-cli docker project-ls
+ugos-cli docker project-logs myapp --lines 100
 ugos-cli docker project-create myapp --file ./compose.yaml
+
+# What was done in the Docker app (not the output of a container)
+ugos-cli docker oplog --failed --limit 20
 
 # Passthrough hardware
 ugos-cli usb list
@@ -286,7 +296,9 @@ Multiple NAS targets are supported:
 The server covers what the CLI covers: shared folders, user accounts, groups
 and their permissions, the file services, hardware and time, the network, the
 SAN Manager, recycle bins, file versions, the Log Center, firmware and
-backup. Reading is open. Everything that changes goes through the same checks
+backup, and in Docker the logs, the app's own log, networks, updates and
+commands inside containers (`ugos_docker_exec` runs code in a container, usually
+as root). Reading is open. Everything that changes goes through the same checks
 as `ugos-cli` and is read back, so a request UGOS answered with success and did
 not carry out comes back as an error.
 
@@ -595,11 +607,13 @@ notes are kept because the reasoning is easy to lose and expensive to redo.
 | **Firmware** (`update`) | status, settings, install, install from a file, signing keys |
 | **Configuration backup** (`backup`) | save, restore, network reset, factory reset |
 | **Machine** (`system about|ports|reboot|poweroff`, `index`) | model and serial, ports in use, restart, power off, the thumbnail service |
-| **Docker container** (`docker`) | list, show, create, start, stop, restart, kill, remove, update, clone, batch-operate, logs |
-| **Docker image** | list, search, download, delete, export, load (URL/path) |
+| **Docker container** (`docker`) | list with CPU, memory, ports and updates, show, create, start, stop, restart, kill, remove, update, clone, batch-operate, logs (also following), run a command, interactive shell, list and end terminals |
+| **Docker image** | list with the containers that use each one, search, download, delete, export, load (URL/path) |
+| **Docker network and updates** | `network-ls`, `network-show`, which images have updates, the update settings |
+| **Docker app log** (`docker oplog`) | who deployed, started or removed what, with filters and export |
 | **Docker registry** | list/add/delete/switch mirror, HTTP proxy get/set |
 | **Docker overview** | engine status, resource usage |
-| **Docker compose** (`docker project-*`) | list, show, create, start, stop, restart, remove |
+| **Docker compose** (`docker project-*`) | list, show, create, start, stop, restart, remove, logs (also following) |
 | **Auth** | RSA key exchange, PKCS1v1.5 encryption, session tokens, TOTP second factor, auto re-auth |
 | **Transport** | certificate pinning on first use, shared by CLI and MCP server |
 
@@ -641,6 +655,13 @@ afford to lose before relying on them:
   importing accounts
 - clearing the log for good (the call was run for a time before the first
   entry, which removes nothing), archiving
+- Docker: `docker updates-set --plan` (only the reminder and the time were
+  changed and restored, the days and the type of the schedule are passed
+  through because their meaning is not known), `docker terminal-rm --force` of a
+  terminal someone else is connected to, `docker shell` on Windows (the key
+  handling is the same code, it was run on macOS in a pseudo terminal), and the
+  positive case of `docker updates` (it showed no pending update when it was
+  run)
 
 ### Not Yet Implemented
 
@@ -652,6 +673,7 @@ afford to lose before relying on them:
 | Snapshot restore | `snapshot/snapshot/restore` rolls a folder back; destructive and untestable without risking real data. `snapshot clone` covers recovery without it — see [docs/api-snapshot.md](docs/api-snapshot.md) |
 | Recycle search, version download, thumbnail quality | The calls are described in the docs; the first two have a replacement (`recycle ls`, `version copy` and `fs get`), the quality values are not in the bundle |
 | Storage Manager changes | Pools, volumes and disks are read only |
+| Docker images from Docker Hub (`ObtainAllImages`), private registry flags | Documented in [docs/api-docker.md](docs/api-docker.md), not wired: `docker search` covers the first, the second only fills in a label |
 | Non-KVM modules | Photo, video, music, antivirus, the vault and the like |
 
 ## Authentication
