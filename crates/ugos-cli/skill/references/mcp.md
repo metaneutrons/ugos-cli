@@ -115,6 +115,18 @@ Create a Docker container from a spec (JSON object matching ContainerDetail sche
 - `spec` (required): Full VM specification as a JSON object.
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
+## ugos_docker_exec
+
+Run a command inside a Docker container and return what it printed (output and error output together) and its exit code. This runs code in the container, usually as root: only do it when the user asked for it. UGOS starts a terminal in the container, types the command into the container's shell and removes the terminal again
+
+- `command` (required): The command, as one string. The shell of the container reads it, so
+quoting and pipes work as in a terminal.
+- `id` (required): Container ID, the first characters of it, or its name.
+- `shell`: Shell to start in the container (default: the one UGOS suggests,
+`/bin/bash`).
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `timeout_seconds`: Give up after this many seconds (default: 60).
+
 ## ugos_docker_image_export
 
 Export a Docker image to a NAS path
@@ -297,6 +309,22 @@ Get Docker engine status (online/offline)
 Stop a Docker container
 
 - `id` (required): Container ID.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+
+## ugos_docker_terminal_rm
+
+End a terminal that is open in a Docker container. One that someone is connected to needs force: ask the user first
+
+- `force`: End it although someone is connected to it. Ask the user first.
+- `id` (required): Container ID, the first characters of it, or its name.
+- `target`: Target NAS name or host. Required when multiple targets are configured.
+- `uuid` (required): The terminal, from `ugos_docker_terminals`.
+
+## ugos_docker_terminals
+
+List the terminals that are open in a Docker container
+
+- `id` (required): Container ID, the first characters of it, or its name.
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
 ## ugos_docker_updates

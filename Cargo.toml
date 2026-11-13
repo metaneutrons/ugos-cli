@@ -74,6 +74,8 @@ hex = "0.4"
 rsa = "0.9"
 # Hidden password prompt for `user create` and `user update`.
 rpassword = "7"
+# Raw mode and key events for `docker shell`, the same on every platform.
+crossterm = { version = "0.29", default-features = false, features = ["events", "windows"] }
 ring = "0.17"
 base64 = "0.23"
 tabled = { version = "0.22", default-features = false, features = ["std"] }

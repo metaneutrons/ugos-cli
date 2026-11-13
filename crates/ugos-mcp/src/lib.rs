@@ -1235,6 +1235,40 @@ impl UgosMcp {
         }
     }
 
+    #[tool(
+        description = "Run a command inside a Docker container and return what it printed (output and error output together) and its exit code. This runs code in the container, usually as root: only do it when the user asked for it. UGOS starts a terminal in the container, types the command into the container's shell and removes the terminal again"
+    )]
+    async fn ugos_docker_exec(&self, Parameters(p): Parameters<nas_docker::ExecParam>) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_docker::exec(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(description = "List the terminals that are open in a Docker container")]
+    async fn ugos_docker_terminals(
+        &self,
+        Parameters(p): Parameters<nas_docker::ContainerRefParam>,
+    ) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_docker::terminals(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
+    #[tool(
+        description = "End a terminal that is open in a Docker container. One that someone is connected to needs force: ask the user first"
+    )]
+    async fn ugos_docker_terminal_rm(
+        &self,
+        Parameters(p): Parameters<nas_docker::TerminalRmParam>,
+    ) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_docker::terminal_rm(c, &p).await,
+            Err(e) => e,
+        }
+    }
+
     #[tool(description = "Clone a Docker container")]
     async fn ugos_docker_clone(&self, Parameters(p): Parameters<ContainerCloneParam>) -> String {
         match self.client(&p.target).await {

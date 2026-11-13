@@ -1560,6 +1560,51 @@ pub enum DockerAction {
         #[arg(short, long)]
         follow: bool,
     },
+    /// List the terminals open in a container.
+    TerminalLs {
+        /// Container ID or name.
+        id: String,
+    },
+    /// End a terminal that was opened in a container.
+    TerminalRm {
+        /// Container ID or name.
+        id: String,
+        /// The terminal, from `terminal-ls`.
+        uuid: String,
+        /// End it although someone is connected to it.
+        #[arg(long)]
+        force: bool,
+    },
+    /// Run a command in a container and print what it printed.
+    ///
+    /// UGOS starts a terminal in the container, the command is typed into it,
+    /// and the terminal is removed again. The command is read by that shell,
+    /// like `ssh host "cmd"`, so quote it as a whole. Output and error output
+    /// come back together. The exit status of the command becomes the status
+    /// of this one. Everything after the container is the command, so put
+    /// options such as `-o json` before it.
+    Exec {
+        /// Container ID or name.
+        id: String,
+        /// Shell to start in the container (default: the one UGOS suggests).
+        #[arg(long)]
+        shell: Option<String>,
+        /// Give up after this many seconds.
+        #[arg(long, default_value = "60")]
+        timeout: u64,
+        /// The command.
+        #[arg(required = true, trailing_var_arg = true, allow_hyphen_values = true)]
+        command: Vec<String>,
+    },
+    /// Open an interactive shell in a container, like the terminal of the
+    /// web UI. Ends with the shell (`exit`), and the terminal is removed.
+    Shell {
+        /// Container ID or name.
+        id: String,
+        /// Shell to start in the container (default: the one UGOS suggests).
+        #[arg(long)]
+        shell: Option<String>,
+    },
     /// Show what was done in the Docker app: who deployed, started or
     /// removed what (not the output of a container, see `logs`).
     Oplog {

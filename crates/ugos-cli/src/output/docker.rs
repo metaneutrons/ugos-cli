@@ -3,6 +3,7 @@
 
 use serde::Serialize;
 use tabled::Tabled;
+use ugos_client::ops::dockerterm::Terminal;
 use ugos_client::ops::dockerupdates::UpdateStatus;
 use ugos_client::ops::dockerview::ContainerView;
 use ugos_client::types::docker::{ContainerStats, Network, NetworkMember, OpLog};
@@ -319,4 +320,33 @@ pub fn update_rows(s: &UpdateStatus) -> Vec<FieldRow> {
         field("Scheduled check", yes_no(c.is_plan)),
         field("Time of the check", c.plan_settings.date.clone()),
     ]
+}
+
+/// A terminal open in a container.
+#[derive(Serialize)]
+pub struct TerminalRow {
+    pub uuid: String,
+    pub command: String,
+    pub connected: String,
+    pub user: String,
+}
+
+table_row! {
+  TerminalRow {
+    uuid => "ID",
+    command => "Command",
+    connected => "Connected",
+    user => "User ID",
+  }
+}
+
+impl From<&Terminal> for TerminalRow {
+    fn from(t: &Terminal) -> Self {
+        Self {
+            uuid: t.uuid.clone(),
+            command: t.cmd.clone(),
+            connected: if t.state == 1 { "yes" } else { "no" }.to_owned(),
+            user: t.uid.to_string(),
+        }
+    }
 }

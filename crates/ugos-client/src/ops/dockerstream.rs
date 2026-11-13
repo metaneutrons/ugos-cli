@@ -148,16 +148,32 @@ pub fn plain(text: &str) -> String {
     let mut chars = text.chars().peekable();
     while let Some(c) = chars.next() {
         match c {
-            '\u{1b}' => {
-                if chars.peek() == Some(&'[') {
+            '\u{1b}' => match chars.peek() {
+                // A control sequence: up to its final letter (or `~`).
+                Some('[') => {
                     let _ = chars.next();
                     for d in chars.by_ref() {
-                        if d.is_ascii_alphabetic() {
+                        if d.is_ascii_alphabetic() || d == '~' {
                             break;
                         }
                     }
                 }
-            }
+                // A system command such as the window title: up to BEL, or
+                // up to the string terminator `ESC \`.
+                Some(']') => {
+                    let _ = chars.next();
+                    while let Some(d) = chars.next() {
+                        if d == '\u{7}' {
+                            break;
+                        }
+                        if d == '\u{1b}' && chars.peek() == Some(&'\\') {
+                            let _ = chars.next();
+                            break;
+                        }
+                    }
+                }
+                _ => {}
+            },
             '\r' if chars.peek() == Some(&'\n') => {}
             other => out.push(other),
         }
@@ -207,6 +223,13 @@ mod tests {
         );
         assert_eq!(plain("a\r\nb"), "a\nb");
         assert_eq!(plain("plain"), "plain");
+    }
+
+    #[test]
+    fn the_window_title_is_taken_out() {
+        assert_eq!(plain("\u{1b}]0;root@c: /\u{7}root@c:/# "), "root@c:/# ");
+        assert_eq!(plain("\u{1b}]0;t\u{1b}\\x"), "x");
+        assert_eq!(plain("a\u{1b}[3~b"), "ab");
     }
 
     #[test]

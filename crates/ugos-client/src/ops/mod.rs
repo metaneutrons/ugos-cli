@@ -15,6 +15,7 @@ macro_rules! refuse {
 pub mod access;
 pub mod dockernet;
 pub mod dockerstream;
+pub mod dockerterm;
 pub mod dockerupdates;
 pub mod dockerview;
 pub mod fileserver;

@@ -241,15 +241,36 @@ be answered, `2002` is ignored.
 - `ugos-cli` takes the backlog as everything up to the first pause of 0.7 s, cuts the last
   lines itself, and takes out the colour codes and `\r`.
 
-### Ws (terminal)
-- Seen in the capture, not implemented: `AddTerminal` (POST, encrypted body, answers with
-  a `uuid`), then `docker/container/Ws?containerId=&uuid=&pageID=` (WebSocket,
-  `type: docker-terminal`: the client sends keystrokes as `text` with `columns`/`rows`, the
-  NAS sends output as `text`, a heartbeat with `code` 2223 every 60 s), then `DelTerminal`
-  (POST). `GetTerminalList?containerId=&processCheck=true` lists the open terminals and
-  `RecommendedTerminalCommands` answers `["/bin/bash"]`. The body of `AddTerminal` is not
-  known: it is encrypted in the capture and guesses with `command`, `cmd`, `shell` and
-  `terminal` failed with 9999 on two containers (one had no shell).
+### Terminal (`AddTerminal`, `Ws`, `DelTerminal`)
+Read from the app's own JavaScript (`/docker/assets/index-*.js` and the container chunk it
+loads, served by the NAS), and verified live on a CI runner container:
+- `POST docker/container/AddTerminal` with `{id: <full container id>, exec: "/bin/bash",
+  pageID: "<number as text>"}` answers `{result: "<uuid>"}`. The body length matches the
+  encrypted request in the capture (113 bytes). Plain requests are accepted. Code `2100`
+  means the container has no such command (tried: `/bin/nope`). The web UI allows 10
+  terminals per container.
+- `GET docker/container/GetTerminalList?containerId=<full id>&processCheck=true` answers
+  `{result: [{uuid, cmd, state, uid, pageID}]}`, `state` 1 while someone is connected.
+  A terminal whose process ended is dropped from the list.
+- `Ws` (WebSocket) `docker/container/Ws?containerId=&uuid=&pageID=`: `type:
+  docker-terminal`. The client sends `{code: 200, text: "", columns, rows}` to resize and
+  `{code: 200, text: "<keystrokes>"}` for input, a heartbeat `{code: 2223}` every 60 s,
+  and answers the ping `{code: 2001}` with `{code: 2001, msg: "pong"}`. The NAS sends the
+  output as `{code: 200, text}` (a `pty`: `\r\n`, colour and title codes, bracketed paste
+  `\u001b[?2004h`). Codes `2047` and `2048` arrive on the app's own notification channel
+  when a terminal is removed or created.
+- **The connection stays open when the shell exits.** The web UI polls
+  `GetTerminalList` every 2 s and drops terminals that are gone; `docker shell` does the
+  same.
+- `POST docker/container/DelTerminal` with `{containerId, uuid}` answers `{}`.
+- `POST docker/container/ChangeTerminalClientID` with `{uuid, containerId, pageID}` takes
+  over a terminal another page is connected to. Not used.
+- `GET docker/container/RecommendedTerminalCommands` answers `{result: ["/bin/bash"]}`.
+
+`docker exec` runs a command through this: it opens a terminal, turns the echo off with
+`stty -echo`, types `<command>; echo "<marker>$?"`, reads until the marker (which carries
+the exit status), and removes the terminal. Output and error output arrive merged, as a
+pty gives them.
 
 ## Container Export/Import
 

@@ -58,6 +58,37 @@ pub async fn containers(
         .collect())
 }
 
+/// The full ID of the container a name, an ID or the first characters of an
+/// ID mean.
+///
+/// # Errors
+///
+/// Refuses when nothing matches, or when the characters match several
+/// containers.
+pub async fn resolve(client: &UgosClient, what: &str) -> Result<String> {
+    let all = client
+        .container_list(1, 1000)
+        .await?
+        .result
+        .unwrap_or_default();
+    pick(&all, what)
+}
+
+fn pick(all: &[Container], what: &str) -> Result<String> {
+    if let Some(c) = all.iter().find(|c| c.name == what) {
+        return Ok(c.container_id.clone());
+    }
+    let by_id: Vec<&Container> = all
+        .iter()
+        .filter(|c| !what.is_empty() && c.container_id.starts_with(what))
+        .collect();
+    match by_id.as_slice() {
+        [one] => Ok(one.container_id.clone()),
+        [] => Err(refused(format!("there is no container '{what}'"))),
+        _ => Err(refused(format!("'{what}' matches several containers"))),
+    }
+}
+
 /// The last `lines` lines of a text, with the line breaks kept.
 #[must_use]
 pub fn tail(text: &str, lines: usize) -> String {
@@ -159,8 +190,24 @@ pub async fn oplog_export(client: &UgosClient, failures_only: bool) -> Result<St
 }
 
 #[cfg(test)]
+#[allow(clippy::unwrap_used)]
 mod tests {
-    use super::{OpLogQuery, oplog_body, tail};
+    use super::{OpLogQuery, oplog_body, pick, tail};
+    use crate::types::docker::Container;
+
+    fn container(id: &str, name: &str) -> Container {
+        serde_json::from_value(serde_json::json!({"containerId": id, "name": name})).unwrap()
+    }
+
+    #[test]
+    fn a_container_is_found_by_name_or_id_prefix() {
+        let all = [container("abc123", "web"), container("abd999", "db")];
+        assert_eq!(pick(&all, "db").unwrap(), "abd999");
+        assert_eq!(pick(&all, "abc").unwrap(), "abc123");
+        assert!(pick(&all, "ab").is_err());
+        assert!(pick(&all, "zzz").is_err());
+        assert!(pick(&all, "").is_err());
+    }
 
     #[test]
     fn tail_keeps_the_last_lines_and_their_breaks() {
