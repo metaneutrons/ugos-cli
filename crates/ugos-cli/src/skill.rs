@@ -23,7 +23,7 @@ pub const NAME: &str = "ugos-cli";
 
 /// What the skill is for, which an AI tool reads to decide whether to load it.
 const DESCRIPTION: &str = "Manage a UGREEN NAS running UGOS through ugos-cli: virtual \
-machines, Docker containers, files, shared folders and their access rules, file services \
+machines, Docker containers (logs, commands inside them, networks, image updates), files, shared folders and their access rules, file services \
 (SMB, FTP, NFS, rsync, WebDAV), accounts, groups and permissions, the network, hardware, \
 power and time, iSCSI, recycle bins, file versions, snapshots, logs, firmware, backup of \
 the configuration and downloads. Use it whenever a task involves a UGOS device, instead of \

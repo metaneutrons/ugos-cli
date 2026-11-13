@@ -37,7 +37,9 @@ Everything that lists or shows (`vm list`, `docker ps`, `fs ls`, `system stat`,
 `user list`, `user show`, `user permissions`, `group list`, `net list`,
 `pool list`, `disk smart`, `hw fan show`, `time show`, `san lun list`,
 `recycle list`, `version folders`, `logcenter modules`, `update status`,
-`system about`, `log`) changes nothing and can be run freely. A few commands
+`system about`, `log`, `docker logs`, `docker project-logs`, `docker oplog`,
+`docker network-ls`, `docker network-show`, `docker updates`, `docker images`,
+`docker terminal-ls`) changes nothing and can be run freely. A few commands
 that read also write when given arguments: `user password-rules`,
 `user password-expiry`, `update config`, `smb discovery`, `logcenter filemgr`
 show without arguments and change with them. Use `-o json` when you are going
@@ -50,6 +52,8 @@ Ask the user before running any command that changes or removes something:
 - `snapshot rm` (it deletes locked snapshots too), `snapshot create`, `snapshot clone`
 - `docker rm`, `docker rmi`, `docker kill`, `docker stop`, `docker restart`,
   `docker project-rm`, and `docker batch`
+- `docker exec` and `docker shell` (they run code in the container, usually as
+  root), `docker terminal-rm`, `docker updates-set`
 - `share create`, `share update`, `share acl set`, and `share delete` (it
   deletes the folder and everything in it)
 - `user create`, `user update` (it can disable an account, change its role or
@@ -141,5 +145,14 @@ The rules above hold for the tools as they do for the CLI.
 - Some changes take a moment: a new LUN is `creating`, a deleted target stays
   listed for a few seconds. The commands wait and read back; if one says UGOS
   said yes but the object did not change, report that instead of retrying.
+- `docker logs` without `--follow` returns the log UGOS keeps up to its own
+  limit, with the last `--lines` cut from it. `docker logs --follow` and
+  `docker project-logs --follow` run until Ctrl-C: give them a timeout in an
+  agent run, or read without `--follow`. `docker shell` needs a real terminal
+  and cannot be used from an agent, `docker exec` can. `docker exec` takes
+  everything after the container as the command and returns its exit status;
+  output and error output come back merged, and options such as `-o json` go
+  before the command. `docker ps` shows `-` for CPU and memory of a stopped
+  container.
 - An edit to an account must send its email address back, or UGOS blanks it.
   The CLI does that; if it says it cannot read the address, give `--email`.
