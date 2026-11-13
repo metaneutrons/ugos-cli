@@ -3,6 +3,7 @@
 
 use serde::Serialize;
 use tabled::Tabled;
+use ugos_client::ops::dockerimages::ImageView;
 use ugos_client::ops::dockerterm::Terminal;
 use ugos_client::ops::dockerupdates::UpdateStatus;
 use ugos_client::ops::dockerview::ContainerView;
@@ -348,5 +349,63 @@ impl From<&Terminal> for TerminalRow {
             connected: if t.state == 1 { "yes" } else { "no" }.to_owned(),
             user: t.uid.to_string(),
         }
+    }
+}
+
+/// A local image in `docker images`.
+#[derive(Serialize)]
+pub struct LocalImageRow {
+    pub id: String,
+    pub repository: String,
+    pub tag: String,
+    pub size: String,
+    pub used_by: String,
+}
+
+table_row! {
+  LocalImageRow {
+    id => "ID",
+    repository => "Repository",
+    tag => "Tag",
+    size => "Size",
+    used_by => "Used by",
+  }
+}
+
+impl From<&ImageView> for LocalImageRow {
+    fn from(v: &ImageView) -> Self {
+        let i = &v.image;
+        Self {
+            id: i.image_id.chars().take(19).collect(),
+            repository: i.image_name.clone(),
+            tag: i.image_version.clone(),
+            size: super::format_mib(i.image_size / 1024),
+            used_by: v.used_by.join(", "),
+        }
+    }
+}
+
+#[cfg(test)]
+#[allow(clippy::unwrap_used)]
+mod image_tests {
+    use super::*;
+
+    #[test]
+    fn an_image_lists_the_containers_that_use_it() {
+        let image = serde_json::from_value(serde_json::json!({
+            "imageId": "sha256:0123456789abcdef0123", "imageName": "nginx",
+            "imageVersion": "1", "imageSize": 2_097_152
+        }))
+        .unwrap();
+        let used = LocalImageRow::from(&ImageView {
+            image,
+            used_by: vec!["web".into(), "web2".into()],
+        });
+        assert_eq!(used.used_by, "web, web2");
+        assert_eq!(used.id, "sha256:0123456789ab");
+        assert_eq!(
+            (used.repository.as_str(), used.tag.as_str()),
+            ("nginx", "1")
+        );
     }
 }

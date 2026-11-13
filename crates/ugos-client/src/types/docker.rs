@@ -566,3 +566,16 @@ impl Default for PlanSettings {
         }
     }
 }
+
+/// What `QueryAllContaners` says about one image: the containers made from it.
+/// The call answers only for images that are in use.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageUse {
+    /// Image ID.
+    #[serde(default)]
+    pub image_id: String,
+    /// Names of the containers that use it.
+    #[serde(default, deserialize_with = "null_vec_as_empty")]
+    pub names: Vec<String>,
+}
