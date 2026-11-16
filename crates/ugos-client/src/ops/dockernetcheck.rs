@@ -298,7 +298,7 @@ mod tests {
         let cases = [
             // The incident: a range behind the gateway, not attached to the NAS.
             (&lan, "bridge", "192.168.16.0/20", Some(Rule::SameBlock)),
-            (&lan, "bridge", "10.200.128.0/24", None),
+            (&lan, "bridge", "10.77.5.0/24", None),
             (&lan, "bridge", "172.17.0.0/16", None),
             (&lan, "bridge", "192.168.0.0/24", Some(Rule::Overlap)),
             (&lan, "bridge", "192.168.0.0/16", Some(Rule::Overlap)),
@@ -338,7 +338,7 @@ mod tests {
     #[test]
     fn an_interface_without_ipv4_is_ignored() {
         let down = iface("", "", "");
-        let n = net("n", "bridge", "10.200.128.0/24");
+        let n = net("n", "bridge", "10.77.5.0/24");
         assert_eq!(check(&[n], &[down]).len(), 0);
     }
 
