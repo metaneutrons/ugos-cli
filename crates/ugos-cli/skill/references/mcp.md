@@ -193,7 +193,7 @@ List Docker registry mirror sources
 
 ## ugos_docker_network_check
 
-Check the Docker networks for subnets that can shadow other networks (same /16 as the NAS's address or gateway, overlap with an interface, or Docker's 192.168.0.0/16 pool). Read-only; returns the findings as JSON
+Check the Docker networks for subnets that may shadow other networks (overlap with an interface of the NAS, or the same /16 as its address or gateway). Read-only; returns the findings as JSON
 
 - `target`: Target NAS name or host. Required when multiple targets are configured.
 
@@ -1205,7 +1205,7 @@ Show one storage pool with its disks, scrub and trim
 
 ## ugos_project_create
 
-Create a Docker Compose project from raw docker-compose.yml content. Use ugos_project_list first to check the shared-folder root for the storage path. The result adds a warning line for each network of the project whose subnet can shadow other networks
+Create a Docker Compose project from raw docker-compose.yml content. Use ugos_project_list first to check the shared-folder root for the storage path. The result adds a warning line for each network of the project whose subnet may shadow other networks
 
 - `content` (required): Raw `docker-compose.yml` content.
 - `name` (required): Compose project name.
@@ -1243,7 +1243,7 @@ Show details of a Docker Compose project
 
 ## ugos_project_start
 
-Start a Docker Compose project. The result adds a warning line for each network of the project whose subnet can shadow other networks
+Start a Docker Compose project. The result adds a warning line for each network of the project whose subnet may shadow other networks
 
 - `name` (required): Compose project name.
 - `target`: Target NAS name or host. Required when multiple targets are configured.

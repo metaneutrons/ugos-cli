@@ -1,26 +1,23 @@
-//! A check for Docker networks that can shadow other networks.
+//! A check for Docker networks whose subnet may shadow other networks.
 //!
 //! A bridge network gives the NAS a route to its subnet through the bridge.
-//! When that subnet is also a range the NAS reaches through its gateway (a
-//! VLAN behind the router, say), the NAS answers into the bridge and the
-//! devices in that range lose it, while the rest of the network works. Docker
-//! picks such ranges by itself when a compose project declares no network.
+//! When that range is also in use elsewhere in the network and the NAS
+//! reaches it through its gateway, the NAS sends its replies into the bridge
+//! and the devices in that range lose it, while the rest works. Docker picks
+//! such a range by itself when a compose project declares no network.
 //!
 //! UGOS does not expose the labels or the IPAM settings of a network, nor the
 //! routing table of the NAS, so the check works from what the API does give:
 //! the subnets of the Docker networks, and the address, netmask and gateway of
-//! each interface. Three rules, strongest first:
+//! each interface. Two rules, strongest first:
 //!
 //! 1. [`Rule::Overlap`]: the subnet overlaps the subnet of a NAS interface.
 //! 2. [`Rule::SameBlock`]: the subnet lies in the same /16 as an address or a
-//!    gateway of the NAS. A VLAN next to the NAS is usually in that block and
-//!    reachable only through the gateway, which no list of interfaces shows.
-//! 3. [`Rule::DefaultPool`]: the subnet is a /20 in 192.168.0.0/16, the second
-//!    pool Docker draws from once 172.16.0.0/12 is used up. Routers and VLANs
-//!    use that block often.
+//!    gateway of the NAS. This is a hint only: the NAS reaches other ranges of
+//!    that block through its gateway, which no list of interfaces shows.
 //!
-//! Only `bridge` networks count. `host` and `none` have no subnet, and an
-//! `ipvlan` or `macvlan` network sits on a card on purpose.
+//! Only `bridge` networks in private ranges count. `host` and `none` have no
+//! subnet, and an `ipvlan` or `macvlan` network sits on a card on purpose.
 
 use serde::Serialize;
 
@@ -39,8 +36,6 @@ pub enum Rule {
     Overlap,
     /// In the same /16 as an address or gateway of the NAS.
     SameBlock,
-    /// A /20 from Docker's 192.168.0.0/16 pool.
-    DefaultPool,
 }
 
 impl Rule {
@@ -49,8 +44,7 @@ impl Rule {
     pub const fn summary(self) -> &'static str {
         match self {
             Self::Overlap => "overlaps a subnet of the NAS",
-            Self::SameBlock => "same /16 as an address or gateway of the NAS",
-            Self::DefaultPool => "from Docker's 192.168.0.0/16 pool",
+            Self::SameBlock => "same /16 as an address or gateway of the NAS (possible)",
         }
     }
 }
@@ -73,8 +67,9 @@ impl Finding {
     #[must_use]
     pub fn line(&self) -> String {
         format!(
-            "warning: Docker network '{}' ({}) {}. Give it an explicit subnet that no \
-             other network uses (in a compose file: networks, ipam, config, subnet).",
+            "warning: Docker network '{}' ({}) {}. That range may be in use elsewhere in \
+             your network. An explicit subnet in the compose file avoids it (networks, \
+             ipam, config, subnet).",
             self.network, self.subnet, self.reason
         )
     }
@@ -182,7 +177,7 @@ fn overlap(subnet: Cidr, own: &[Own]) -> Option<Verdict> {
     Some((
         Rule::Overlap,
         format!(
-            "overlaps {} of the NAS ({s}), so the NAS sends traffic for that range into the \
+            "overlaps {} of the NAS ({s}). The NAS then sends traffic for that range into the \
              Docker bridge instead of the network",
             o.label
         ),
@@ -203,23 +198,11 @@ fn same_block(subnet: Cidr, own: &[Own]) -> Option<Verdict> {
     Some((
         Rule::SameBlock,
         format!(
-            "lies in the same /16 as {near}. Networks in that block that the NAS reaches \
-             through its gateway (VLANs) are shadowed: the NAS sends its replies into the \
-             Docker bridge and the devices there lose it"
+            "lies in the same /16 as {near}. It may shadow a range in that block that the NAS \
+             reaches through its gateway: the NAS would then answer into the Docker bridge \
+             (a possibility, not a certainty)"
         ),
     ))
-}
-
-fn default_pool(subnet: Cidr) -> Option<Verdict> {
-    let pool = Cidr::new(std::net::Ipv4Addr::new(192, 168, 0, 0), 16);
-    (subnet.prefix == 20 && pool.contains(subnet.addr)).then(|| {
-        (
-            Rule::DefaultPool,
-            "comes from Docker's default pool 192.168.0.0/16, which routers and VLANs use often, \
-             and shadows such a network if one exists"
-                .into(),
-        )
-    })
 }
 
 fn judge(net: &Network, own: &[Own]) -> Option<Finding> {
@@ -230,9 +213,7 @@ fn judge(net: &Network, own: &[Own]) -> Option<Finding> {
     if !private_ranges().iter().any(|r| r.contains(subnet.addr)) {
         return None;
     }
-    let (rule, reason) = overlap(subnet, own)
-        .or_else(|| same_block(subnet, own))
-        .or_else(|| default_pool(subnet))?;
+    let (rule, reason) = overlap(subnet, own).or_else(|| same_block(subnet, own))?;
     Some(Finding {
         network: net.network_name.clone(),
         subnet: net.ipv4_subnet.clone(),
@@ -315,7 +296,7 @@ mod tests {
         let lan = iface("192.168.2.5", "255.255.240.0", "192.168.1.1");
         let ten = iface("10.1.2.5", "255.255.255.0", "10.1.2.1");
         let cases = [
-            // The incident: a VLAN behind the router, not attached to the NAS.
+            // The incident: a range behind the gateway, not attached to the NAS.
             (&lan, "bridge", "192.168.16.0/20", Some(Rule::SameBlock)),
             (&lan, "bridge", "10.200.128.0/24", None),
             (&lan, "bridge", "172.17.0.0/16", None),
@@ -331,9 +312,8 @@ mod tests {
             ),
             (&ten, "bridge", "10.1.200.0/24", Some(Rule::SameBlock)),
             (&ten, "bridge", "10.2.0.0/24", None),
-            // Docker's own 192.168 pool, even where the NAS is elsewhere.
-            (&ten, "bridge", "192.168.48.0/20", Some(Rule::DefaultPool)),
-            (&ten, "bridge", "192.168.48.0/24", None),
+            // Elsewhere in the same private range, but not in the /16.
+            (&ten, "bridge", "192.168.48.0/20", None),
             (&lan, "ipvlan", "192.168.0.0/20", None),
             (&lan, "host", "", None),
             (&lan, "bridge", "--", None),
@@ -352,7 +332,7 @@ mod tests {
         let found = check(&[n], &[lan]);
         let line = found[0].line();
         assert!(line.contains("proj_default") && line.contains("192.168.16.0/20"));
-        assert!(line.contains("VLANs") && line.contains("192.168.2.5"));
+        assert!(line.contains("may shadow") && line.contains("192.168.2.5"));
     }
 
     #[test]

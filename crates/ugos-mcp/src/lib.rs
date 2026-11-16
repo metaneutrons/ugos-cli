@@ -1188,7 +1188,7 @@ impl UgosMcp {
     }
 
     #[tool(
-        description = "Check the Docker networks for subnets that can shadow other networks (same /16 as the NAS's address or gateway, overlap with an interface, or Docker's 192.168.0.0/16 pool). Read-only; returns the findings as JSON"
+        description = "Check the Docker networks for subnets that may shadow other networks (overlap with an interface of the NAS, or the same /16 as its address or gateway). Read-only; returns the findings as JSON"
     )]
     async fn ugos_docker_network_check(
         &self,
@@ -1412,7 +1412,7 @@ impl UgosMcp {
     }
 
     #[tool(
-        description = "Create a Docker Compose project from raw docker-compose.yml content. Use ugos_project_list first to check the shared-folder root for the storage path. The result adds a warning line for each network of the project whose subnet can shadow other networks"
+        description = "Create a Docker Compose project from raw docker-compose.yml content. Use ugos_project_list first to check the shared-folder root for the storage path. The result adds a warning line for each network of the project whose subnet may shadow other networks"
     )]
     async fn ugos_project_create(&self, Parameters(p): Parameters<ProjectCreateParam>) -> String {
         match self.client(&p.target).await {
@@ -1428,7 +1428,7 @@ impl UgosMcp {
     }
 
     #[tool(
-        description = "Start a Docker Compose project. The result adds a warning line for each network of the project whose subnet can shadow other networks"
+        description = "Start a Docker Compose project. The result adds a warning line for each network of the project whose subnet may shadow other networks"
     )]
     async fn ugos_project_start(&self, Parameters(p): Parameters<ProjectNameParam>) -> String {
         match self.client(&p.target).await {
