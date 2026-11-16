@@ -1,15 +1,16 @@
-//! `docker network-ls`, `network-show`, `updates` and `updates-set`.
+//! `docker network-ls`, `network-show`, `network-check`, `updates` and
+//! `updates-set`, and the warning the project commands print.
 
 use std::io::Write;
 
 use anyhow::{Result, bail};
 use ugos_client::UgosClient;
-use ugos_client::ops::dockernet;
 use ugos_client::ops::dockerupdates::{self, ConfigChange};
+use ugos_client::ops::{dockernet, dockernetcheck};
 
 use crate::cli::{DockerAction, OnOff, OutputFormat};
 use crate::output;
-use crate::output::docker::{MemberRow, NetworkRow, network_rows, update_rows};
+use crate::output::docker::{MemberRow, NetworkRow, finding_rows, network_rows, update_rows};
 
 /// Run one of the network and update commands.
 pub async fn run(
@@ -28,6 +29,7 @@ pub async fn run(
             output::print_list(w, &rows, fmt)
         }
         DockerAction::NetworkShow { name } => network_show(client, name, fmt, w).await,
+        DockerAction::NetworkCheck => network_check(client, fmt, w).await,
         DockerAction::Updates => {
             let status = dockerupdates::status(client).await?;
             match fmt {
@@ -48,6 +50,29 @@ pub async fn run(
             updates_set(client, &change, fmt, w).await
         }
         _ => bail!("not a network or update command"),
+    }
+}
+
+async fn network_check(client: &UgosClient, fmt: OutputFormat, w: &mut impl Write) -> Result<()> {
+    let found = dockernetcheck::run(client).await?;
+    match fmt {
+        OutputFormat::Json => output::print_json(w, &found),
+        OutputFormat::Table if found.is_empty() => {
+            writeln!(w, "No Docker network can shadow another network.")?;
+            Ok(())
+        }
+        OutputFormat::Table => output::print_list(w, &finding_rows(&found), fmt),
+    }
+}
+
+/// Warn on stderr about the networks of a project that can shadow others.
+/// The project command has succeeded by then, so a failed check says nothing
+/// and the exit code stays as it was.
+pub async fn warn_project(client: &UgosClient, project: &str) {
+    let lines = dockernetcheck::warnings_for_project(client, project).await;
+    let mut err = std::io::stderr();
+    for line in lines {
+        let _ = writeln!(err, "{line}");
     }
 }
 

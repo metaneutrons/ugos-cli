@@ -994,6 +994,7 @@ async fn docker(
         }
         DockerAction::NetworkLs
         | DockerAction::NetworkShow { .. }
+        | DockerAction::NetworkCheck
         | DockerAction::Updates
         | DockerAction::UpdatesSet { .. } => dockernet::run(client, action, fmt, w).await?,
         DockerAction::TerminalLs { .. }
@@ -1038,16 +1039,19 @@ async fn docker(
             };
             client.project_create(name, &path, &content, *run).await?;
             output::print_success(w, &format!("Created project {name} at {path}"), fmt)?;
+            dockernet::warn_project(client, name).await;
         }
         DockerAction::ProjectUpdate { name, file, pull } => {
             let content = std::fs::read_to_string(file)
                 .map_err(|e| anyhow::anyhow!("reading {file}: {e}"))?;
             client.project_update(name, &content, *pull).await?;
             output::print_success(w, &format!("Updated project {name}"), fmt)?;
+            dockernet::warn_project(client, name).await;
         }
         DockerAction::ProjectStart { name } => {
             client.project_start(name).await?;
             output::print_success(w, &format!("Started project {name}"), fmt)?;
+            dockernet::warn_project(client, name).await;
         }
         DockerAction::ProjectStop { name } => {
             client.project_stop(name).await?;

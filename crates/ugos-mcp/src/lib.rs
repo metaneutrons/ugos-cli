@@ -1187,6 +1187,19 @@ impl UgosMcp {
         }
     }
 
+    #[tool(
+        description = "Check the Docker networks for subnets that can shadow other networks (same /16 as the NAS's address or gateway, overlap with an interface, or Docker's 192.168.0.0/16 pool). Read-only; returns the findings as JSON"
+    )]
+    async fn ugos_docker_network_check(
+        &self,
+        Parameters(p): Parameters<TargetOnlyParam>,
+    ) -> String {
+        match self.client(&p.target).await {
+            Ok(c) => nas_docker::network_check(c).await,
+            Err(e) => e,
+        }
+    }
+
     #[tool(description = "Show a Docker network by name or ID and the containers attached to it")]
     async fn ugos_docker_network_show(
         &self,
@@ -1399,23 +1412,31 @@ impl UgosMcp {
     }
 
     #[tool(
-        description = "Create a Docker Compose project from raw docker-compose.yml content. Use ugos_project_list first to check the shared-folder root for the storage path."
+        description = "Create a Docker Compose project from raw docker-compose.yml content. Use ugos_project_list first to check the shared-folder root for the storage path. The result adds a warning line for each network of the project whose subnet can shadow other networks"
     )]
     async fn ugos_project_create(&self, Parameters(p): Parameters<ProjectCreateParam>) -> String {
         match self.client(&p.target).await {
             Ok(c) => match c.project_create(&p.name, &p.path, &p.content, p.run).await {
-                Ok(()) => format!("Created project {}", p.name),
+                Ok(()) => {
+                    let done = format!("Created project {}", p.name);
+                    nas_docker::with_network_warnings(c, &p.name, done).await
+                }
                 Err(e) => format!("error: {e}"),
             },
             Err(e) => e,
         }
     }
 
-    #[tool(description = "Start a Docker Compose project")]
+    #[tool(
+        description = "Start a Docker Compose project. The result adds a warning line for each network of the project whose subnet can shadow other networks"
+    )]
     async fn ugos_project_start(&self, Parameters(p): Parameters<ProjectNameParam>) -> String {
         match self.client(&p.target).await {
             Ok(c) => match c.project_start(&p.name).await {
-                Ok(()) => format!("Started project {}", p.name),
+                Ok(()) => {
+                    let done = format!("Started project {}", p.name);
+                    nas_docker::with_network_warnings(c, &p.name, done).await
+                }
                 Err(e) => format!("error: {e}"),
             },
             Err(e) => e,

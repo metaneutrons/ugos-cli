@@ -38,7 +38,8 @@ Everything that lists or shows (`vm list`, `docker ps`, `fs ls`, `system stat`,
 `pool list`, `disk smart`, `hw fan show`, `time show`, `san lun list`,
 `recycle list`, `version folders`, `logcenter modules`, `update status`,
 `system about`, `log`, `docker logs`, `docker project-logs`, `docker oplog`,
-`docker network-ls`, `docker network-show`, `docker updates`, `docker images`,
+`docker network-ls`, `docker network-show`, `docker network-check`,
+`docker updates`, `docker images`,
 `docker terminal-ls`) changes nothing and can be run freely. A few commands
 that read also write when given arguments: `user password-rules`,
 `user password-expiry`, `update config`, `smb discovery`, `logcenter filemgr`
