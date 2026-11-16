@@ -1640,6 +1640,13 @@ pub enum DockerAction {
         /// Network name, or its ID or the first characters of it.
         name: String,
     },
+    /// Check the Docker networks for subnets that may shadow other networks.
+    ///
+    /// A bridge network whose subnet overlaps an interface of the NAS, or lies
+    /// in the same /16 as an address or the gateway of the NAS, can make the
+    /// NAS answer into the bridge instead of to the devices in that range.
+    /// Read-only; the exit code stays 0.
+    NetworkCheck,
     /// Show which containers and projects have a newer image, and the update
     /// settings.
     Updates,

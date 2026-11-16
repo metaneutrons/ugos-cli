@@ -9,6 +9,7 @@ use ugos_client::UgosClient;
 use ugos_client::error::UgosError;
 use ugos_client::ops::dockerimages;
 use ugos_client::ops::dockernet;
+use ugos_client::ops::dockernetcheck;
 use ugos_client::ops::dockerstream;
 use ugos_client::ops::dockerterm;
 use ugos_client::ops::dockerupdates::{self, ConfigChange};
@@ -103,6 +104,22 @@ pub async fn networks(client: &UgosClient) -> String {
 /// One network with the containers attached to it.
 pub async fn network(client: &UgosClient, p: &NetworkParam) -> String {
     json(dockernet::show(client, &p.name).await)
+}
+
+/// The networks that can shadow others.
+pub async fn network_check(client: &UgosClient) -> String {
+    json(dockernetcheck::run(client).await)
+}
+
+/// A result line followed by the warnings about the project's networks, one
+/// per line. The check never turns a success into an error.
+pub async fn with_network_warnings(client: &UgosClient, project: &str, done: String) -> String {
+    let mut out = done;
+    for line in dockernetcheck::warnings_for_project(client, project).await {
+        out.push('\n');
+        out.push_str(&line);
+    }
+    out
 }
 
 /// What is outdated, and the update settings.

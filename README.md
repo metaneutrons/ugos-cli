@@ -187,6 +187,7 @@ ugos-cli docker images                       # with the containers that use each
 ugos-cli docker pull redis:7
 ugos-cli docker network-ls
 ugos-cli docker network-show traefik
+ugos-cli docker network-check               # subnets that may shadow other networks
 ugos-cli docker updates                      # what has a newer image
 ugos-cli docker project-ls
 ugos-cli docker project-logs myapp --lines 100
@@ -609,7 +610,7 @@ notes are kept because the reasoning is easy to lose and expensive to redo.
 | **Machine** (`system about|ports|reboot|poweroff`, `index`) | model and serial, ports in use, restart, power off, the thumbnail service |
 | **Docker container** (`docker`) | list with CPU, memory, ports and updates, show, create, start, stop, restart, kill, remove, update, clone, batch-operate, logs (also following), run a command, interactive shell, list and end terminals |
 | **Docker image** | list with the containers that use each one, search, download, delete, export, load (URL/path) |
-| **Docker network and updates** | `network-ls`, `network-show`, which images have updates, the update settings |
+| **Docker network and updates** | `network-ls`, `network-show`, `network-check` (subnets that may shadow other networks, also warned about after `project-create`, `project-update` and `project-start`), which images have updates, the update settings |
 | **Docker app log** (`docker oplog`) | who deployed, started or removed what, with filters and export |
 | **Docker registry** | list/add/delete/switch mirror, HTTP proxy get/set |
 | **Docker overview** | engine status, resource usage |

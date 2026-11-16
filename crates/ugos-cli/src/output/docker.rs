@@ -4,6 +4,7 @@
 use serde::Serialize;
 use tabled::Tabled;
 use ugos_client::ops::dockerimages::ImageView;
+use ugos_client::ops::dockernetcheck::Finding;
 use ugos_client::ops::dockerterm::Terminal;
 use ugos_client::ops::dockerupdates::UpdateStatus;
 use ugos_client::ops::dockerview::ContainerView;
@@ -243,6 +244,34 @@ impl From<&Network> for NetworkRow {
             containers: n.container_names.len().to_string(),
         }
     }
+}
+
+/// A network in `docker network-check`.
+#[derive(Serialize)]
+pub struct FindingRow {
+    pub network: String,
+    pub subnet: String,
+    pub why: String,
+}
+
+table_row! {
+  FindingRow {
+    network => "Network",
+    subnet => "Subnet",
+    why => "Risk",
+  }
+}
+
+/// The rows of `docker network-check`.
+pub fn finding_rows(found: &[Finding]) -> Vec<FindingRow> {
+    found
+        .iter()
+        .map(|f| FindingRow {
+            network: f.network.clone(),
+            subnet: f.subnet.clone(),
+            why: f.rule.summary().to_owned(),
+        })
+        .collect()
 }
 
 /// A container attached to a network.
