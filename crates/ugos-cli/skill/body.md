@@ -120,6 +120,15 @@ The rules above hold for the tools as they do for the CLI.
 - A session token is valid for about 25 minutes and cached under
   `~/.config/ugos-cli/`. `--no-cache` skips the cache.
 - A VM has to be shut off before `vm update`.
+- **A Docker network can shadow another network.** A compose project without its
+  own `networks:` block gets a subnet that Docker picks itself. If that subnet is
+  also in use somewhere else in the user's network, the NAS sends traffic for that
+  range into the Docker bridge instead of to the router, and the devices in that
+  range lose the NAS while the rest keep working. Before `docker project-create`
+  or `project-update`, look at `docker network-ls` and `net list`, and tell the
+  user when the compose file has no `networks:` block. Pin the subnet in the
+  compose file to a range the user confirms is unused, and check `docker
+  network-ls` again after the project started.
 - UGOS often answers success to a change and keeps the old value. `share
   update`, `share acl set`, `user create` and `user update` read the result back
   and fail with what was not applied. Treat that as the answer: do not retry the
