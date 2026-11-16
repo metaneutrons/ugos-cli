@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.25.0](https://github.com/metaneutrons/ugos-cli/compare/v0.24.0...v0.25.0) (2026-11-16)
+
+
+### Features
+
+* **cli:** warn about Docker networks that can shadow other networks ([#151](https://github.com/metaneutrons/ugos-cli/issues/151)) ([4b9d6fc](https://github.com/metaneutrons/ugos-cli/commit/4b9d6fc8807f62b685b3ed40ef0ffcd8758a35bd))
+
 ## [0.24.0](https://github.com/metaneutrons/ugos-cli/compare/v0.23.0...v0.24.0) (2026-11-13)
 
 
