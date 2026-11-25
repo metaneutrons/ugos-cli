@@ -48,6 +48,8 @@ to parse the output.
 
 Ask the user before running any command that changes or removes something:
 
+- `certificate import` installs a certificate. `--replace-unused` renews an unassigned custom entry.
+- `certificate rotate` changes the live HTTPS certificate. Supply the renewed full chain, its key file and the public PEM of an installed standby with a different common name. Use `certificate list` to check assignments first.
 - `vm delete`, `vm stop`, `vm reboot`, `vm update`, and `vm create`
 - `fs rm`, `fs mv`, `fs put`, and `fs mkdir`
 - `snapshot rm` (it deletes locked snapshots too), `snapshot create`, `snapshot clone`

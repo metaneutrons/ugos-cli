@@ -257,6 +257,11 @@ pub enum Resource {
         #[command(subcommand)]
         action: SanAction,
     },
+    /// HTTPS certificates installed on the NAS.
+    Certificate {
+        #[command(subcommand)]
+        action: CertificateAction,
+    },
     /// Firmware updates.
     Update {
         #[command(subcommand)]
@@ -312,6 +317,37 @@ pub enum Resource {
     /// Needs no NAS connection. Without an option it shows where the skill is
     /// and what would happen.
     Skill(SkillArgs),
+}
+
+/// Manage the certificates shown in Control Panel > Security.
+#[derive(Debug, Subcommand)]
+pub enum CertificateAction {
+    /// Show certificate subjects, expiry times and service assignments.
+    List,
+    /// Import a PEM certificate and its matching private key.
+    Import {
+        /// Leaf certificate or leaf-first full chain (e.g. Certbot fullchain.pem).
+        #[arg(long, value_name = "FILE")]
+        cert: std::path::PathBuf,
+        /// Unencrypted PEM private key (e.g. Certbot privkey.pem).
+        #[arg(long, value_name = "FILE")]
+        key: std::path::PathBuf,
+        /// Replace an existing unassigned custom certificate with the same subject.
+        #[arg(long)]
+        replace_unused: bool,
+    },
+    /// Deploy a renewed certificate to the HTTPS service using an installed standby.
+    Rotate {
+        /// New leaf or fullchain.pem, leaf first.
+        #[arg(long, value_name = "FILE")]
+        cert: std::path::PathBuf,
+        /// Matching unencrypted private key.
+        #[arg(long, value_name = "FILE")]
+        key: std::path::PathBuf,
+        /// Public PEM for an installed standby with a different common name.
+        #[arg(long, value_name = "FILE")]
+        fallback_cert: std::path::PathBuf,
+    },
 }
 
 /// Flags for the system log.

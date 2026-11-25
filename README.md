@@ -552,6 +552,7 @@ notes are kept because the reasoning is easy to lose and expensive to redo.
 |----------|--------|
 | [api-overview.md](docs/api-overview.md) | Every module found, and which are documented |
 | [api-auth.md](docs/api-auth.md) | Login flow, RSA key exchange, session tokens |
+| [api-certificates.md](docs/api-certificates.md) | HTTPS certificate inventory, import and renewal with a Certbot deploy hook |
 | [api-tls.md](docs/api-tls.md) | The version 1 certificate and how it is pinned |
 | [api-encryption.md](docs/api-encryption.md) | The AES-GCM request wrapping and when UGOS uses it |
 | [api-kvm.md](docs/api-kvm.md) | Virtual machines, snapshots, networks, storage, images |

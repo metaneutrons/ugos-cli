@@ -61,7 +61,7 @@ async fn main() -> Result<()> {
         otp_secret: blank_to_none(env_var("UGOS_OTP_SECRET")),
     };
 
-    let tls = resolve_tls(host, cli.port, cli.tls_insecure, cli.tls_trust_new).await?;
+    let tls = command_tls(host, &cli).await?;
     let client = build_client(host, cli.port, &creds, cli.no_cache, &tls).await?;
 
     let mut stdout = BufWriter::new(std::io::stdout().lock());
@@ -189,6 +189,34 @@ fn run_offline(cli: &cli::Cli) -> Result<bool> {
 fn notice(message: &str) {
     let mut err = std::io::stderr();
     let _ = writeln!(err, "{message}");
+}
+
+async fn command_tls(host: &str, cli: &cli::Cli) -> Result<TlsPolicy> {
+    if let cli::Resource::Certificate {
+        action:
+            cli::CertificateAction::Rotate {
+                cert,
+                fallback_cert,
+                ..
+            },
+    } = &cli.command
+    {
+        if cli.tls_insecure || cli.tls_trust_new {
+            bail!("certificate rotation requires normal certificate pinning");
+        }
+        // Recover even if the previous process stopped just after a web reload.
+        // The two local PEM files bound which replacement pins may be learned.
+        let (_, target) = ugos_client::ops::certificate::identity(cert)?;
+        let (_, standby) = ugos_client::ops::certificate::identity(fallback_cert)?;
+        let seen = tls::probe_fingerprint(host, cli.port).await?;
+        if known_hosts::get(host, cli.port)? != Some(seen) && seen != target && seen != standby {
+            bail!(
+                "the current HTTPS certificate must match a trusted pin or one of the supplied certificates"
+            );
+        }
+        return Ok(TlsPolicy::Pinned(seen));
+    }
+    resolve_tls(host, cli.port, cli.tls_insecure, cli.tls_trust_new).await
 }
 
 /// Settle on a TLS policy for this host, pinning on first contact.
