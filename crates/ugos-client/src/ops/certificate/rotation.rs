@@ -110,14 +110,7 @@ pub async fn rotate(
     let _lock = mutation_lock(client)?;
     let new = Bundle::load(cert, key)?;
     let target = &new.chain.subject;
-    custom_subject(target)?;
-    let standby_pem = read_pem(fallback_cert)?;
-    pem::require_current(&new.chain.leaf_pem)?;
-    pem::require_current(&standby_pem)?;
-    let (standby, standby_pin) = pem::identity(&standby_pem)?;
-    if target == &standby {
-        refuse!("standby and replacement must have different subjects");
-    }
+    let (standby, standby_pin) = validate_deployment(&new, fallback_cert)?;
     let (host, port, _) = client.https_target();
     let endpoint = Endpoint { host, port };
     let (web, served) = verify_assignments(client, target, &standby, standby_pin).await?;
@@ -151,6 +144,18 @@ pub async fn rotate(
         .switch(&connection, &standby, target, new.chain.fingerprint)
         .await?;
     confirmed_web(&connection, &new).await
+}
+
+fn validate_deployment(new: &Bundle, fallback_cert: &Path) -> Result<(String, CertFingerprint)> {
+    custom_subject(&new.chain.subject)?;
+    let standby_pem = read_pem(fallback_cert)?;
+    pem::require_current(&new.chain.leaf_pem)?;
+    pem::require_current(&standby_pem)?;
+    let (standby, standby_pin) = pem::identity(&standby_pem)?;
+    if new.chain.subject == standby {
+        refuse!("standby and replacement must have different subjects");
+    }
+    Ok((standby, standby_pin))
 }
 
 async fn matches_existing(
