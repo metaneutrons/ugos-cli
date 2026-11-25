@@ -118,45 +118,13 @@ pub async fn rotate(
     if target == &standby {
         refuse!("standby and replacement must have different subjects");
     }
-    let (host, port, policy) = client.https_target();
+    let (host, port, _) = client.https_target();
     let endpoint = Endpoint { host, port };
-    let served = probe_fingerprint(host, port).await?;
-    // Every request uses the authenticated session's original policy until a
-    // switch has been verified. Insecure connections cannot authorize a rotation.
-    if !matches!(policy, TlsPolicy::Pinned(pin) if *pin == served) {
-        refuse!("rotation requires a direct, pinned connection to the UGOS web service");
-    }
-    let current = settings(client).await?;
-    let web = &current["webserver"];
-    if web != target && web != &standby {
-        refuse!(
-            "WebServer is assigned to {web}; expected {target} or the selected standby {standby}"
-        );
-    }
-    if web == &standby && served != standby_pin {
-        refuse!("the supplied standby certificate differs from the one served by the NAS");
-    }
-    if find(client, &standby).await?.is_none() {
-        refuse!("standby certificate {standby} is missing from the NAS");
-    }
-    if web != &standby && pem::identity(&archive::leaf(client, &standby).await?)?.1 != standby_pin {
-        refuse!("the installed standby differs from the supplied public certificate");
-    }
-
-    if known_hosts::get(host, port)? != Some(served) {
-        known_hosts::put(host, port, &served)?;
-    }
+    let (web, served) = verify_assignments(client, target, &standby, standby_pin).await?;
+    let web = web.as_str();
     let mut connection = client.clone();
     if let Some(existing) = find(client, target).await? {
-        user_slot(&existing)?;
-        if existing.be_used.iter().any(|s| s != "webserver") {
-            refuse!("other services use {target}; this rotation manages WebServer only");
-        }
-        let old = Bundle::exported(client, target).await?;
-        if web == target && old.chain.fingerprint != served {
-            refuse!("the live HTTPS certificate differs from the UGOS web assignment");
-        }
-        if new.same(&old) {
+        if matches_existing(client, &new, &existing, web, served).await? {
             if web != target {
                 connection = endpoint
                     .switch(client, web, target, new.chain.fingerprint)
@@ -183,6 +151,61 @@ pub async fn rotate(
         .switch(&connection, &standby, target, new.chain.fingerprint)
         .await?;
     confirmed_web(&connection, &new).await
+}
+
+async fn matches_existing(
+    client: &UgosClient,
+    new: &Bundle,
+    existing: &CertificateInfo,
+    web: &str,
+    served: CertFingerprint,
+) -> Result<bool> {
+    user_slot(existing)?;
+    let target = &existing.subject;
+    if existing.be_used.iter().any(|s| s != "webserver") {
+        refuse!("other services use {target}; this rotation manages WebServer only");
+    }
+    let old = Bundle::exported(client, target).await?;
+    if web == target && old.chain.fingerprint != served {
+        refuse!("the live HTTPS certificate differs from the UGOS web assignment");
+    }
+    Ok(new.same(&old))
+}
+
+async fn verify_assignments(
+    client: &UgosClient,
+    target: &str,
+    standby: &str,
+    standby_pin: CertFingerprint,
+) -> Result<(String, CertFingerprint)> {
+    let (host, port, policy) = client.https_target();
+    let served = probe_fingerprint(host, port).await?;
+    // Every request uses the authenticated session's original policy until a
+    // switch has been verified. Insecure connections cannot authorize a rotation.
+    if !matches!(policy, TlsPolicy::Pinned(pin) if *pin == served) {
+        refuse!("rotation requires a direct, pinned connection to the UGOS web service");
+    }
+    let current = settings(client).await?;
+    let web = current["webserver"].as_str();
+    if web != target && web != standby {
+        refuse!(
+            "WebServer is assigned to {web}; expected {target} or the selected standby {standby}"
+        );
+    }
+    if web == standby && served != standby_pin {
+        refuse!("the supplied standby certificate differs from the one served by the NAS");
+    }
+    if find(client, standby).await?.is_none() {
+        refuse!("standby certificate {standby} is missing from the NAS");
+    }
+    if web != standby && pem::identity(&archive::leaf(client, standby).await?)?.1 != standby_pin {
+        refuse!("the installed standby differs from the supplied public certificate");
+    }
+
+    if known_hosts::get(host, port)? != Some(served) {
+        known_hosts::put(host, port, &served)?;
+    }
+    Ok((web.to_owned(), served))
 }
 
 async fn confirmed_web(client: &UgosClient, new: &Bundle) -> Result<CertificateInfo> {

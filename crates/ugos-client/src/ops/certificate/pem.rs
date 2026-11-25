@@ -166,38 +166,7 @@ fn parse_pem(pem: &[u8], allowed_labels: &[&str]) -> Result<Vec<PemBlock>> {
             .and_then(|line| line.strip_suffix("-----"))
             .filter(|label| allowed_labels.contains(label))
             .ok_or_else(invalid_input)?;
-        let footer = format!("-----END {label}-----");
-        let mut encoded = Vec::new();
-        let mut found_footer = false;
-
-        for line in lines.by_ref() {
-            let line = line.strip_suffix('\r').unwrap_or(line);
-            if line == footer {
-                found_footer = true;
-                break;
-            }
-            if line.starts_with("-----END ") || line.starts_with("-----BEGIN ") {
-                return Err(invalid_input());
-            }
-            for byte in line.bytes() {
-                if !byte.is_ascii_whitespace() {
-                    if !byte.is_ascii() {
-                        return Err(invalid_input());
-                    }
-                    encoded.push(byte);
-                }
-            }
-        }
-
-        if !found_footer || encoded.is_empty() {
-            return Err(invalid_input());
-        }
-        let der = base64::engine::general_purpose::STANDARD
-            .decode(encoded)
-            .map_err(|_| invalid_input())?;
-        if der.is_empty() {
-            return Err(invalid_input());
-        }
+        let der = decode_block(&mut lines, label)?;
         blocks.push(PemBlock {
             label: label.to_owned(),
             der,
@@ -208,6 +177,42 @@ fn parse_pem(pem: &[u8], allowed_labels: &[&str]) -> Result<Vec<PemBlock>> {
         return Err(invalid_input());
     }
     Ok(blocks)
+}
+
+fn decode_block<'a>(lines: &mut impl Iterator<Item = &'a str>, label: &str) -> Result<Vec<u8>> {
+    let footer = format!("-----END {label}-----");
+    let mut encoded = Vec::new();
+    let mut found_footer = false;
+
+    for line in lines {
+        let line = line.strip_suffix('\r').unwrap_or(line);
+        if line == footer {
+            found_footer = true;
+            break;
+        }
+        if line.starts_with("-----END ") || line.starts_with("-----BEGIN ") {
+            return Err(invalid_input());
+        }
+        for byte in line.bytes() {
+            if !byte.is_ascii_whitespace() {
+                if !byte.is_ascii() {
+                    return Err(invalid_input());
+                }
+                encoded.push(byte);
+            }
+        }
+    }
+
+    if !found_footer || encoded.is_empty() {
+        return Err(invalid_input());
+    }
+    let der = base64::engine::general_purpose::STANDARD
+        .decode(encoded)
+        .map_err(|_| invalid_input())?;
+    if der.is_empty() {
+        return Err(invalid_input());
+    }
+    Ok(der)
 }
 
 fn next_nonblank_line<'a>(lines: &mut impl Iterator<Item = &'a str>) -> Option<&'a str> {

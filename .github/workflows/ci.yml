@@ -69,7 +69,7 @@ jobs:
         if: matrix.name == 'linux-x86_64'
         run: |
           cargo build --locked -p ugos-cli
-          python3 scripts/tests/certificate_rotation.py target/debug/ugos-cli
+          bash scripts/tests/certificate_rotation.sh
       # Measured 2026-09-03: 31.5 % line coverage. The threshold sits just below
       # that so it catches regressions; it claims no good coverage. The large
       # uncovered block is ugos-mcp and everything that needs a real NAS
