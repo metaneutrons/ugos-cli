@@ -9,6 +9,7 @@ all-features = true
 version = 2
 yanked = "deny"
 ignore = [
+    { id = "RUSTSEC-2026-0543", reason = "chrono maintenance notice; required transitively by rmcp and its schemars feature; remove when rmcp drops chrono or RustSec withdraws the notice" },
     { id = "RUSTSEC-2023-0071", reason = "Marvin attack; no patch available; pulled in through rsa; concerns decryption with a private key, and this client only encrypts with the NAS public key; remove as soon as rsa publishes a fixed version" },
 ]
 
