@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.0](https://github.com/metaneutrons/ugos-cli/compare/v0.26.0...v0.27.0) (2026-11-25)
+
+
+### Features
+
+* **cli:** import and rotate UGOS HTTPS certificates ([#159](https://github.com/metaneutrons/ugos-cli/issues/159)) ([b93301e](https://github.com/metaneutrons/ugos-cli/commit/b93301e529d186441bfe21c08126618c6cb75306))
+
 ## [0.26.0](https://github.com/metaneutrons/ugos-cli/compare/v0.25.0...v0.26.0) (2026-11-25)
 
 

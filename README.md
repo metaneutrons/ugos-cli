@@ -8,7 +8,7 @@ CLI, MCP server, and Rust client library for managing **UGREEN NAS** (UGOS) devi
 
 UGOS ships a web UI but no CLI and no API documentation. Reaching past it with `virsh`/`qemu` makes UGOS lose track of its own VMs, so this project drives the same (undocumented) API the web UI uses — reverse-engineered from its bundles and verified against real hardware.
 
-Covers virtual machines, Docker, files, downloads, system monitoring, logs and users.
+Covers virtual machines, Docker, files, downloads, system monitoring, logs, users and HTTPS certificates.
 
 > **⚠️ Work in Progress** — A large subset of the UGOS API, not all of it. See the [implementation status](#implementation-status) for what is covered and what is deliberately left out.
 
@@ -159,6 +159,13 @@ ugos-cli update install --force      # restarts the NAS
 ugos-cli backup save ./backup_restore.ugb
 ugos-cli index status
 ugos-cli system about
+
+# Inspect certificate assignments and import a new, unassigned certificate
+ugos-cli certificate list
+ugos-cli certificate import --cert fullchain.pem --key privkey.pem
+
+# Renew the active HTTPS certificate using an installed standby with a different common name
+ugos-cli certificate rotate --cert fullchain.pem --key privkey.pem --fallback-cert standby.pem
 
 # Let the NAS fetch a file straight from the internet
 ugos-cli download add https://example.org/big.iso
@@ -619,6 +626,7 @@ notes are kept because the reasoning is easy to lose and expensive to redo.
 | **Docker overview** | engine status, resource usage |
 | **Docker compose** (`docker project-*`) | list, show, create, start, stop, restart, remove, logs (also following) |
 | **Auth** | RSA key exchange, PKCS1v1.5 encryption, session tokens, TOTP second factor, auto re-auth |
+| **HTTPS certificates** (`certificate`, CLI and Rust library) | List assignments and expiry, import a PEM leaf or full chain with its key, renew an unassigned entry with `import --replace-unused`, and rotate the web certificate via an installed standby. [Certbot deploy hook](docs/api-certificates.md#certbot-deploy-hook) |
 | **Transport** | certificate pinning on first use, shared by CLI and MCP server |
 
 `Docker container create/update` were reverse-engineered against the real
@@ -643,7 +651,12 @@ anything critical.
 
 ### Written, not run against a NAS
 
-These are built from the web UI's own code and unit tests, guarded by `--force`,
+Active HTTPS rotation (`certificate rotate`) was exercised against a local
+HTTPS server that switches certificates. The test covers both handovers,
+restoration after a rejected import and retry with a stale pin. Hardware tests
+covered certificate inventory, import and same-name renewal of an unassigned entry.
+
+The following operations are built from the web UI's own code and unit tests, guarded by `--force`,
 and **have not been run on a real NAS**, because that cannot be undone or the
 NAS tested had nothing to run them against. Check them on a machine you can
 afford to lose before relying on them:
@@ -698,11 +711,11 @@ Storing the secret has a cost. With the password and the secret on one machine, 
 
 ## Transport security
 
-UGOS serves a self-signed **X.509 version 1** certificate, which no ordinary
-certificate parser will accept. Rather than trusting whatever is presented,
-the client pins the certificate on first contact and refuses anything else
-afterwards, the way SSH treats host keys. Fingerprints are stored per
-`host:port` in `known_hosts.json` in the user's config directory.
+The factory HTTPS certificate on tested UGOS devices is self-signed and uses
+**X.509 version 1**. The client pins the leaf certificate on first contact,
+including when the NAS serves a custom certificate. It stores the fingerprint
+per `host:port` in `known_hosts.json` in the user's config directory.
+`certificate rotate` updates the local pin after each verified HTTPS handover.
 
 | Flag | Effect |
 |------|--------|
@@ -720,6 +733,7 @@ needs handling by hand, and why requests are not all encrypted.
 
 | Model | UGOS Version | Notes |
 |-------|--------------|-------|
+| DXP480T Plus | 1.21.1.0016 | Certificate inventory, leaf-only and full-chain import, and same-name renewal of an unassigned test entry |
 | DXP480T Plus | 1.20.0.0142 | Reads and every write that can be undone, run against this machine. What was not run is listed above |
 | DXP480T Plus | 1.18.1.0098 | The KVM, Docker, files, shares and first account commands |
 | DXP480T Plus | 1.14.1.0107 | Earlier verification |
