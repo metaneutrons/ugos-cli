@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.26.0](https://github.com/metaneutrons/ugos-cli/compare/v0.25.0...v0.26.0) (2026-11-25)
+
+
+### Features
+
+* **cli:** read download URLs from stdin ([#157](https://github.com/metaneutrons/ugos-cli/issues/157)) ([c2a70c3](https://github.com/metaneutrons/ugos-cli/commit/c2a70c39213ece584383dc355d827f4265d8321c))
+
 ## [0.25.0](https://github.com/metaneutrons/ugos-cli/compare/v0.24.0...v0.25.0) (2026-11-16)
 
 
