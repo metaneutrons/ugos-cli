@@ -57,6 +57,30 @@ pub mod versions;
 
 // ── Display row types ───────────────────────────────────────────────
 
+/// Inventory metadata displayed by the certificate commands.
+#[derive(Serialize)]
+pub struct CertificateRow {
+    subject: String,
+    issuer: String,
+    expires: String,
+    services: String,
+}
+
+table_row! {
+    CertificateRow { subject => "Subject", issuer => "Issuer", expires => "Expires (UTC)", services => "Services" }
+}
+
+impl From<&ugos_client::ops::certificate::CertificateInfo> for CertificateRow {
+    fn from(c: &ugos_client::ops::certificate::CertificateInfo) -> Self {
+        Self {
+            subject: c.subject.clone(),
+            issuer: c.issuer.clone(),
+            expires: format_unix(i64::try_from(c.expired).unwrap_or_default()),
+            services: c.be_used.join(", "),
+        }
+    }
+}
+
 /// Table row for VM list.
 #[derive(Serialize)]
 pub struct VmRow {

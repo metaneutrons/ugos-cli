@@ -19,6 +19,7 @@ use crate::types::common::ApiResponse;
 pub struct UgosClient {
     http: reqwest::Client,
     base_url: String,
+    endpoint: (String, u16),
     creds: Credentials,
     session: Arc<RwLock<Session>>,
     /// Cached RSA key, fetched on first use by an encrypted request.
@@ -53,6 +54,7 @@ impl UgosClient {
         Ok(Self {
             http,
             base_url,
+            endpoint: (host.to_owned(), port),
             creds,
             session: Arc::new(RwLock::new(session)),
             public_key: Arc::new(RwLock::new(None)),
@@ -80,6 +82,7 @@ impl UgosClient {
         Ok(Self {
             http,
             base_url,
+            endpoint: (host.to_owned(), port),
             creds,
             session: Arc::new(RwLock::new(session)),
             public_key: Arc::new(RwLock::new(None)),
@@ -94,11 +97,17 @@ impl UgosClient {
     /// HTTP stand-in.
     #[cfg(test)]
     pub(crate) async fn connect_for_test(base_url: &str, creds: Credentials) -> Result<Self> {
+        let url = reqwest::Url::parse(base_url)
+            .map_err(|e| UgosError::Refused(format!("invalid test URL: {e}")))?;
         let http = crate::tls::http_client(&crate::tls::TlsPolicy::Insecure)?;
         let session = auth::login(&http, base_url, &creds).await?;
         Ok(Self {
             http,
             base_url: base_url.to_owned(),
+            endpoint: (
+                url.host_str().unwrap_or_default().to_owned(),
+                url.port_or_known_default().unwrap_or(443),
+            ),
             creds,
             session: Arc::new(RwLock::new(session)),
             public_key: Arc::new(RwLock::new(None)),
@@ -112,16 +121,48 @@ impl UgosClient {
     pub(crate) async fn socket_target(
         &self,
     ) -> Result<(String, u16, crate::tls::TlsPolicy, String)> {
-        let url = reqwest::Url::parse(&self.base_url)
-            .map_err(|e| UgosError::Refused(format!("the NAS address is not usable: {e}")))?;
-        let host = url
-            .host_str()
-            .ok_or_else(|| UgosError::Refused("the NAS address has no host".into()))?
-            .trim_matches(['[', ']'])
-            .to_owned();
-        let port = url.port_or_known_default().unwrap_or(443);
+        let (host, port, policy) = self.https_target();
         let token = self.session.read().await.token.clone();
-        Ok((host, port, self.tls.clone(), token))
+        Ok((
+            host.trim_matches(['[', ']']).to_owned(),
+            port,
+            policy.clone(),
+            token,
+        ))
+    }
+
+    pub(crate) fn https_target(&self) -> (&str, u16, &crate::tls::TlsPolicy) {
+        (&self.endpoint.0, self.endpoint.1, &self.tls)
+    }
+
+    /// Reuse the authenticated session with a fresh HTTPS connection pool
+    /// after rotating the NAS web certificate.
+    pub(crate) fn repin(&self, pin: crate::CertFingerprint) -> Result<Self> {
+        let tls = crate::TlsPolicy::Pinned(pin);
+        Ok(Self {
+            http: crate::tls::http_client(&tls)?,
+            tls,
+            ..self.clone()
+        })
+    }
+
+    /// Delete a named resource using query parameters, as the Control Panel does.
+    pub(crate) async fn delete_params<T: DeserializeOwned>(
+        &self,
+        path: &str,
+        params: &[(&str, &str)],
+    ) -> Result<T> {
+        let token = self.session.read().await.token.clone();
+        let url = Self::append_token(&self.url_for(path), &token);
+        let response = self
+            .http
+            .delete(url)
+            .query(params)
+            .send()
+            .await?
+            .json()
+            .await?;
+        Self::decode(response)
     }
 
     /// The current session token.

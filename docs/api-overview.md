@@ -15,6 +15,7 @@ Base URL: `https://<nas-ip>:9443/ugreen/v1/`
 | **Download Center** | com.ugreen.downloadCenter | Complete | [api-downloadcenter.md](api-downloadcenter.md) |
 | **System / monitoring** | core | Complete | [api-system.md](api-system.md) |
 | **Request encryption** | — | Complete | [api-encryption.md](api-encryption.md) |
+| **HTTPS certificates** | com.ugreen.ctlmgr | Inventory, import and web certificate rotation | [api-certificates.md](api-certificates.md) |
 | **Transport security** | — | Complete | [api-tls.md](api-tls.md) |
 | **Filesystem snapshots** | com.ugreen.snapshot | Complete | [api-snapshot.md](api-snapshot.md) |
 | **Shared folders and SMB** | com.ugreen.filemgr, com.ugreen.ctlmgr | Reading, creating, changing, deleting; SMB service read only | [api-shares.md](api-shares.md) |
@@ -41,7 +42,6 @@ Base URL: `https://<nas-ip>:9443/ugreen/v1/`
 | User | `user/` | Listing implemented (`ugos user list`); password, avatar, wallpaper untouched |
 | Log | `log/` | Query, clearing, archiving, notifications, export: see [api-logcenter.md](api-logcenter.md) |
 | Firmware | `firmware/`, `upgrader/` | System updates, manual firmware upload |
-| Security | `security/ssl/` | SSL certificate import |
 | Sync | `sync/syncthing/`, `web/sync/` | Syncthing integration |
 | Hardware | `hardware/ups/` | UPS firmware |
 | Time | `time/config` | Time configuration |

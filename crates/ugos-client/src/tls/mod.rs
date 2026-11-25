@@ -371,6 +371,7 @@ pub async fn probe_fingerprint(host: &str, port: u16) -> Result<CertFingerprint>
         provider: Arc::new(ring::default_provider()),
     });
     let client = reqwest::Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
         .timeout(std::time::Duration::from_secs(30))
         .use_preconfigured_tls(config_with(verifier)?)
         .build()

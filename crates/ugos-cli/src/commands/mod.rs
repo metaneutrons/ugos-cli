@@ -1,6 +1,7 @@
 //! Command dispatch — maps CLI actions to API calls and output.
 
 pub mod access;
+mod certificate;
 mod clock;
 mod dockerlog;
 mod dockernet;
@@ -95,6 +96,7 @@ pub async fn run(
         Resource::Version { action } => versions::version(client, action, fmt, w).await,
         Resource::Recycle { action } => recycle::recycle(client, action, fmt, w).await,
         Resource::San { action } => san::san(client, action, fmt, w).await,
+        Resource::Certificate { action } => certificate::run(client, action, fmt, w).await,
         Resource::Update { action } => update::update(client, action, fmt, w).await,
         Resource::Backup { action } => update::backup(client, action, fmt, w).await,
         Resource::Index { action } => update::index(client, action, fmt, w).await,
