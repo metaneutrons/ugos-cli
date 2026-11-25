@@ -273,9 +273,24 @@ async fn download(
                 OutputFormat::Json => output::print_json(w, &tasks)?,
             }
         }
-        DownloadAction::Add { url, dir } => {
-            client.download_add(url, dir.as_deref()).await?;
-            output::print_success(w, &format!("Queued {url}"), fmt)?;
+        DownloadAction::Add { url, dir, .. } => {
+            if let Some(url) = url {
+                client.download_add(url, dir.as_deref()).await?;
+                output::print_success(w, &format!("Queued {url}"), fmt)?;
+            } else {
+                let mut line = String::new();
+                let _ = std::io::stdin().read_line(&mut line)?;
+                let url = line.trim_end_matches(['\r', '\n']);
+                if url.is_empty() {
+                    bail!("--url-stdin requires a URL");
+                }
+                // A NAS error message can quote the submitted URL.
+                client
+                    .download_add(url, dir.as_deref())
+                    .await
+                    .map_err(|_| anyhow::anyhow!("UGOS did not confirm the download"))?;
+                output::print_success(w, "Download queued", fmt)?;
+            }
         }
         DownloadAction::Check { url } => {
             let status = client.download_check(url).await?;

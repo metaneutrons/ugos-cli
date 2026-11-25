@@ -869,7 +869,11 @@ pub enum DownloadAction {
     /// Queue a URL for the NAS to fetch.
     Add {
         /// The URL to download.
-        url: String,
+        #[arg(required_unless_present = "url_stdin", conflicts_with = "url_stdin")]
+        url: Option<String>,
+        /// Read the URL from stdin and omit it from the confirmation.
+        #[arg(long)]
+        url_stdin: bool,
         /// Target directory [default: the configured one].
         #[arg(long)]
         dir: Option<String>,
@@ -1773,11 +1777,14 @@ pub struct SkillArgs {
 }
 
 impl Cli {
-    /// `true` when `--password-stdin` and another flag that reads a password
+    /// `true` when `--password-stdin` and another flag that reads input
     /// from stdin would both read the one stream.
     pub const fn reads_stdin_twice(&self) -> bool {
         self.password_stdin
             && match &self.command {
+                Resource::Download {
+                    action: DownloadAction::Add { url_stdin, .. },
+                } => *url_stdin,
                 Resource::Docker {
                     action:
                         DockerAction::MirrorAdd {
@@ -1810,6 +1817,37 @@ mod tests {
         let matches = Cli::command().try_get_matches_from(args)?;
         let cli = Cli::from_arg_matches(&matches)?;
         Ok((matches, cli))
+    }
+
+    #[test]
+    fn download_add_requires_one_url_source() {
+        let parse_add = |args: &[&str]| {
+            let mut argv = vec!["ugos-cli", "download", "add"];
+            argv.extend_from_slice(args);
+            parse(&argv).is_ok()
+        };
+        assert!(parse_add(&["https://example.org/file"]));
+        assert!(parse_add(&["--url-stdin", "--dir", "/volume1/download"]));
+        assert!(!parse_add(&[]));
+        assert!(!parse_add(&["https://example.org/file", "--url-stdin"]));
+        for argv in [
+            [
+                "ugos-cli",
+                "--password-stdin",
+                "download",
+                "add",
+                "--url-stdin",
+            ],
+            [
+                "ugos-cli",
+                "download",
+                "add",
+                "--url-stdin",
+                "--password-stdin",
+            ],
+        ] {
+            assert!(parse(&argv).unwrap().1.reads_stdin_twice());
+        }
     }
 
     #[test]
