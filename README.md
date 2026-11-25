@@ -162,6 +162,8 @@ ugos-cli system about
 
 # Let the NAS fetch a file straight from the internet
 ugos-cli download add https://example.org/big.iso
+# Read a signed or authenticated URL from the clipboard on macOS
+pbpaste | ugos-cli download add --url-stdin
 ugos-cli download list
 
 # NAS hardware, firmware and live readings

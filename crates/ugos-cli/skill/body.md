@@ -76,7 +76,8 @@ Ask the user before running any command that changes or removes something:
   `version clear-deleted`, `logcenter clear`, `logcenter archive set`
 - `update install`, `update upload`, `update key`, `backup restore`,
   `backup reset-network`, `backup reset-factory`
-- `download add`, `download rm`
+- `download add`, `download rm`. For signed URLs or URLs containing credentials,
+  pipe one URL to `download add --url-stdin`. UGOS receives the full URL.
 
 The list is not complete. If a command creates, starts, stops, changes or
 deletes something, ask first, whatever it is called.
